@@ -1,4 +1,4 @@
-import { BrowserWindow, dialog, ipcMain } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain } from 'electron'
 import type { ProgressInfo } from '../shared/types'
 import { analyzeRepo, checkGitInstalled } from './git/analyze'
 import { cloneRepo } from './git/clone'
@@ -28,6 +28,6 @@ export function registerIpc(): void {
     const send = (p: ProgressInfo): void => {
       if (!event.sender.isDestroyed()) event.sender.send('git-city:progress', p)
     }
-    return cloneRepo(url, send)
+    return cloneRepo(url, app.getPath('userData'), send)
   })
 }

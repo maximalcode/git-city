@@ -1,4 +1,3 @@
-import { app } from 'electron'
 import { existsSync } from 'fs'
 import { mkdir } from 'fs/promises'
 import { join } from 'path'
@@ -14,8 +13,10 @@ export function repoNameFromUrl(url: string): string {
   return safe
 }
 
+/** Clone `url` into `<baseDir>/clones/<name>`; baseDir is injected so this stays testable without Electron. */
 export async function cloneRepo(
   url: string,
+  baseDir: string,
   onProgress: (p: ProgressInfo) => void
 ): Promise<string> {
   const trimmed = url.trim()
@@ -23,7 +24,7 @@ export async function cloneRepo(
     throw new Error('Please enter an https:// or git@ repository URL.')
   }
   const name = repoNameFromUrl(trimmed)
-  const clonesDir = join(app.getPath('userData'), 'clones')
+  const clonesDir = join(baseDir, 'clones')
   await mkdir(clonesDir, { recursive: true })
   const dest = join(clonesDir, name)
 

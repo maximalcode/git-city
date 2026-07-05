@@ -1,0 +1,34 @@
+appId: com.nickelchrist.gitcity
+productName: Git City
+directories:
+  buildResources: build
+  output: dist
+files:
+  - '!src/*'
+  - '!scripts/*'
+  - '!.claude/*'
+  - '!electron.vite.config.ts'
+  - '!vite.preview.config.ts'
+  - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+  - '!{README.md,.gitignore}'
+  - '!dist/*'
+asar: true
+npmRebuild: false
+win:
+  executableName: GitCity
+  icon: build/icon.png
+  target:
+    - nsis
+nsis:
+  artifactName: ${name}-${version}-setup.${ext}
+  shortcutName: ${productName}
+  createDesktopShortcut: always
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+mac:
+  category: public.app-category.developer-tools
+  icon: build/icon.png
+  target:
+    - dmg
+dmg:
+  artifactName: ${name}-${version}.${ext}

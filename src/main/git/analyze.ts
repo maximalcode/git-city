@@ -1,0 +1,238 @@
+import { spawn } from 'child_process'
+import { basename } from 'path'
+import { createInterface } from 'readline'
+import type { FileState, ProgressInfo, RepoAnalysis, Snapshot } from '../../shared/types'
+
+/**
+ * Repo analysis built from a single streaming pass of
+ * `git log --first-parent --reverse --no-renames --raw --numstat`.
+ *
+ * Along first-parent history each commit's diff is against the previous
+ * mainline state, so the diffs telescope: cumulatively applying added/deleted
+ * line counts reproduces the exact line count of every file at every mainline
+ * commit — no checkouts or per-commit file reads needed.
+ */
+
+const SENTINEL = '\x01'
+
+function runGit(cwd: string, args: string[]): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const child = spawn('git', args, { cwd, stdio: ['ignore', 'pipe', 'pipe'] })
+    let out = ''
+    let err = ''
+    child.stdout.on('data', (d) => (out += d))
+    child.stderr.on('data', (d) => (err += d))
+    child.on('error', reject)
+    child.on('close', (code) => {
+      if (code === 0) resolve(out)
+      else reject(new Error(err.trim() || `git ${args.join(' ')} exited with ${code}`))
+    })
+  })
+}
+
+function runGitLines(
+  cwd: string,
+  args: string[],
+  onLine: (line: string) => void
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const child = spawn('git', args, { cwd, stdio: ['ignore', 'pipe', 'pipe'] })
+    let err = ''
+    child.stderr.on('data', (d) => (err += d))
+    const rl = createInterface({ input: child.stdout, crlfDelay: Infinity })
+    rl.on('line', onLine)
+    child.on('error', reject)
+    child.on('close', (code) => {
+      if (code === 0) resolve()
+      else reject(new Error(err.trim() || `git log exited with ${code}`))
+    })
+  })
+}
+
+export async function checkGitInstalled(): Promise<string | null> {
+  try {
+    const v = await runGit(process.cwd(), ['--version'])
+    return v.trim()
+  } catch {
+    return null
+  }
+}
+
+/** Evenly spaced indices across [0, total), always including the last. */
+export function pickSampleIndices(total: number, target: number): Set<number> {
+  const picks = new Set<number>()
+  if (total <= 0) return picks
+  const n = Math.min(total, Math.max(2, target))
+  for (let i = 0; i < n; i++) {
+    picks.add(Math.round((i * (total - 1)) / (n - 1)))
+  }
+  picks.add(total - 1)
+  return picks
+}
+
+interface PendingCommit {
+  hash: string
+  date: number
+  author: string
+  message: string
+  /** path → accumulated change within this commit */
+  changes: Map<string, { add: number; del: number; deleted: boolean; binary: boolean }>
+}
+
+function unquotePath(p: string): string {
+  // git quotes paths containing special characters as "..." with C escapes
+  if (p.startsWith('"') && p.endsWith('"')) {
+    try {
+      return JSON.parse(p) as string
+    } catch {
+      return p.slice(1, -1)
+    }
+  }
+  return p
+}
+
+export async function analyzeRepo(
+  repoPath: string,
+  sampleTarget: number,
+  onProgress: (p: ProgressInfo) => void
+): Promise<RepoAnalysis> {
+  const inside = (await runGit(repoPath, ['rev-parse', '--is-inside-work-tree']).catch(() => 'false')).trim()
+  if (inside !== 'true') {
+    throw new Error('The selected folder is not a git repository.')
+  }
+
+  onProgress({ phase: 'counting', done: 0, total: 1 })
+  let commitCount: number
+  try {
+    commitCount = parseInt(
+      (await runGit(repoPath, ['rev-list', '--count', '--first-parent', 'HEAD'])).trim(),
+      10
+    )
+  } catch {
+    throw new Error('This repository has no commits yet.')
+  }
+  if (!Number.isFinite(commitCount) || commitCount === 0) {
+    throw new Error('This repository has no commits yet.')
+  }
+
+  const branch = (await runGit(repoPath, ['rev-parse', '--abbrev-ref', 'HEAD'])).trim()
+  const sampleIdx = pickSampleIndices(commitCount, sampleTarget)
+
+  const state = new Map<string, FileState>()
+  const snapshots: Snapshot[] = []
+  let commitIndex = -1
+  let current: PendingCommit | null = null
+
+  const finishCommit = (): void => {
+    if (!current) return
+    commitIndex++
+    for (const [path, ch] of current.changes) {
+      if (ch.deleted) {
+        state.delete(path)
+        continue
+      }
+      let f = state.get(path)
+      if (!f) {
+        f = { path, loc: 0, commits: 0, lastTouched: 0, lastAuthor: '', binary: false }
+        state.set(path, f)
+      }
+      f.loc = Math.max(0, f.loc + ch.add - ch.del)
+      f.commits++
+      f.lastTouched = current.date
+      f.lastAuthor = current.author
+      if (ch.binary) f.binary = true
+    }
+    if (sampleIdx.has(commitIndex)) {
+      snapshots.push({
+        hash: current.hash,
+        date: current.date,
+        author: current.author,
+        message: current.message,
+        index: commitIndex,
+        files: Array.from(state.values(), (f) => ({ ...f }))
+      })
+    }
+    if (commitIndex % 500 === 0) {
+      onProgress({ phase: 'reading-history', done: commitIndex + 1, total: commitCount })
+    }
+    current = null
+  }
+
+  const getChange = (
+    c: PendingCommit,
+    path: string
+  ): { add: number; del: number; deleted: boolean; binary: boolean } => {
+    let ch = c.changes.get(path)
+    if (!ch) {
+      ch = { add: 0, del: 0, deleted: false, binary: false }
+      c.changes.set(path, ch)
+    }
+    return ch
+  }
+
+  await runGitLines(
+    repoPath,
+    [
+      '-c',
+      'core.quotepath=false',
+      'log',
+      '--first-parent',
+      '--reverse',
+      '--no-renames',
+      '--raw',
+      '--numstat',
+      '--date=unix',
+      `--format=${SENTINEL}%H%x09%at%x09%an%x09%s`,
+      'HEAD'
+    ],
+    (line) => {
+      if (line.startsWith(SENTINEL)) {
+        finishCommit()
+        const [hash, at, author, ...rest] = line.slice(1).split('\t')
+        current = {
+          hash,
+          date: parseInt(at, 10) * 1000,
+          author,
+          message: rest.join('\t'),
+          changes: new Map()
+        }
+        return
+      }
+      if (!current || line.length === 0) return
+      if (line.startsWith(':')) {
+        // raw line: ":100644 000000 abc def D\tpath"
+        const tab = line.indexOf('\t')
+        if (tab === -1) return
+        const status = line.slice(0, tab).split(' ').pop() ?? ''
+        const path = unquotePath(line.slice(tab + 1))
+        if (status.startsWith('D')) getChange(current, path).deleted = true
+        return
+      }
+      // numstat line: "12\t3\tpath" or "-\t-\tbinary"
+      const parts = line.split('\t')
+      if (parts.length < 3) return
+      const [addStr, delStr] = parts
+      const path = unquotePath(parts.slice(2).join('\t'))
+      const ch = getChange(current, path)
+      if (addStr === '-' || delStr === '-') {
+        ch.binary = true
+      } else {
+        ch.add += parseInt(addStr, 10) || 0
+        ch.del += parseInt(delStr, 10) || 0
+      }
+    }
+  )
+  finishCommit()
+
+  onProgress({ phase: 'reading-history', done: commitCount, total: commitCount })
+
+  return {
+    info: {
+      path: repoPath,
+      name: basename(repoPath),
+      branch,
+      commitCount
+    },
+    snapshots
+  }
+}

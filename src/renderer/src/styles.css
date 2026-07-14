@@ -7,6 +7,7 @@
   --accent: #ffb347;
   --accent-2: #6ec8ff;
   --danger: #ff6b6b;
+  --ok: #7dd87d;
   font-family: 'Segoe UI', 'SF Pro Display', -apple-system, system-ui, sans-serif;
 }
 
@@ -51,6 +52,31 @@ button.primary {
 }
 button.primary:hover {
   background: #ffc46a;
+}
+button.danger {
+  border-color: rgba(255, 107, 107, 0.4);
+  color: var(--danger);
+}
+button.danger:hover {
+  background: rgba(255, 107, 107, 0.15);
+}
+button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+textarea {
+  font: inherit;
+  color: var(--text);
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  padding: 9px 12px;
+  outline: none;
+  width: 100%;
+  resize: vertical;
+}
+textarea:focus {
+  border-color: var(--accent-2);
 }
 
 input[type='text'] {

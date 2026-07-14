@@ -3,6 +3,8 @@ import { useStore } from './store'
 import Welcome from './screens/Welcome'
 import Loading from './screens/Loading'
 import CityView from './city/CityView'
+import ConfirmDialog from './panels/ConfirmDialog'
+import OpErrorToast from './panels/OpErrorToast'
 
 export default function App(): React.JSX.Element {
   const screen = useStore((s) => s.screen)
@@ -10,7 +12,14 @@ export default function App(): React.JSX.Element {
 
   useEffect(() => init(), [init])
 
-  if (screen === 'welcome') return <Welcome />
-  if (screen === 'loading') return <Loading />
-  return <CityView />
+  return (
+    <>
+      {screen === 'welcome' && <Welcome />}
+      {screen === 'loading' && <Loading />}
+      {screen === 'city' && <CityView />}
+      {/* root-level overlays available from any screen */}
+      <ConfirmDialog />
+      <OpErrorToast />
+    </>
+  )
 }

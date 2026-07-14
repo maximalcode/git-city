@@ -7,7 +7,14 @@ import { buildCityModel, snapshotTargets } from './cityData'
 import Buildings from './Buildings'
 import Districts from './Districts'
 import Highlight from './Highlight'
+import StatusOverlay from './StatusOverlay'
+import ConstructionSites from './ConstructionSites'
+import Effects from './Effects'
 import Hud from './Hud'
+import ChangesPanel from '../panels/ChangesPanel'
+import BranchesPanel from '../panels/BranchesPanel'
+import StashPanel from '../panels/StashPanel'
+import MergeView from '../panels/MergeView'
 
 const PLAY_STEP_MS = 800
 
@@ -83,6 +90,9 @@ export default function CityView(): React.JSX.Element {
         <Districts model={model} />
         <Buildings model={model} targets={targets} />
         <Highlight model={model} targets={targets} />
+        <StatusOverlay model={model} targets={targets} />
+        <ConstructionSites model={model} />
+        <Effects citySize={size} />
 
         <CameraControls maxDistance={size * 4} />
 
@@ -93,6 +103,10 @@ export default function CityView(): React.JSX.Element {
       </Canvas>
 
       <Hud snapshot={snapshot} model={model} />
+      <ChangesPanel />
+      <BranchesPanel />
+      <StashPanel />
+      <MergeView />
     </div>
   )
 }

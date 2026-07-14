@@ -1,0 +1,504 @@
+/* Styles for the interactive git-client UI (panels, sync controls, merge view). */
+
+/* ---------- hud sync controls ---------- */
+.hud-top .sync-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.hud-top .sync-group button {
+  padding: 6px 10px;
+  font-size: 12.5px;
+}
+.ab-badge {
+  font-size: 12px;
+  color: var(--accent-2);
+  font-family: Consolas, monospace;
+  white-space: nowrap;
+}
+.op-badge {
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: #1a1205;
+  background: var(--accent);
+  border-radius: 999px;
+  padding: 3px 10px;
+}
+.op-spinner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+.op-spinner button {
+  padding: 3px 8px;
+  font-size: 12px;
+}
+.spinner {
+  width: 13px;
+  height: 13px;
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  display: inline-block;
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.stale-pill {
+  font-size: 12.5px;
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.cherry-btn {
+  padding: 3px 10px;
+  font-size: 12px;
+  border-color: var(--accent-2);
+  color: var(--accent-2);
+}
+
+/* ---------- side panels ---------- */
+.side-panel {
+  position: absolute;
+  top: 60px;
+  left: 16px;
+  bottom: 96px;
+  width: 340px;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  backdrop-filter: blur(10px);
+  display: flex;
+  flex-direction: column;
+  z-index: 20;
+  overflow: hidden;
+}
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  font-weight: 600;
+  border-bottom: 1px solid var(--panel-border);
+}
+.panel-head .close,
+.merge-head .close,
+.op-toast .close {
+  border: none;
+  background: none;
+  color: var(--text-dim);
+  font-size: 15px;
+  padding: 2px 6px;
+}
+.panel-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-dim);
+  padding: 8px 14px;
+  background: rgba(110, 200, 255, 0.06);
+}
+.panel-banner button {
+  padding: 3px 8px;
+  font-size: 11.5px;
+}
+.panel-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 0;
+}
+.panel-scroll section {
+  margin-bottom: 10px;
+}
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 14px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-dim);
+}
+.section-head button {
+  padding: 2px 8px;
+  font-size: 11.5px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.danger-text {
+  color: var(--danger);
+}
+.empty {
+  padding: 8px 14px;
+  font-size: 12.5px;
+  color: var(--text-dim);
+  font-style: italic;
+}
+
+/* file rows */
+.file-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 14px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.file-row:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+.status-chip {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  font-family: Consolas, monospace;
+  flex-shrink: 0;
+}
+.chip-mod {
+  background: rgba(255, 179, 71, 0.25);
+  color: var(--accent);
+}
+.chip-add,
+.chip-new {
+  background: rgba(110, 200, 255, 0.22);
+  color: var(--accent-2);
+}
+.chip-del {
+  background: rgba(255, 107, 107, 0.2);
+  color: var(--danger);
+}
+.chip-conflict {
+  background: rgba(255, 107, 107, 0.3);
+  color: var(--danger);
+}
+.file-path {
+  flex: 1;
+  font-family: Consolas, monospace;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  direction: rtl;
+  text-align: left;
+}
+.row-actions {
+  display: none;
+  gap: 4px;
+}
+.file-row:hover .row-actions {
+  display: flex;
+}
+.row-actions button {
+  padding: 1px 7px;
+  font-size: 13px;
+  line-height: 1.2;
+}
+
+/* commit box */
+.commit-box {
+  border-top: 1px solid var(--panel-border);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.commit-box textarea {
+  min-height: 60px;
+}
+.amend-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+.amend-row input {
+  accent-color: var(--accent);
+}
+.commit-btn {
+  width: 100%;
+}
+
+/* branches + stash */
+.new-branch,
+.new-stash {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--panel-border);
+}
+.new-branch {
+  flex-direction: row;
+}
+.branch-row,
+.stash-row {
+  padding: 8px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+.branch-row.current {
+  background: rgba(255, 179, 71, 0.08);
+}
+.branch-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+}
+.branch-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-dim);
+}
+.branch-row.current .branch-dot {
+  background: var(--accent);
+}
+.branch-dot.remote {
+  background: transparent;
+  border: 1.5px solid var(--accent-2);
+}
+.branch-row.remote .branch-label {
+  color: var(--text-dim);
+}
+.branch-label {
+  flex: 1;
+  font-family: Consolas, monospace;
+  font-size: 12.5px;
+}
+.branch-actions {
+  display: flex;
+  gap: 5px;
+  margin-top: 7px;
+  flex-wrap: wrap;
+}
+.branch-actions button {
+  padding: 3px 9px;
+  font-size: 11.5px;
+}
+.stash-msg {
+  font-size: 13px;
+}
+.stash-date {
+  font-size: 11.5px;
+  color: var(--text-dim);
+  margin: 2px 0 4px;
+}
+
+/* ---------- modal ---------- */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+.modal-card {
+  width: 420px;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 14px;
+  padding: 22px;
+  backdrop-filter: blur(12px);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.modal-card h3 {
+  font-size: 17px;
+}
+.modal-card p {
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--text-dim);
+}
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+/* ---------- op error toast ---------- */
+.op-toast {
+  position: fixed;
+  bottom: 110px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(560px, 80vw);
+  background: var(--panel);
+  border: 1px solid rgba(255, 107, 107, 0.4);
+  border-radius: 12px;
+  padding: 14px 16px;
+  backdrop-filter: blur(10px);
+  z-index: 90;
+}
+.op-toast .close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+}
+.op-toast-msg {
+  font-size: 13.5px;
+  color: var(--text);
+  padding-right: 20px;
+}
+.op-toast details {
+  margin-top: 8px;
+}
+.op-toast summary {
+  font-size: 12px;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.op-toast pre {
+  margin-top: 6px;
+  font-family: Consolas, monospace;
+  font-size: 11.5px;
+  color: var(--text-dim);
+  white-space: pre-wrap;
+  max-height: 160px;
+  overflow-y: auto;
+}
+
+/* ---------- merge view ---------- */
+.merge-view {
+  position: fixed;
+  inset: 0;
+  background: rgba(11, 14, 20, 0.97);
+  z-index: 80;
+  display: flex;
+  flex-direction: column;
+}
+.merge-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--panel-border);
+}
+.merge-title {
+  font-weight: 600;
+  font-size: 15px;
+}
+.merge-head .spacer {
+  flex: 1;
+}
+.merge-body {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+.merge-rail {
+  width: 260px;
+  border-right: 1px solid var(--panel-border);
+  overflow-y: auto;
+  padding: 8px 0;
+  flex-shrink: 0;
+}
+.rail-item {
+  padding: 8px 16px;
+  font-family: Consolas, monospace;
+  font-size: 12px;
+  cursor: pointer;
+  word-break: break-all;
+}
+.rail-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+.rail-item.active {
+  background: rgba(255, 179, 71, 0.12);
+  color: var(--accent);
+}
+.merge-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.merge-segments {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 18px;
+}
+.seg-text {
+  font-family: Consolas, monospace;
+  font-size: 12.5px;
+  color: var(--text-dim);
+  white-space: pre-wrap;
+  line-height: 1.5;
+}
+.hunk {
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  margin: 8px 0;
+  overflow: hidden;
+}
+.hunk-actions {
+  display: flex;
+  gap: 6px;
+  padding: 8px;
+  background: rgba(255, 255, 255, 0.03);
+}
+.hunk-actions button {
+  padding: 3px 10px;
+  font-size: 12px;
+}
+.hunk-preview {
+  padding: 4px 0;
+}
+.seg-ours,
+.seg-theirs {
+  font-family: Consolas, monospace;
+  font-size: 12.5px;
+  white-space: pre-wrap;
+  line-height: 1.5;
+  padding: 4px 12px;
+}
+.seg-ours {
+  background: rgba(125, 216, 125, 0.08);
+  border-left: 3px solid var(--ok);
+}
+.seg-theirs {
+  background: rgba(110, 200, 255, 0.08);
+  border-left: 3px solid var(--accent-2);
+}
+.hunk-edit {
+  min-height: 100px;
+  border-radius: 0;
+  border: none;
+  font-family: Consolas, monospace;
+  font-size: 12.5px;
+}
+.merge-file-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 12px 18px;
+  border-top: 1px solid var(--panel-border);
+}
+.binary-resolve {
+  padding: 24px;
+  color: var(--text-dim);
+  font-size: 14px;
+  line-height: 1.6;
+}
+.binary-resolve code {
+  font-family: Consolas, monospace;
+  color: var(--accent);
+}

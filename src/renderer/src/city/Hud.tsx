@@ -23,6 +23,17 @@ export default function Hud({ snapshot }: Props): React.JSX.Element {
   const selected = useStore((s) => s.selected)
   const setSelected = useStore((s) => s.setSelected)
   const backToWelcome = useStore((s) => s.backToWelcome)
+  const workingStatus = useStore((s) => s.workingStatus)
+  const panel = useStore((s) => s.panel)
+  const setPanel = useStore((s) => s.setPanel)
+  const opInProgress = useStore((s) => s.opInProgress)
+  const reanalyzing = useStore((s) => s.reanalyzing)
+  const historyStale = useStore((s) => s.historyStale)
+  const fetch = useStore((s) => s.fetch)
+  const pull = useStore((s) => s.pull)
+  const push = useStore((s) => s.push)
+  const cancelOp = useStore((s) => s.cancelOp)
+  const refreshAnalysis = useStore((s) => s.refreshAnalysis)
 
   const byPath = useMemo(() => new Map(snapshot.files.map((f) => [f.path, f])), [snapshot])
   const totalLoc = useMemo(() => snapshot.files.reduce((a, f) => a + f.loc, 0), [snapshot])
@@ -32,15 +43,90 @@ export default function Hud({ snapshot }: Props): React.JSX.Element {
   const selectedFile = selected ? byPath.get(selected) : undefined
   const date = new Date(snapshot.date)
 
+  const st = workingStatus
+  const busy = opInProgress !== null
+  const branchLabel = st ? (st.branch ?? `detached @ ${st.detachedAt}`) : analysis.info.branch
+  const changeCount = st?.files.length ?? 0
+  const hasRemote = (st?.remotes.length ?? 0) > 0
+  const hasUpstream = st?.upstream != null
+  const opState = st?.opState ?? 'none'
+
   return (
     <>
       <div className="hud-top">
         <span className="repo-name">{analysis.info.name}</span>
-        <span className="branch">{analysis.info.branch}</span>
-        <span className="branch">
-          {snapshot.files.length.toLocaleString()} files · {totalLoc.toLocaleString()} lines
-        </span>
+        <button
+          className={panel === 'branches' ? 'active' : ''}
+          onClick={() => setPanel('branches')}
+          title="Branches"
+        >
+          ⑂ {branchLabel}
+        </button>
+
+        {hasRemote && (
+          <span className="sync-group">
+            <button disabled={busy} onClick={() => void fetch()} title="Fetch">
+              ⭳ Fetch
+            </button>
+            <button disabled={busy || !hasUpstream} onClick={() => void pull()} title="Pull">
+              ↓ Pull
+            </button>
+            <button
+              disabled={busy}
+              onClick={() => void push(!hasUpstream)}
+              title={hasUpstream ? 'Push' : 'Publish this branch'}
+            >
+              ↑ {hasUpstream ? 'Push' : 'Publish'}
+            </button>
+            {st && (st.ahead > 0 || st.behind > 0) && (
+              <span className="ab-badge">
+                {st.ahead > 0 && `↑${st.ahead}`} {st.behind > 0 && `↓${st.behind}`}
+              </span>
+            )}
+          </span>
+        )}
+
+        {opState !== 'none' && (
+          <span className="op-badge">
+            {opState.toUpperCase()}
+            {st?.rebaseProgress && ` ${st.rebaseProgress.done}/${st.rebaseProgress.total}`}
+          </span>
+        )}
+
+        <button
+          className={panel === 'changes' ? 'active' : ''}
+          onClick={() => setPanel('changes')}
+          title="Working tree changes"
+        >
+          ✎ Changes{changeCount > 0 ? ` (${changeCount})` : ''}
+        </button>
+        <button
+          className={panel === 'stashes' ? 'active' : ''}
+          onClick={() => setPanel('stashes')}
+          title="Stashes"
+        >
+          ⊟ Stash{st && st.stashCount > 0 ? ` (${st.stashCount})` : ''}
+        </button>
+
         <div className="spacer" />
+
+        {busy && (
+          <span className="op-spinner">
+            <span className="spinner" /> {opInProgress?.label}
+            <button onClick={() => void cancelOp()}>Cancel</button>
+          </span>
+        )}
+        {!busy && reanalyzing && (
+          <span className="op-spinner">
+            <span className="spinner" /> updating history…
+          </span>
+        )}
+        {historyStale && !busy && !reanalyzing && (
+          <button className="stale-pill" onClick={() => void refreshAnalysis()}>
+            History changed — Reload
+          </button>
+        )}
+
         <button
           className={colorMode === 'language' ? 'active' : ''}
           onClick={() => setColorMode('language')}
@@ -114,6 +200,23 @@ export default function Hud({ snapshot }: Props): React.JSX.Element {
             {snapshot.author} · {date.toLocaleDateString()} · commit {snapshot.index + 1} of{' '}
             {analysis.info.commitCount.toLocaleString()}
           </span>
+          {snapshotIndex < last && st?.branch && (
+            <button
+              className="cherry-btn"
+              disabled={busy}
+              onClick={() =>
+                useStore.getState().askConfirm({
+                  title: 'Cherry-pick this commit?',
+                  body: `Apply commit ${snapshot.hash.slice(0, 7)} "${snapshot.message}" onto ${st.branch}.`,
+                  confirmLabel: 'Cherry-pick',
+                  danger: false,
+                  onConfirm: () => void useStore.getState().cherryPick(snapshot.hash)
+                })
+              }
+            >
+              ⤷ Cherry-pick onto {st.branch}
+            </button>
+          )}
         </div>
         <div className="timeline-row">
           <button className="play" onClick={() => setPlaying(!playing)} title="Play history">

@@ -1,12 +1,46 @@
 import { create } from 'zustand'
-import type { ProgressInfo, RepoAnalysis } from '../../shared/types'
+import type {
+  BranchInfo,
+  OpResult,
+  ProgressInfo,
+  RepoAnalysis,
+  RepoOpState,
+  StashEntry,
+  WorkingStatus
+} from '../../shared/types'
 
 export type ColorMode = 'language' | 'heat'
+export type Panel = 'none' | 'changes' | 'branches' | 'stashes'
+
+export interface ConfirmRequest {
+  title: string
+  body: string
+  confirmLabel: string
+  danger: boolean
+  onConfirm: () => void
+}
+
+export interface MergeViewState {
+  active: string | null
+  source: RepoOpState
+}
+
+export type EffectKind = 'commit-settle' | 'push' | 'pull'
 
 function cleanError(err: unknown): string {
   const msg = err instanceof Error ? err.message : String(err)
   // Electron prefixes IPC errors with "Error invoking remote method '...': Error:"
   return msg.replace(/^Error invoking remote method '[^']+':\s*(Error:\s*)?/, '')
+}
+
+const hasApi = (): boolean => 'gitCity' in window
+
+/** Cheap fingerprint so identical statuses (editor atomic-save churn) don't re-render. */
+function statusFingerprint(s: WorkingStatus | null): string {
+  if (!s) return ''
+  return `${s.headHash}|${s.opState}|${s.ahead},${s.behind}|${s.branch}|${s.files
+    .map((f) => `${f.path}:${f.index}${f.worktree}${f.conflicted ? 'C' : ''}`)
+    .join(',')}`
 }
 
 interface GitCityState {
@@ -22,6 +56,20 @@ interface GitCityState {
   error: string | null
   gitVersion: string | null | 'unknown'
 
+  // --- live repo state ---
+  repoPath: string | null
+  workingStatus: WorkingStatus | null
+  branches: BranchInfo[]
+  stashes: StashEntry[]
+  panel: Panel
+  opInProgress: { label: string } | null
+  opError: { message: string; gitOutput?: string } | null
+  confirm: ConfirmRequest | null
+  mergeView: MergeViewState | null
+  historyStale: boolean
+  effect: { kind: EffectKind; nonce: number } | null
+  reanalyzing: boolean
+
   init(): void
   openLocal(): Promise<void>
   openUrl(url: string): Promise<void>
@@ -32,7 +80,46 @@ interface GitCityState {
   setColorMode(mode: ColorMode): void
   toggleNight(): void
   backToWelcome(): void
+
+  // live actions
+  setPanel(panel: Panel): void
+  refreshStatus(): Promise<void>
+  refreshBranches(): Promise<void>
+  refreshStashes(): Promise<void>
+  refreshAnalysis(): Promise<void>
+  jumpToNow(): void
+  dismissError(): void
+  askConfirm(req: ConfirmRequest): void
+  resolveConfirm(go: boolean): void
+
+  stage(paths: string[]): Promise<void>
+  unstage(paths: string[]): Promise<void>
+  discard(paths: string[]): Promise<void>
+  commit(message: string, amend: boolean): Promise<void>
+  fetch(): Promise<void>
+  pull(): Promise<void>
+  push(setUpstream: boolean): Promise<void>
+  cancelOp(): Promise<void>
+  switchBranch(name: string): Promise<void>
+  createBranch(name: string, andSwitch: boolean): Promise<void>
+  deleteBranch(name: string, force: boolean): Promise<void>
+  merge(name: string): Promise<void>
+  rebaseOnto(name: string): Promise<void>
+  cherryPick(hash: string): Promise<void>
+  stashPush(message: string, includeUntracked: boolean): Promise<void>
+  stashPop(index: number): Promise<void>
+  stashApply(index: number): Promise<void>
+  stashDrop(index: number): Promise<void>
+  openMergeView(): void
+  closeMergeView(): void
+  setMergeActive(path: string | null): void
+  resolveConflict(path: string, text: string): Promise<void>
+  resolveWhole(path: string, side: 'ours' | 'theirs'): Promise<void>
+  abortOp(): Promise<void>
+  continueOp(): Promise<void>
 }
+
+let lastFingerprint = ''
 
 export const useStore = create<GitCityState>((set, get) => ({
   screen: 'welcome',
@@ -47,10 +134,33 @@ export const useStore = create<GitCityState>((set, get) => ({
   error: null,
   gitVersion: 'unknown',
 
+  repoPath: null,
+  workingStatus: null,
+  branches: [],
+  stashes: [],
+  panel: 'none',
+  opInProgress: null,
+  opError: null,
+  confirm: null,
+  mergeView: null,
+  historyStale: false,
+  effect: null,
+  reanalyzing: false,
+
   init: () => {
     // absent when the renderer runs in a plain browser (vite preview) instead of Electron
-    if (!('gitCity' in window)) return
+    if (!hasApi()) return
     window.gitCity.onProgress((p) => set({ progress: p }))
+    window.gitCity.onRepoChanged((reasons) => {
+      void get().refreshStatus()
+      if (reasons.includes('head') || reasons.includes('refs')) {
+        void get().refreshBranches()
+        void get().refreshStashes()
+        // external HEAD move: don't surprise-reanalyze; offer a reload pill
+        const s = get()
+        if (s.opInProgress === null && s.reanalyzing === false) set({ historyStale: true })
+      }
+    })
     window.gitCity
       .checkGit()
       .then((v) => set({ gitVersion: v }))
@@ -58,37 +168,18 @@ export const useStore = create<GitCityState>((set, get) => ({
   },
 
   openLocal: async () => {
+    if (!hasApi()) return
     const path = await window.gitCity.selectFolder()
     if (!path) return
-    set({ screen: 'loading', error: null, progress: null })
-    try {
-      const analysis = await window.gitCity.analyzeRepo(path, 50)
-      set({
-        analysis,
-        snapshotIndex: analysis.snapshots.length - 1,
-        screen: 'city',
-        selected: null,
-        hovered: null,
-        playing: false
-      })
-    } catch (err) {
-      set({ screen: 'welcome', error: cleanError(err) })
-    }
+    await loadRepo(set, get, () => window.gitCity.analyzeRepo(path, 50), path)
   },
 
   openUrl: async (url: string) => {
+    if (!hasApi()) return
     set({ screen: 'loading', error: null, progress: null })
     try {
       const path = await window.gitCity.cloneRepo(url)
-      const analysis = await window.gitCity.analyzeRepo(path, 50)
-      set({
-        analysis,
-        snapshotIndex: analysis.snapshots.length - 1,
-        screen: 'city',
-        selected: null,
-        hovered: null,
-        playing: false
-      })
+      await loadRepo(set, get, () => window.gitCity.analyzeRepo(path, 50), path)
     } catch (err) {
       set({ screen: 'welcome', error: cleanError(err) })
     }
@@ -97,7 +188,6 @@ export const useStore = create<GitCityState>((set, get) => ({
   setSnapshotIndex: (i) => set({ snapshotIndex: i, playing: false }),
   setPlaying: (playing) => {
     const { analysis, snapshotIndex } = get()
-    // restart from the beginning when pressing play at the end
     if (playing && analysis && snapshotIndex >= analysis.snapshots.length - 1) {
       set({ playing, snapshotIndex: 0 })
     } else {
@@ -108,6 +198,315 @@ export const useStore = create<GitCityState>((set, get) => ({
   setSelected: (selected) => set({ selected }),
   setColorMode: (colorMode) => set({ colorMode }),
   toggleNight: () => set((s) => ({ night: !s.night })),
-  backToWelcome: () =>
-    set({ screen: 'welcome', analysis: null, selected: null, hovered: null, playing: false })
+  backToWelcome: () => {
+    if (hasApi()) void window.gitCity.watchStop()
+    lastFingerprint = ''
+    set({
+      screen: 'welcome',
+      analysis: null,
+      selected: null,
+      hovered: null,
+      playing: false,
+      repoPath: null,
+      workingStatus: null,
+      branches: [],
+      stashes: [],
+      panel: 'none',
+      mergeView: null,
+      historyStale: false,
+      opError: null,
+      confirm: null
+    })
+  },
+
+  setPanel: (panel) => set((s) => ({ panel: s.panel === panel ? 'none' : panel })),
+
+  refreshStatus: async () => {
+    const { repoPath } = get()
+    if (!hasApi() || !repoPath) return
+    try {
+      const status = await window.gitCity.status(repoPath)
+      const fp = statusFingerprint(status)
+      if (fp === lastFingerprint) return
+      lastFingerprint = fp
+      set({ workingStatus: status })
+      // conflicts appeared while a merge view is open → nothing to do; gone → maybe close
+    } catch {
+      // status can briefly fail during an index.lock window; the next event retries
+    }
+  },
+
+  refreshBranches: async () => {
+    const { repoPath } = get()
+    if (!hasApi() || !repoPath) return
+    try {
+      set({ branches: await window.gitCity.branches(repoPath) })
+    } catch {
+      /* ignore */
+    }
+  },
+
+  refreshStashes: async () => {
+    const { repoPath } = get()
+    if (!hasApi() || !repoPath) return
+    try {
+      set({ stashes: await window.gitCity.stashList(repoPath) })
+    } catch {
+      /* ignore */
+    }
+  },
+
+  refreshAnalysis: async () => {
+    const { repoPath } = get()
+    if (!hasApi() || !repoPath) return
+    set({ reanalyzing: true, historyStale: false })
+    try {
+      let analysis = await window.gitCity.analyzeIncremental(repoPath)
+      if (!analysis) analysis = await window.gitCity.analyzeRepo(repoPath, 50)
+      const wasLive = isLiveState(get())
+      set((s) => ({
+        analysis,
+        // if the user was watching the latest state, keep them there
+        snapshotIndex: wasLive ? analysis!.snapshots.length - 1 : s.snapshotIndex
+      }))
+    } catch (err) {
+      set({ opError: { message: cleanError(err) } })
+    } finally {
+      set({ reanalyzing: false })
+    }
+  },
+
+  jumpToNow: () => {
+    const { analysis } = get()
+    if (analysis) set({ snapshotIndex: analysis.snapshots.length - 1, playing: false })
+  },
+
+  dismissError: () => set({ opError: null }),
+  askConfirm: (req) => set({ confirm: req }),
+  resolveConfirm: (go) => {
+    const req = get().confirm
+    set({ confirm: null })
+    if (go && req) req.onConfirm()
+  },
+
+  // --- mutating actions (all funnel through runOp) ---
+  stage: (paths) => runOp(set, get, 'Staging…', (repo) => window.gitCity.stage(repo, paths)),
+  unstage: (paths) =>
+    runOp(set, get, 'Unstaging…', (repo) => window.gitCity.unstage(repo, paths)),
+  discard: (paths) =>
+    runOp(set, get, 'Discarding…', (repo) => window.gitCity.discard(repo, paths)),
+  commit: (message, amend) =>
+    runOp(
+      set,
+      get,
+      amend ? 'Amending…' : 'Committing…',
+      (repo) => window.gitCity.commit(repo, message, amend),
+      { reanalyze: true, effect: 'commit-settle' }
+    ),
+  // fetch never moves HEAD — it only updates remote refs, so no re-analysis;
+  // the payoff is refreshBranches() (runs after every op) surfacing updated remotes
+  fetch: () => runOp(set, get, 'Fetching…', (repo) => window.gitCity.fetch(repo)),
+  pull: () =>
+    runOp(set, get, 'Pulling…', (repo) => window.gitCity.pull(repo), {
+      reanalyze: true,
+      effect: 'pull',
+      conflictsOpenMerge: true
+    }),
+  push: (setUpstream) =>
+    runOp(set, get, 'Pushing…', (repo) => window.gitCity.push(repo, setUpstream), {
+      effect: 'push'
+    }),
+  cancelOp: async () => {
+    if (hasApi()) await window.gitCity.cancelOp()
+  },
+  switchBranch: (name) =>
+    runOp(set, get, `Switching to ${name}…`, (repo) => window.gitCity.switchBranch(repo, name), {
+      reanalyze: true
+    }),
+  createBranch: (name, andSwitch) =>
+    runOp(
+      set,
+      get,
+      'Creating branch…',
+      (repo) => window.gitCity.createBranch(repo, name, andSwitch),
+      { reanalyze: andSwitch }
+    ),
+  deleteBranch: (name, force) =>
+    runOp(set, get, 'Deleting branch…', (repo) =>
+      window.gitCity.deleteBranch(repo, name, force)
+    ),
+  merge: (name) =>
+    runOp(set, get, `Merging ${name}…`, (repo) => window.gitCity.merge(repo, name), {
+      reanalyze: true,
+      conflictsOpenMerge: true
+    }),
+  rebaseOnto: (name) =>
+    runOp(set, get, `Rebasing onto ${name}…`, (repo) => window.gitCity.rebase(repo, name), {
+      reanalyze: true,
+      conflictsOpenMerge: true
+    }),
+  cherryPick: (hash) =>
+    runOp(set, get, 'Cherry-picking…', (repo) => window.gitCity.cherryPick(repo, hash), {
+      reanalyze: true,
+      conflictsOpenMerge: true
+    }),
+  stashPush: (message, includeUntracked) =>
+    runOp(set, get, 'Stashing…', (repo) =>
+      window.gitCity.stashPush(repo, message, includeUntracked)
+    ),
+  stashPop: (index) =>
+    runOp(set, get, 'Applying stash…', (repo) => window.gitCity.stashPop(repo, index), {
+      conflictsOpenMerge: true
+    }),
+  stashApply: (index) =>
+    runOp(set, get, 'Applying stash…', (repo) => window.gitCity.stashApply(repo, index), {
+      conflictsOpenMerge: true
+    }),
+  stashDrop: (index) =>
+    runOp(set, get, 'Dropping stash…', (repo) => window.gitCity.stashDrop(repo, index)),
+
+  openMergeView: () => {
+    const st = get().workingStatus
+    set({ mergeView: { active: null, source: st?.opState ?? 'merge' } })
+  },
+  closeMergeView: () => set({ mergeView: null }),
+  setMergeActive: (path) =>
+    set((s) => (s.mergeView ? { mergeView: { ...s.mergeView, active: path } } : {})),
+  resolveConflict: (path, text) =>
+    runOp(set, get, 'Marking resolved…', (repo) =>
+      window.gitCity.conflictResolve(repo, path, text)
+    ),
+  resolveWhole: (path, side) =>
+    runOp(set, get, 'Marking resolved…', (repo) =>
+      window.gitCity.conflictResolveWhole(repo, path, side)
+    ),
+  abortOp: () => {
+    const source = get().workingStatus?.opState ?? 'merge'
+    const fn =
+      source === 'rebase'
+        ? window.gitCity.rebaseAbort
+        : source === 'cherry-pick'
+          ? window.gitCity.cherryPickAbort
+          : window.gitCity.mergeAbort
+    return runOp(set, get, 'Aborting…', (repo) => fn(repo), {
+      reanalyze: true,
+      closeMerge: true
+    })
+  },
+  continueOp: () => {
+    const source = get().workingStatus?.opState ?? 'merge'
+    const fn =
+      source === 'rebase'
+        ? window.gitCity.rebaseContinue
+        : source === 'cherry-pick'
+          ? window.gitCity.cherryPickContinue
+          : window.gitCity.mergeContinue
+    return runOp(set, get, 'Continuing…', (repo) => fn(repo), {
+      reanalyze: true,
+      conflictsOpenMerge: true,
+      closeMergeOnSuccess: true,
+      effect: 'commit-settle'
+    })
+  }
 }))
+
+// ---------- helpers ----------
+
+interface RunOpts {
+  reanalyze?: boolean
+  effect?: EffectKind
+  conflictsOpenMerge?: boolean
+  closeMerge?: boolean
+  closeMergeOnSuccess?: boolean
+}
+
+/** Shared plumbing for every mutating op: guard, spinner, error surfacing, refresh. */
+async function runOp(
+  set: (partial: Partial<GitCityState>) => void,
+  get: () => GitCityState,
+  label: string,
+  fn: (repoPath: string) => Promise<OpResult>,
+  opts: RunOpts = {}
+): Promise<void> {
+  const { repoPath } = get()
+  if (!hasApi() || !repoPath) return
+  set({ opInProgress: { label }, opError: null })
+  let result: OpResult
+  try {
+    result = await fn(repoPath)
+  } catch (err) {
+    set({ opInProgress: null, opError: { message: cleanError(err) } })
+    return
+  }
+  set({ opInProgress: null })
+
+  await get().refreshStatus()
+  await get().refreshBranches()
+  await get().refreshStashes()
+
+  if (!result.ok) {
+    if (result.code === 'conflict' && opts.conflictsOpenMerge) {
+      const src = get().workingStatus?.opState ?? 'merge'
+      set({ mergeView: { active: result.conflicts?.[0] ?? null, source: src } })
+    }
+    if (result.code !== 'conflict') {
+      set({ opError: { message: result.message ?? 'Operation failed.', gitOutput: result.gitOutput } })
+    }
+    return
+  }
+
+  if (opts.closeMerge || opts.closeMergeOnSuccess) set({ mergeView: null })
+  if (opts.effect) triggerEffect(set, get, opts.effect)
+  if (opts.reanalyze) await get().refreshAnalysis()
+}
+
+function triggerEffect(
+  set: (partial: Partial<GitCityState>) => void,
+  get: () => GitCityState,
+  kind: EffectKind
+): void {
+  set({ effect: { kind, nonce: (get().effect?.nonce ?? 0) + 1 } })
+}
+
+async function loadRepo(
+  set: (partial: Partial<GitCityState>) => void,
+  get: () => GitCityState,
+  analyze: () => Promise<RepoAnalysis>,
+  path: string
+): Promise<void> {
+  set({ screen: 'loading', error: null, progress: null })
+  try {
+    const analysis = await analyze()
+    lastFingerprint = ''
+    set({
+      analysis,
+      repoPath: path,
+      snapshotIndex: analysis.snapshots.length - 1,
+      screen: 'city',
+      selected: null,
+      hovered: null,
+      playing: false,
+      panel: 'none',
+      historyStale: false
+    })
+    if (hasApi()) {
+      await window.gitCity.watchStart(path)
+      await get().refreshStatus()
+      await get().refreshBranches()
+      await get().refreshStashes()
+    }
+  } catch (err) {
+    set({ screen: 'welcome', error: cleanError(err) })
+  }
+}
+
+/** Derived: are we viewing HEAD with a status that matches the analyzed head? */
+export function isLiveState(s: GitCityState): boolean {
+  const { analysis, snapshotIndex, workingStatus } = s
+  if (!analysis || analysis.snapshots.length === 0) return false
+  if (snapshotIndex !== analysis.snapshots.length - 1) return false
+  const headSnap = analysis.snapshots[analysis.snapshots.length - 1]
+  if (!workingStatus) return true
+  if (!workingStatus.headHash) return true
+  return workingStatus.headHash.startsWith(headSnap.hash)
+}

@@ -1,7 +1,6 @@
-import { spawn } from 'child_process'
 import { basename } from 'path'
-import { createInterface } from 'readline'
 import type { FileState, ProgressInfo, RepoAnalysis, Snapshot } from '../../shared/types'
+import { runGit, runGitLines, runGitResult } from './exec'
 
 /**
  * Repo analysis built from a single streaming pass of
@@ -14,40 +13,6 @@ import type { FileState, ProgressInfo, RepoAnalysis, Snapshot } from '../../shar
  */
 
 const SENTINEL = '\x01'
-
-function runGit(cwd: string, args: string[]): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const child = spawn('git', args, { cwd, stdio: ['ignore', 'pipe', 'pipe'] })
-    let out = ''
-    let err = ''
-    child.stdout.on('data', (d) => (out += d))
-    child.stderr.on('data', (d) => (err += d))
-    child.on('error', reject)
-    child.on('close', (code) => {
-      if (code === 0) resolve(out)
-      else reject(new Error(err.trim() || `git ${args.join(' ')} exited with ${code}`))
-    })
-  })
-}
-
-function runGitLines(
-  cwd: string,
-  args: string[],
-  onLine: (line: string) => void
-): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const child = spawn('git', args, { cwd, stdio: ['ignore', 'pipe', 'pipe'] })
-    let err = ''
-    child.stderr.on('data', (d) => (err += d))
-    const rl = createInterface({ input: child.stdout, crlfDelay: Infinity })
-    rl.on('line', onLine)
-    child.on('error', reject)
-    child.on('close', (code) => {
-      if (code === 0) resolve()
-      else reject(new Error(err.trim() || `git log exited with ${code}`))
-    })
-  })
-}
 
 export async function checkGitInstalled(): Promise<string | null> {
   try {
@@ -91,36 +56,21 @@ function unquotePath(p: string): string {
   return p
 }
 
-export async function analyzeRepo(
+/**
+ * Stream a first-parent log range and cumulatively apply it to `state`.
+ * `startIndex` is the mainline index of the first commit in the range.
+ * Returns the snapshots taken at indices approved by `shouldSnapshot`.
+ */
+async function replayRange(
   repoPath: string,
-  sampleTarget: number,
-  onProgress: (p: ProgressInfo) => void
-): Promise<RepoAnalysis> {
-  const inside = (await runGit(repoPath, ['rev-parse', '--is-inside-work-tree']).catch(() => 'false')).trim()
-  if (inside !== 'true') {
-    throw new Error('The selected folder is not a git repository.')
-  }
-
-  onProgress({ phase: 'counting', done: 0, total: 1 })
-  let commitCount: number
-  try {
-    commitCount = parseInt(
-      (await runGit(repoPath, ['rev-list', '--count', '--first-parent', 'HEAD'])).trim(),
-      10
-    )
-  } catch {
-    throw new Error('This repository has no commits yet.')
-  }
-  if (!Number.isFinite(commitCount) || commitCount === 0) {
-    throw new Error('This repository has no commits yet.')
-  }
-
-  const branch = (await runGit(repoPath, ['rev-parse', '--abbrev-ref', 'HEAD'])).trim()
-  const sampleIdx = pickSampleIndices(commitCount, sampleTarget)
-
-  const state = new Map<string, FileState>()
+  range: string,
+  state: Map<string, FileState>,
+  startIndex: number,
+  shouldSnapshot: (index: number) => boolean,
+  onCommitDone?: (index: number) => void
+): Promise<Snapshot[]> {
   const snapshots: Snapshot[] = []
-  let commitIndex = -1
+  let commitIndex = startIndex - 1
   let current: PendingCommit | null = null
 
   const finishCommit = (): void => {
@@ -142,7 +92,7 @@ export async function analyzeRepo(
       f.lastAuthor = current.author
       if (ch.binary) f.binary = true
     }
-    if (sampleIdx.has(commitIndex)) {
+    if (shouldSnapshot(commitIndex)) {
       snapshots.push({
         hash: current.hash,
         date: current.date,
@@ -152,9 +102,7 @@ export async function analyzeRepo(
         files: Array.from(state.values(), (f) => ({ ...f }))
       })
     }
-    if (commitIndex % 500 === 0) {
-      onProgress({ phase: 'reading-history', done: commitIndex + 1, total: commitCount })
-    }
+    onCommitDone?.(commitIndex)
     current = null
   }
 
@@ -183,7 +131,7 @@ export async function analyzeRepo(
       '--numstat',
       '--date=unix',
       `--format=${SENTINEL}%H%x09%at%x09%an%x09%s`,
-      'HEAD'
+      range
     ],
     (line) => {
       if (line.startsWith(SENTINEL)) {
@@ -223,16 +171,121 @@ export async function analyzeRepo(
     }
   )
   finishCommit()
+  return snapshots
+}
+
+/**
+ * Last full analysis per repo, kept so analyzeIncremental can splice new
+ * commits without re-reading the whole history. Analyses are too big to
+ * round-trip over IPC, so the renderer only ever asks by repoPath.
+ */
+const analysisCache = new Map<string, RepoAnalysis>()
+
+export async function analyzeRepo(
+  repoPath: string,
+  sampleTarget: number,
+  onProgress: (p: ProgressInfo) => void
+): Promise<RepoAnalysis> {
+  const inside = (
+    await runGit(repoPath, ['rev-parse', '--is-inside-work-tree']).catch(() => 'false')
+  ).trim()
+  if (inside !== 'true') {
+    throw new Error('The selected folder is not a git repository.')
+  }
+
+  onProgress({ phase: 'counting', done: 0, total: 1 })
+  let commitCount: number
+  try {
+    commitCount = parseInt(
+      (await runGit(repoPath, ['rev-list', '--count', '--first-parent', 'HEAD'])).trim(),
+      10
+    )
+  } catch {
+    throw new Error('This repository has no commits yet.')
+  }
+  if (!Number.isFinite(commitCount) || commitCount === 0) {
+    throw new Error('This repository has no commits yet.')
+  }
+
+  const branch = (await runGit(repoPath, ['rev-parse', '--abbrev-ref', 'HEAD'])).trim()
+  const sampleIdx = pickSampleIndices(commitCount, sampleTarget)
+
+  const state = new Map<string, FileState>()
+  const snapshots = await replayRange(
+    repoPath,
+    'HEAD',
+    state,
+    0,
+    (i) => sampleIdx.has(i),
+    (i) => {
+      if (i % 500 === 0) {
+        onProgress({ phase: 'reading-history', done: i + 1, total: commitCount })
+      }
+    }
+  )
 
   onProgress({ phase: 'reading-history', done: commitCount, total: commitCount })
 
-  return {
-    info: {
-      path: repoPath,
-      name: basename(repoPath),
-      branch,
-      commitCount
-    },
+  const analysis: RepoAnalysis = {
+    info: { path: repoPath, name: basename(repoPath), branch, commitCount },
     snapshots
   }
+  analysisCache.set(repoPath, analysis)
+  return analysis
+}
+
+/**
+ * Splice commits made since the cached analysis instead of re-reading the
+ * whole history. Returns null when a fast path is impossible (no cache, or
+ * history was rewritten — rebase/amend/reset) so the caller falls back to a
+ * full analyzeRepo.
+ */
+export async function analyzeIncremental(repoPath: string): Promise<RepoAnalysis | null> {
+  const prev = analysisCache.get(repoPath)
+  if (!prev || prev.snapshots.length === 0) return null
+  const prevHead = prev.snapshots[prev.snapshots.length - 1].hash
+
+  const head = (await runGit(repoPath, ['rev-parse', 'HEAD'])).trim()
+  const branch = (await runGit(repoPath, ['rev-parse', '--abbrev-ref', 'HEAD'])).trim()
+  if (head === prevHead) {
+    // HEAD unchanged (e.g. branch metadata only) — refresh the branch name
+    const analysis = { ...prev, info: { ...prev.info, branch } }
+    analysisCache.set(repoPath, analysis)
+    return analysis
+  }
+
+  // history rewritten? (rebase, amend, reset) → full re-analysis
+  const ancestor = await runGitResult(repoPath, ['merge-base', '--is-ancestor', prevHead, head])
+  if (ancestor.code !== 0) return null
+
+  const added = parseInt(
+    (
+      await runGit(repoPath, ['rev-list', '--count', '--first-parent', `${prevHead}..${head}`])
+    ).trim(),
+    10
+  )
+  if (!Number.isFinite(added) || added === 0) return null
+
+  // seed exact HEAD state from the last snapshot (it is a full-state capture)
+  const state = new Map<string, FileState>(
+    prev.snapshots[prev.snapshots.length - 1].files.map((f) => [f.path, { ...f }])
+  )
+  const newSnaps = await replayRange(
+    repoPath,
+    `${prevHead}..${head}`,
+    state,
+    prev.info.commitCount,
+    () => true // snapshot every new commit — there are few
+  )
+
+  const analysis: RepoAnalysis = {
+    info: {
+      ...prev.info,
+      branch,
+      commitCount: prev.info.commitCount + added
+    },
+    snapshots: [...prev.snapshots, ...newSnaps]
+  }
+  analysisCache.set(repoPath, analysis)
+  return analysis
 }

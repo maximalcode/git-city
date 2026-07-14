@@ -2,10 +2,13 @@ import { app, BrowserWindow, dialog, ipcMain } from 'electron'
 import type { ProgressInfo } from '../shared/types'
 import { analyzeRepo, checkGitInstalled } from './git/analyze'
 import { cloneRepo } from './git/clone'
+import { registerOpsIpc } from './ipcOps'
 
 const SAMPLE_TARGET = 50
 
 export function registerIpc(): void {
+  registerOpsIpc()
+
   ipcMain.handle('git-city:check-git', () => checkGitInstalled())
 
   ipcMain.handle('git-city:select-folder', async (event) => {

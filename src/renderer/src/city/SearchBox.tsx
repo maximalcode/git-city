@@ -7,12 +7,14 @@ const MAX_RESULTS = 8
 /**
  * Fuzzy-ish path search over the city's buildings. Picking a result selects it,
  * which the camera fly-to in CameraControls picks up automatically.
+ * Arrow keys move through the results, Enter picks the highlighted one.
  */
 export default function SearchBox({ model }: { model: CityModel }): React.JSX.Element | null {
   const searchOpen = useStore((s) => s.searchOpen)
   const setSearchOpen = useStore((s) => s.setSearchOpen)
   const setSelected = useStore((s) => s.setSelected)
   const [q, setQ] = useState('')
+  const [activeIdx, setActiveIdx] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -26,11 +28,29 @@ export default function SearchBox({ model }: { model: CityModel }): React.JSX.El
     return model.paths.filter((p) => p.toLowerCase().includes(needle)).slice(0, MAX_RESULTS)
   }, [q, model])
 
+  // new query → highlight the first hit again
+  useEffect(() => {
+    setActiveIdx(0)
+  }, [q])
+
   if (!searchOpen) return null
 
   const pick = (path: string): void => {
     setSelected(path)
     setSearchOpen(false)
+  }
+
+  const onKeyDown = (e: React.KeyboardEvent): void => {
+    if (e.key === 'Escape') setSearchOpen(false)
+    else if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      setActiveIdx((i) => Math.min(i + 1, results.length - 1))
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      setActiveIdx((i) => Math.max(i - 1, 0))
+    } else if (e.key === 'Enter' && results[activeIdx]) {
+      pick(results[activeIdx])
+    }
   }
 
   return (
@@ -39,17 +59,23 @@ export default function SearchBox({ model }: { model: CityModel }): React.JSX.El
         ref={inputRef}
         type="text"
         placeholder="Find a file…"
+        aria-label="Find a file"
         value={q}
         onChange={(e) => setQ(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === 'Escape') setSearchOpen(false)
-          if (e.key === 'Enter' && results[0]) pick(results[0])
-        }}
+        onKeyDown={onKeyDown}
       />
       {results.length > 0 && (
-        <div className="search-results">
-          {results.map((p) => (
-            <button key={p} onClick={() => pick(p)} title={p}>
+        <div className="search-results" role="listbox">
+          {results.map((p, i) => (
+            <button
+              key={p}
+              role="option"
+              aria-selected={i === activeIdx}
+              className={i === activeIdx ? 'active' : ''}
+              onClick={() => pick(p)}
+              onMouseEnter={() => setActiveIdx(i)}
+              title={p}
+            >
               {p}
             </button>
           ))}

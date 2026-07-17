@@ -110,7 +110,7 @@ export default function MergeView(): React.JSX.Element | null {
         <button className="primary" disabled={busy || !allResolved} onClick={() => void continueOp()}>
           Continue
         </button>
-        <button className="close" onClick={closeMergeView}>
+        <button className="close" aria-label="Close" onClick={closeMergeView}>
           ✕
         </button>
       </div>

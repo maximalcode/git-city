@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { CommitGraph, GraphCommit } from '../../../shared/types'
-import { hasApi, useStore } from '../store'
+import { cleanError, hasApi, useStore } from '../store'
 
 const ROW_H = 34
 const LANE_W = 20
@@ -23,21 +23,29 @@ export default function CommitGraphPanel(): React.JSX.Element | null {
 
   const [graph, setGraph] = useState<CommitGraph | null>(null)
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [retryNonce, setRetryNonce] = useState(0)
   const [active, setActive] = useState<string | null>(null)
 
   useEffect(() => {
     if (!graphOpen || !repoPath || !hasApi()) return
     let cancelled = false
     setLoading(true)
+    setError(null)
     void window.gitCity
       .commitGraph(repoPath, 500)
       .then((g) => !cancelled && setGraph(g))
-      .catch(() => !cancelled && setGraph(null))
+      .catch((err) => {
+        if (!cancelled) {
+          setGraph(null)
+          setError(cleanError(err))
+        }
+      })
       .finally(() => !cancelled && setLoading(false))
     return () => {
       cancelled = true
     }
-  }, [graphOpen, repoPath])
+  }, [graphOpen, repoPath, retryNonce])
 
   const rowIndex = useMemo(() => {
     const m = new Map<string, GraphCommit>()
@@ -54,13 +62,19 @@ export default function CommitGraphPanel(): React.JSX.Element | null {
     <div className="graph-panel">
       <div className="panel-head">
         <span>Commit graph{graph?.truncated ? ' · showing latest 500' : ''}</span>
-        <button className="close" onClick={() => setGraphOpen(false)}>
+        <button className="close" aria-label="Close" onClick={() => setGraphOpen(false)}>
           ✕
         </button>
       </div>
 
       <div className="graph-scroll">
         {loading && <div className="empty">Building graph…</div>}
+        {!loading && error && (
+          <div className="panel-error">
+            <span>{error}</span>
+            <button onClick={() => setRetryNonce((n) => n + 1)}>Retry</button>
+          </div>
+        )}
         {!loading && graph && (
           <div className="graph-inner" style={{ height: totalH }}>
             <svg className="graph-svg" width={graphW} height={totalH}>

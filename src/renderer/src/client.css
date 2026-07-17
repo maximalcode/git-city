@@ -250,6 +250,24 @@
   z-index: 20;
   overflow: hidden;
 }
+/* error state shared by the async panels (diff, history, graph, rebase) */
+.panel-error {
+  margin: 14px;
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 107, 107, 0.35);
+  border-radius: 10px;
+  background: rgba(255, 107, 107, 0.08);
+  color: var(--text);
+  font-size: 12.5px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.panel-error button {
+  flex-shrink: 0;
+}
+
 /* single definition — previously split across the "modern UI polish" block
    and here with conflicting padding */
 .panel-head {
@@ -1121,7 +1139,8 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.search-results button:hover {
+.search-results button:hover,
+.search-results button.active {
   background: rgba(110, 200, 255, 0.14);
 }
 .search-results.empty {

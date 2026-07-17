@@ -6,6 +6,7 @@ import { useStore } from '../store'
 import type { CityModel } from './cityData'
 
 const UP = new Vector3(0, 1, 0)
+const offsetScratch = new Vector3() // reused every frame during the intro orbit
 
 /**
  * Thin wrapper around three's own MapControls (pan/zoom/orbit above the city).
@@ -69,7 +70,7 @@ export default function CameraControls({
   useFrame((_, dt) => {
     if (intro.current) {
       // orbit by rotating the camera around the target (MapControls has no azimuth setter)
-      const offset = new Vector3().subVectors(camera.position, controls.target)
+      const offset = offsetScratch.subVectors(camera.position, controls.target)
       offset.applyAxisAngle(UP, Math.min(dt, 0.05) * 0.12)
       camera.position.copy(controls.target).add(offset)
     } else if (tween.current) {

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { DiffFile } from '../../../shared/types'
-import { hasApi, isLiveState, useStore } from '../store'
+import { cleanError, hasApi, isLiveState, useStore } from '../store'
 
 /**
  * Shows the diff for the selected building's file. Context-aware: when viewing
@@ -20,6 +20,8 @@ export default function DiffPanel(): React.JSX.Element | null {
 
   const [diff, setDiff] = useState<DiffFile | null>(null)
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [retryNonce, setRetryNonce] = useState(0)
 
   // An explicit rev (opened from a history commit) wins over the timeline context.
   const rev =
@@ -32,13 +34,17 @@ export default function DiffPanel(): React.JSX.Element | null {
     }
     let cancelled = false
     setLoading(true)
+    setError(null)
     void window.gitCity
       .getFileDiff(repoPath, selected, rev)
       .then((d) => {
         if (!cancelled) setDiff(d)
       })
-      .catch(() => {
-        if (!cancelled) setDiff(null)
+      .catch((err) => {
+        if (!cancelled) {
+          setDiff(null)
+          setError(cleanError(err))
+        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
@@ -46,7 +52,7 @@ export default function DiffPanel(): React.JSX.Element | null {
     return () => {
       cancelled = true
     }
-  }, [diffOpen, selected, repoPath, rev])
+  }, [diffOpen, selected, repoPath, rev, retryNonce])
 
   if (!diffOpen || !selected) return null
 
@@ -68,13 +74,19 @@ export default function DiffPanel(): React.JSX.Element | null {
             </span>
           )}
         </div>
-        <button className="close" onClick={() => setDiffOpen(false)}>
+        <button className="close" aria-label="Close" onClick={() => setDiffOpen(false)}>
           ✕
         </button>
       </div>
 
       <div className="diff-body">
         {loading && <div className="empty">Loading diff…</div>}
+        {!loading && error && (
+          <div className="panel-error">
+            <span>{error}</span>
+            <button onClick={() => setRetryNonce((n) => n + 1)}>Retry</button>
+          </div>
+        )}
         {!loading && diff && diff.binary && <div className="empty">Binary file — no line diff.</div>}
         {!loading && diff && !diff.binary && diff.hunks.length === 0 && (
           <div className="empty">No changes to show.</div>

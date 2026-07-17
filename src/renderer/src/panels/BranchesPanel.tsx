@@ -83,7 +83,7 @@ export default function BranchesPanel(): React.JSX.Element | null {
     <div className="side-panel branches-panel">
       <div className="panel-head">
         <span>Branches</span>
-        <button className="close" onClick={() => setPanel('none')}>
+        <button className="close" aria-label="Close" onClick={() => setPanel('none')}>
           ✕
         </button>
       </div>

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { RebaseEntry } from '../../../shared/types'
-import { hasApi, useStore } from '../store'
+import { cleanError, hasApi, useStore } from '../store'
 
 const LOAD_COUNT = 15
 
@@ -21,11 +21,14 @@ export default function RebasePanel(): React.JSX.Element | null {
   const [base, setBase] = useState<string | null>(null)
   const [hasMerges, setHasMerges] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [retryNonce, setRetryNonce] = useState(0)
 
   useEffect(() => {
     if (!rebaseOpen || !repoPath || !hasApi()) return
     let cancelled = false
     setLoading(true)
+    setError(null)
     void window.gitCity
       .rebaseTodo(repoPath, LOAD_COUNT)
       .then((r) => {
@@ -34,12 +37,12 @@ export default function RebasePanel(): React.JSX.Element | null {
         setBase(r.base)
         setHasMerges(r.hasMerges)
       })
-      .catch(() => {})
+      .catch((err) => !cancelled && setError(cleanError(err)))
       .finally(() => !cancelled && setLoading(false))
     return () => {
       cancelled = true
     }
-  }, [rebaseOpen, repoPath])
+  }, [rebaseOpen, repoPath, retryNonce])
 
   if (!rebaseOpen) return null
 
@@ -75,7 +78,7 @@ export default function RebasePanel(): React.JSX.Element | null {
     <div className="rebase-panel">
       <div className="panel-head">
         <span>Interactive rebase · last {entries.length} commits</span>
-        <button className="close" onClick={() => setRebaseOpen(false)}>
+        <button className="close" aria-label="Close" onClick={() => setRebaseOpen(false)}>
           ✕
         </button>
       </div>
@@ -91,6 +94,12 @@ export default function RebasePanel(): React.JSX.Element | null {
 
       <div className="panel-scroll">
         {loading && <div className="empty">Loading commits…</div>}
+        {!loading && error && (
+          <div className="panel-error">
+            <span>{error}</span>
+            <button onClick={() => setRetryNonce((n) => n + 1)}>Retry</button>
+          </div>
+        )}
         {!loading &&
           entries.map((e, i) => (
             <div key={e.hash} className={`rebase-row action-${e.action}`}>

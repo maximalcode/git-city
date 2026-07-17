@@ -43,6 +43,7 @@ export default function Hud({ snapshot, model }: Props): React.JSX.Element {
   const push = useStore((s) => s.push)
   const cancelOp = useStore((s) => s.cancelOp)
   const refreshAnalysis = useStore((s) => s.refreshAnalysis)
+  const modalOpen = useStore((s) => s.confirm !== null || s.mergeView !== null)
 
   const byPath = useMemo(() => new Map(snapshot.files.map((f) => [f.path, f])), [snapshot])
   const totalLoc = useMemo(() => snapshot.files.reduce((a, f) => a + f.loc, 0), [snapshot])
@@ -65,12 +66,15 @@ export default function Hud({ snapshot, model }: Props): React.JSX.Element {
         st.setDiffOpen(false)
         st.setFileView('none')
         st.setGraphOpen(false)
+        st.setRebaseOpen(false)
         st.setSelected(null)
       }
     }),
     []
   )
-  useHotkeys(hotkeys)
+  // suspended while the confirm dialog or merge view is up — 'c'/'space'/etc.
+  // must not toggle panels or playback underneath a modal
+  useHotkeys(hotkeys, !modalOpen)
 
   const last = analysis.snapshots.length - 1
   const hoveredFile = hovered ? byPath.get(hovered) : undefined
@@ -143,7 +147,11 @@ export default function Hud({ snapshot, model }: Props): React.JSX.Element {
         >
           ⑃ Graph
         </button>
-        <button onClick={() => useStore.getState().setSearchOpen(true)} title="Find a file (/)">
+        <button
+          onClick={() => useStore.getState().setSearchOpen(true)}
+          title="Find a file (/)"
+          aria-label="Find a file"
+        >
           ⌕
         </button>
 
@@ -183,7 +191,7 @@ export default function Hud({ snapshot, model }: Props): React.JSX.Element {
 
       {selectedFile && (
         <div className="details">
-          <button className="close" onClick={() => setSelected(null)}>
+          <button className="close" aria-label="Close" onClick={() => setSelected(null)}>
             ✕
           </button>
           <div className="path">{selectedFile.path}</div>
@@ -253,7 +261,12 @@ export default function Hud({ snapshot, model }: Props): React.JSX.Element {
           )}
         </div>
         <div className="timeline-row">
-          <button className="play" onClick={() => setPlaying(!playing)} title="Play history">
+          <button
+            className="play"
+            onClick={() => setPlaying(!playing)}
+            title="Play history (Space)"
+            aria-label={playing ? 'Pause history' : 'Play history'}
+          >
             {playing ? '❚❚' : '▶'}
           </button>
           <input

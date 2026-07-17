@@ -66,7 +66,7 @@ export interface MergeViewState {
 
 export type EffectKind = 'commit-settle' | 'push' | 'pull'
 
-function cleanError(err: unknown): string {
+export function cleanError(err: unknown): string {
   const msg = err instanceof Error ? err.message : String(err)
   // Electron prefixes IPC errors with "Error invoking remote method '...': Error:"
   return msg.replace(/^Error invoking remote method '[^']+':\s*(Error:\s*)?/, '')

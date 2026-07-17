@@ -39,7 +39,7 @@ export default function StashPanel(): React.JSX.Element | null {
     <div className="side-panel stash-panel">
       <div className="panel-head">
         <span>Stashes</span>
-        <button className="close" onClick={() => setPanel('none')}>
+        <button className="close" aria-label="Close" onClick={() => setPanel('none')}>
           ✕
         </button>
       </div>

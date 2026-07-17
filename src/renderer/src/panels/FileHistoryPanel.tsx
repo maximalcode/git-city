@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { BlameLine, FileCommit } from '../../../shared/types'
-import { hasApi, useStore } from '../store'
+import { cleanError, hasApi, useStore } from '../store'
 import { formatDate } from '../lib/format'
 
 /**
@@ -16,22 +16,27 @@ export default function FileHistoryPanel(): React.JSX.Element | null {
   const [commits, setCommits] = useState<FileCommit[] | null>(null)
   const [blame, setBlame] = useState<BlameLine[] | null>(null)
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [retryNonce, setRetryNonce] = useState(0)
 
   useEffect(() => {
     if (fileView === 'none' || !selected || !repoPath || !hasApi()) return
     let cancelled = false
     setLoading(true)
+    setError(null)
     setCommits(null)
     setBlame(null)
     const job =
       fileView === 'history'
         ? window.gitCity.fileHistory(repoPath, selected).then((c) => !cancelled && setCommits(c))
         : window.gitCity.blame(repoPath, selected).then((b) => !cancelled && setBlame(b))
-    void job.catch(() => {}).finally(() => !cancelled && setLoading(false))
+    void job
+      .catch((err) => !cancelled && setError(cleanError(err)))
+      .finally(() => !cancelled && setLoading(false))
     return () => {
       cancelled = true
     }
-  }, [fileView, selected, repoPath])
+  }, [fileView, selected, repoPath, retryNonce])
 
   if (fileView === 'none' || !selected) return null
 
@@ -52,7 +57,7 @@ export default function FileHistoryPanel(): React.JSX.Element | null {
             Blame
           </button>
         </div>
-        <button className="close" onClick={() => setFileView('none')}>
+        <button className="close" aria-label="Close" onClick={() => setFileView('none')}>
           ✕
         </button>
       </div>
@@ -60,6 +65,12 @@ export default function FileHistoryPanel(): React.JSX.Element | null {
 
       <div className="filehist-body">
         {loading && <div className="empty">Loading…</div>}
+        {!loading && error && (
+          <div className="panel-error">
+            <span>{error}</span>
+            <button onClick={() => setRetryNonce((n) => n + 1)}>Retry</button>
+          </div>
+        )}
 
         {!loading && fileView === 'history' && commits && (
           <div className="commit-list">

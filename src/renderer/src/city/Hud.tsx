@@ -46,7 +46,6 @@ export default function Hud({ snapshot, model }: Props): React.JSX.Element {
   const modalOpen = useStore((s) => s.confirm !== null || s.mergeView !== null)
 
   const byPath = useMemo(() => new Map(snapshot.files.map((f) => [f.path, f])), [snapshot])
-  const totalLoc = useMemo(() => snapshot.files.reduce((a, f) => a + f.loc, 0), [snapshot])
 
   const hotkeys = useMemo(
     () => ({

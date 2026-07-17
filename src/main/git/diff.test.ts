@@ -103,6 +103,15 @@ describe('getFileDiff', () => {
     expect(added.some((l) => l.text === 'v2')).toBe(true)
   })
 
+  it('throws on a bad rev instead of returning a silent empty diff', async () => {
+    const r = repo()
+    r.write('a.txt', 'x\n')
+    r.commitAll('init')
+    await expect(
+      getFileDiff(r.path, 'a.txt', { rev: 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeef' })
+    ).rejects.toThrow(/no longer exist/)
+  })
+
   it('shows an untracked file as all additions', async () => {
     const r = repo()
     r.write('a.txt', 'base\n')

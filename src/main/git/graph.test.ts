@@ -51,6 +51,23 @@ describe('layoutLanes', () => {
     expect(laneOf.A).toBe(0)
   })
 
+  it('handles an octopus merge (3+ parents) without losing a branch', () => {
+    const { width, laneOf } = lanes([
+      { hash: 'M', parents: ['A', 'B', 'C'] },
+      { hash: 'A', parents: ['base'] },
+      { hash: 'B', parents: ['base'] },
+      { hash: 'C', parents: ['base'] },
+      { hash: 'base', parents: [] }
+    ])
+    expect(width).toBeGreaterThanOrEqual(3)
+    expect(laneOf.M).toBe(0)
+    expect(laneOf.A).toBe(0) // first parent continues the lane
+    // every parent got a lane, no two share one
+    const parentLanes = [laneOf.A, laneOf.B, laneOf.C]
+    expect(new Set(parentLanes).size).toBe(3)
+    expect(laneOf.base).toBe(0) // everything converges back
+  })
+
   it('gives two independent tips their own lanes', () => {
     const { width, laneOf } = lanes([
       { hash: 'X', parents: ['base'] },
@@ -73,6 +90,10 @@ describe('parseRefs', () => {
       { name: 'v1.0', kind: 'tag' }
     ])
     expect(parseRefs('')).toEqual([])
+  })
+
+  it('parses a lone detached HEAD', () => {
+    expect(parseRefs('HEAD')).toEqual([{ name: 'HEAD', kind: 'head' }])
   })
 })
 

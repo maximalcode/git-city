@@ -1,4 +1,5 @@
-import { existsSync, rmSync } from 'fs'
+import { existsSync, readdirSync, rmSync } from 'fs'
+import { tmpdir } from 'os'
 import { join } from 'path'
 import { afterAll, describe, expect, it } from 'vitest'
 import { makeTempRepo, type FixtureRepo } from './fixtures'
@@ -54,10 +55,52 @@ describe('tags', () => {
     r.commitAll('init')
     expect((await createTag(r.path, '  ')).ok).toBe(false)
   })
+
+  it('rejects option-like names — a tag named "-d" with a ref must not delete', async () => {
+    const r = repo()
+    r.write('a.txt', 'x\n')
+    r.commitAll('init')
+    expect((await createTag(r.path, 'victim')).ok).toBe(true)
+
+    // without the guard this would run `git tag -d victim`
+    const res = await createTag(r.path, '-d', 'victim')
+    expect(res.ok).toBe(false)
+    expect((await listTags(r.path)).map((t) => t.name)).toContain('victim')
+
+    expect((await deleteTag(r.path, '--delete')).ok).toBe(false)
+  })
+})
+
+describe('getRebaseTodo', () => {
+  it('reports the base commit and detects merges in range', async () => {
+    const r = fourCommits()
+    const { entries, base, hasMerges } = await getRebaseTodo(r.path, 2) // [D, C]
+    expect(entries.map((e) => e.subject)).toEqual(['D', 'C'])
+    expect(hasMerges).toBe(false)
+    // base = parent of the oldest entry (C) = B
+    expect(base).toBe(r.git('rev-parse', 'HEAD~2').trim())
+  })
+
+  it('reaches the root with a null base and flags merge commits', async () => {
+    const r = repo()
+    r.write('a.txt', 'a\n')
+    r.commitAll('A')
+    r.git('switch', '-c', 'side')
+    r.write('s.txt', 's\n')
+    r.commitAll('S')
+    r.git('switch', 'main')
+    r.write('m.txt', 'm\n')
+    r.commitAll('M')
+    r.git('merge', '--no-ff', 'side', '-m', 'merge side')
+
+    const { base, hasMerges } = await getRebaseTodo(r.path, 100)
+    expect(base).toBeNull() // range reaches the root commit
+    expect(hasMerges).toBe(true)
+  })
 })
 
 describe('interactive rebase', () => {
-  it('drops a commit', async () => {
+  it('drops a commit (and cleans up its todo temp file)', async () => {
     const r = fourCommits()
     const { entries, base } = await getRebaseTodo(r.path, 3) // D, C, B (newest first)
     const marked = entries.map((e) => (e.subject === 'C' ? { ...e, action: 'drop' as const } : e))
@@ -66,6 +109,11 @@ describe('interactive rebase', () => {
     expect(subjects(r)).toEqual(['D', 'B', 'A'])
     expect(existsSync(join(r.path, 'c.txt'))).toBe(false)
     expect((await getWorkingStatus(r.path)).opState).toBe('none')
+    // the GIT_SEQUENCE_EDITOR todo file must not linger in the temp dir
+    const leftovers = readdirSync(tmpdir()).filter((f) =>
+      f.startsWith(`gitcity-rebase-${process.pid}-`)
+    )
+    expect(leftovers).toEqual([])
   })
 
   it('reorders commits', async () => {

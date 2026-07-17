@@ -81,4 +81,24 @@ describe('fileHistory + blame (real repo)', () => {
     expect(lines[0]).toMatchObject({ lineNo: 1, text: 'alpha', author: 'Test' })
     expect(lines[1]).toMatchObject({ lineNo: 2, text: 'beta', author: 'Test' })
   })
+
+  it('blames at an older rev', async () => {
+    const r = repo()
+    r.write('f.txt', 'alpha\n')
+    r.commitAll('a')
+    const first = r.git('rev-parse', 'HEAD').trim()
+    r.write('f.txt', 'alpha\nbeta\n')
+    r.commitAll('b')
+
+    const lines = await blameFile(r.path, 'f.txt', first)
+    expect(lines).toHaveLength(1) // beta doesn't exist yet at the first commit
+    expect(lines[0].text).toBe('alpha')
+  })
+
+  it('throws on an untracked file instead of returning an empty blame', async () => {
+    const r = repo()
+    r.write('f.txt', 'x\n')
+    r.commitAll('a')
+    await expect(blameFile(r.path, 'nope.txt')).rejects.toThrow()
+  })
 })

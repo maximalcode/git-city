@@ -1,16 +1,24 @@
 import { useEffect, useState } from 'react'
 import type { ConflictFile, ConflictSegment } from '../../../shared/types'
-import { useStore } from '../store'
+import { hasApi, useStore } from '../store'
 
-type Choice = 'ours' | 'theirs' | 'both' | 'edit'
+export type Choice = 'ours' | 'theirs' | 'both' | 'edit'
 
-/** Assemble the resolved file text from the current per-hunk choices. */
-function assemble(segments: ConflictSegment[], choices: Map<number, Choice>, edits: Map<number, string>): string {
+/**
+ * Assemble the resolved file text from the current per-hunk choices.
+ * Exported for tests. The 'edit' fallback MUST match what the textarea shows
+ * for an untouched edit (ours+theirs) so displayed text === written text.
+ */
+export function assemble(
+  segments: ConflictSegment[],
+  choices: Map<number, Choice>,
+  edits: Map<number, string>
+): string {
   return segments
     .map((seg) => {
       if (seg.kind === 'text') return seg.text
       const choice = choices.get(seg.id) ?? 'ours'
-      if (choice === 'edit') return edits.get(seg.id) ?? seg.ours
+      if (choice === 'edit') return edits.get(seg.id) ?? seg.ours + seg.theirs
       if (choice === 'theirs') return seg.theirs
       if (choice === 'both') return seg.ours + seg.theirs
       return seg.ours
@@ -39,7 +47,7 @@ export default function MergeView(): React.JSX.Element | null {
   const [edits, setEdits] = useState<Map<number, string>>(new Map())
 
   useEffect(() => {
-    if (!mergeView || !active || !repoPath || !('gitCity' in window)) {
+    if (!mergeView || !active || !repoPath || !hasApi()) {
       setFile(null)
       return
     }
@@ -57,9 +65,22 @@ export default function MergeView(): React.JSX.Element | null {
 
   if (!mergeView) return null
 
-  const setChoice = (id: number, c: Choice): void =>
+  const setChoice = (id: number, c: Choice): void => {
     setChoices((prev) => new Map(prev).set(id, c))
-  const setEdit = (id: number, text: string): void => setEdits((prev) => new Map(prev).set(id, text))
+    // Seed the edit buffer with what the textarea will display, so an
+    // untouched "Edit" resolves to exactly the text the user saw.
+    if (c === 'edit' && file) {
+      const seg = file.segments.find(
+        (s): s is Extract<ConflictSegment, { kind: 'conflict' }> =>
+          s.kind === 'conflict' && s.id === id
+      )
+      if (seg) {
+        setEdits((prev) => (prev.has(id) ? prev : new Map(prev).set(id, seg.ours + seg.theirs)))
+      }
+    }
+  }
+  const setEdit = (id: number, text: string): void =>
+    setEdits((prev) => new Map(prev).set(id, text))
 
   const markResolved = (): void => {
     if (!file || !active) return
@@ -87,10 +108,14 @@ export default function MergeView(): React.JSX.Element | null {
         <button onClick={doAbort} className="danger" disabled={busy}>
           Abort {source}
         </button>
-        <button className="primary" disabled={busy || !allResolved} onClick={() => void continueOp()}>
+        <button
+          className="primary"
+          disabled={busy || !allResolved}
+          onClick={() => void continueOp()}
+        >
           Continue
         </button>
-        <button className="close" onClick={closeMergeView}>
+        <button className="close" aria-label="Close" onClick={closeMergeView}>
           ✕
         </button>
       </div>
@@ -151,7 +176,7 @@ export default function MergeView(): React.JSX.Element | null {
                 <button
                   disabled={busy}
                   onClick={() =>
-                    repoPath && 'gitCity' in window && window.gitCity.openInEditor(repoPath, active)
+                    repoPath && hasApi() && window.gitCity.openInEditor(repoPath, active)
                   }
                 >
                   Open in external editor

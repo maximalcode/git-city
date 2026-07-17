@@ -1,6 +1,6 @@
 import type { BranchInfo, OpResult } from '../../shared/types'
 import { runGit, runGitResult } from './exec'
-import { failFrom, ok } from './result'
+import { failFrom, ok, optionLikeName } from './result'
 
 const FORMAT =
   '%(refname:short)%09%(upstream:short)%09%(upstream:track)%09%(objectname:short)%09%(committerdate:unix)%09%(contents:subject)'
@@ -16,7 +16,8 @@ function parseTrack(track: string): { ahead: number; behind: number } {
   }
 }
 
-function parseRefs(raw: string, isRemote: boolean, current: string): BranchInfo[] {
+// (named to avoid confusion with graph.ts's exported parseRefs, which parses %D decorations)
+function parseForEachRef(raw: string, isRemote: boolean, current: string): BranchInfo[] {
   const out: BranchInfo[] = []
   for (const line of raw.split('\n')) {
     if (!line.trim()) continue
@@ -53,9 +54,9 @@ export async function listBranches(repoPath: string): Promise<BranchInfo[]> {
   ])
   const current = headRes.code === 0 ? headRes.stdout.trim() : ''
 
-  const local = parseRefs(localRaw, false, current)
+  const local = parseForEachRef(localRaw, false, current)
   const localShortNames = new Set(local.map((b) => b.name))
-  const remote = parseRefs(remoteRaw, true, current).filter((b) => {
+  const remote = parseForEachRef(remoteRaw, true, current).filter((b) => {
     // drop a remote branch whose short name already exists locally (e.g. origin/main ↔ main)
     const short = b.name.slice(b.name.indexOf('/') + 1)
     return !localShortNames.has(short)
@@ -78,6 +79,8 @@ export async function listBranches(repoPath: string): Promise<BranchInfo[]> {
  *   local tracking branch and switch to it
  */
 export async function switchBranch(repoPath: string, name: string): Promise<OpResult> {
+  const bad = optionLikeName(name)
+  if (bad) return bad
   const isLocal = await runGitResult(repoPath, [
     'rev-parse',
     '--verify',
@@ -113,10 +116,9 @@ export async function createBranch(
   name: string,
   andSwitch: boolean
 ): Promise<OpResult> {
-  const res = await runGitResult(
-    repoPath,
-    andSwitch ? ['switch', '-c', name] : ['branch', name]
-  )
+  const bad = optionLikeName(name)
+  if (bad) return bad
+  const res = await runGitResult(repoPath, andSwitch ? ['switch', '-c', name] : ['branch', name])
   return res.code === 0 ? ok() : failFrom(res)
 }
 
@@ -125,6 +127,8 @@ export async function deleteBranch(
   name: string,
   force: boolean
 ): Promise<OpResult> {
+  const bad = optionLikeName(name)
+  if (bad) return bad
   // force only ever set after the UI's explicit "not fully merged" confirmation
   const res = await runGitResult(repoPath, ['branch', force ? '-D' : '-d', name])
   return res.code === 0 ? ok() : failFrom(res)

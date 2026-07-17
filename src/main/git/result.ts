@@ -1,6 +1,13 @@
 import type { OpResult } from '../../shared/types'
 import type { GitResult } from './exec'
 
+/**
+ * An error whose message is written for the user and safe to show verbatim.
+ * The read-only IPC boundary forwards these; everything else is replaced with
+ * a generic message (raw git stderr can contain absolute paths).
+ */
+export class FriendlyError extends Error {}
+
 /** Map raw git stderr/stdout onto our uniform failure codes. */
 export function classifyGitError(text: string): NonNullable<OpResult['code']> {
   if (
@@ -13,7 +20,9 @@ export function classifyGitError(text: string): NonNullable<OpResult['code']> {
   if (/\[rejected\]|failed to push some refs|non-fast-forward|fetch first/i.test(text)) {
     return 'rejected'
   }
-  if (/no upstream branch|no tracking information|The current branch .* has no upstream/i.test(text)) {
+  if (
+    /no upstream branch|no tracking information|The current branch .* has no upstream/i.test(text)
+  ) {
     return 'no-upstream'
   }
   if (
@@ -43,6 +52,18 @@ export function classifyGitError(text: string): NonNullable<OpResult['code']> {
 
 export function ok(message?: string): OpResult {
   return { ok: true, message }
+}
+
+/**
+ * Guard for user-supplied names passed to git as positionals: a name starting
+ * with '-' would be parsed as an option (e.g. a tag named '-d' turning a
+ * create into a delete). Returns a failure OpResult, or null when fine.
+ */
+export function optionLikeName(name: string): OpResult | null {
+  if (name.startsWith('-')) {
+    return { ok: false, code: 'unknown', message: `Invalid name: ${name}` }
+  }
+  return null
 }
 
 /** Build a failed OpResult from a finished git process. */

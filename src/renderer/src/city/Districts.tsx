@@ -1,21 +1,22 @@
-import { useLayoutEffect, useMemo, useRef } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { CanvasTexture, Color, InstancedMesh, LinearFilter, Object3D } from 'three'
 import type { CityModel } from './cityData'
 import { useStore } from '../store'
+import { getTheme } from './themes'
 
 const dummy = new Object3D()
 
 /** Stacked ground plates for each directory, one instanced mesh for all. */
 export default function Districts({ model }: { model: CityModel }): React.JSX.Element {
   const meshRef = useRef<InstancedMesh>(null!)
-  const night = useStore((s) => s.night)
+  const theme = getTheme(useStore((s) => s.themeId))
   const districts = model.layout.districts
   const n = districts.length
 
   useLayoutEffect(() => {
     const mesh = meshRef.current
     if (!mesh) return
-    const base = new Color(night ? '#141a26' : '#232c3d')
+    const base = new Color(theme.districtBase)
     const scratch = new Color()
     for (let i = 0; i < n; i++) {
       const d = districts[i]
@@ -31,7 +32,7 @@ export default function Districts({ model }: { model: CityModel }): React.JSX.El
     }
     mesh.instanceMatrix.needsUpdate = true
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
-  }, [districts, n, night])
+  }, [districts, n, theme.districtBase])
 
   return (
     <group>
@@ -48,7 +49,7 @@ export default function Districts({ model }: { model: CityModel }): React.JSX.El
             x={d.rect.x + d.rect.w / 2}
             z={d.rect.y + 1.4}
             width={d.rect.w}
-            night={night}
+            labelColor={theme.label}
           />
         ))}
     </group>
@@ -61,13 +62,13 @@ function DistrictLabel({
   x,
   z,
   width,
-  night
+  labelColor
 }: {
   name: string
   x: number
   z: number
   width: number
-  night: boolean
+  labelColor: string
 }): React.JSX.Element {
   const { texture, aspect } = useMemo(() => {
     const canvas = document.createElement('canvas')
@@ -79,12 +80,16 @@ function DistrictLabel({
     canvas.height = 88
     ctx.font = font
     ctx.textBaseline = 'middle'
-    ctx.fillStyle = night ? 'rgba(220, 230, 255, 0.5)' : 'rgba(255, 255, 255, 0.65)'
+    ctx.fillStyle = labelColor
     ctx.fillText(name, 12, 46)
     const tex = new CanvasTexture(canvas)
     tex.minFilter = LinearFilter
     return { texture: tex, aspect: canvas.width / canvas.height }
-  }, [name, night])
+  }, [name, labelColor])
+
+  // Material.dispose() never disposes its maps — free the canvas texture when
+  // the theme changes (new labelColor → new texture) and on unmount.
+  useEffect(() => () => texture.dispose(), [texture])
 
   const w = Math.min(width * 0.7, aspect * 2.2)
   const h = w / aspect

@@ -74,9 +74,7 @@ export function fetchRemote(
   repoPath: string,
   onProgress: (p: ProgressInfo) => void
 ): Promise<OpResult> {
-  return remoteOp(repoPath, 'fetching', onProgress, (git) =>
-    git.fetch(['--progress', '--prune'])
-  )
+  return remoteOp(repoPath, 'fetching', onProgress, (git) => git.fetch(['--progress', '--prune']))
 }
 
 export function pullRemote(
@@ -96,7 +94,7 @@ export async function pushRemote(
   }
   const branch = (await runGit(repoPath, ['rev-parse', '--abbrev-ref', 'HEAD'])).trim()
   const remote = (await runGit(repoPath, ['remote'])).split('\n').map((r) => r.trim())
-  const target = remote.includes('origin') ? 'origin' : remote.find((r) => r) ?? 'origin'
+  const target = remote.includes('origin') ? 'origin' : (remote.find((r) => r) ?? 'origin')
   return remoteOp(repoPath, 'pushing', onProgress, (git) =>
     git.push(['--progress', '-u', target, branch])
   )

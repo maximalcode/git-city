@@ -3,13 +3,52 @@ import type {
   BranchInfo,
   OpResult,
   ProgressInfo,
+  RebaseEntry,
   RepoAnalysis,
   RepoOpState,
   StashEntry,
+  TagInfo,
   WorkingStatus
 } from '../../shared/types'
+import { DEFAULT_THEME_ID } from './city/themes'
+import type { ColorMode } from './city/colorModes'
 
-export type ColorMode = 'language' | 'heat'
+export type { ColorMode }
+
+const THEME_KEY = 'gitcity.theme'
+function loadTheme(): string {
+  try {
+    return localStorage.getItem(THEME_KEY) ?? DEFAULT_THEME_ID
+  } catch {
+    return DEFAULT_THEME_ID
+  }
+}
+function saveTheme(id: string): void {
+  try {
+    localStorage.setItem(THEME_KEY, id)
+  } catch {
+    /* private mode / no storage — theme just won't persist */
+  }
+}
+
+const RECENT_KEY = 'gitcity.recent'
+const RECENT_MAX = 8
+function loadRecent(): string[] {
+  try {
+    const raw = localStorage.getItem(RECENT_KEY)
+    const list = raw ? (JSON.parse(raw) as unknown) : []
+    return Array.isArray(list) ? list.filter((p): p is string => typeof p === 'string') : []
+  } catch {
+    return []
+  }
+}
+function saveRecent(paths: string[]): void {
+  try {
+    localStorage.setItem(RECENT_KEY, JSON.stringify(paths.slice(0, RECENT_MAX)))
+  } catch {
+    /* ignore */
+  }
+}
 export type Panel = 'none' | 'changes' | 'branches' | 'stashes'
 
 export interface ConfirmRequest {
@@ -27,13 +66,41 @@ export interface MergeViewState {
 
 export type EffectKind = 'commit-settle' | 'push' | 'pull'
 
-function cleanError(err: unknown): string {
+export function cleanError(err: unknown): string {
   const msg = err instanceof Error ? err.message : String(err)
   // Electron prefixes IPC errors with "Error invoking remote method '...': Error:"
   return msg.replace(/^Error invoking remote method '[^']+':\s*(Error:\s*)?/, '')
 }
 
-const hasApi = (): boolean => 'gitCity' in window
+/** Whether the preload API exists (absent when the renderer runs in a plain browser). */
+export const hasApi = (): boolean => 'gitCity' in window
+
+/**
+ * Everything scoped to one open repo. Applied on BOTH leaving the city and
+ * loading a repo, so stale panels/dialogs/effects can never leak between repos
+ * no matter which path a future feature takes.
+ */
+const REPO_STATE_RESET: Partial<GitCityState> = {
+  selected: null,
+  hovered: null,
+  playing: false,
+  searchOpen: false,
+  workingStatus: null,
+  branches: [],
+  stashes: [],
+  tags: [],
+  rebaseOpen: false,
+  panel: 'none',
+  opError: null,
+  confirm: null,
+  mergeView: null,
+  historyStale: false,
+  effect: null,
+  diffOpen: false,
+  diffRev: null,
+  fileView: 'none',
+  graphOpen: false
+}
 
 /** Cheap fingerprint so identical statuses (editor atomic-save churn) don't re-render. */
 function statusFingerprint(s: WorkingStatus | null): string {
@@ -51,16 +118,20 @@ interface GitCityState {
   hovered: string | null
   selected: string | null
   colorMode: ColorMode
-  night: boolean
+  themeId: string
   progress: ProgressInfo | null
   error: string | null
   gitVersion: string | null | 'unknown'
+  recentRepos: string[]
+  searchOpen: boolean
 
   // --- live repo state ---
   repoPath: string | null
   workingStatus: WorkingStatus | null
   branches: BranchInfo[]
   stashes: StashEntry[]
+  tags: TagInfo[]
+  rebaseOpen: boolean
   panel: Panel
   opInProgress: { label: string } | null
   opError: { message: string; gitOutput?: string } | null
@@ -69,16 +140,27 @@ interface GitCityState {
   historyStale: boolean
   effect: { kind: EffectKind; nonce: number } | null
   reanalyzing: boolean
+  diffOpen: boolean
+  /** Explicit revision to diff (set when opened from a history commit); null = context-derived. */
+  diffRev: string | null
+  fileView: 'none' | 'history' | 'blame'
+  graphOpen: boolean
 
   init(): void
   openLocal(): Promise<void>
+  openPath(path: string): Promise<void>
   openUrl(url: string): Promise<void>
+  setSearchOpen(open: boolean): void
+  clearRecent(): void
   setSnapshotIndex(i: number): void
   setPlaying(playing: boolean): void
   setHovered(path: string | null): void
   setSelected(path: string | null): void
   setColorMode(mode: ColorMode): void
-  toggleNight(): void
+  setTheme(id: string): void
+  setDiffOpen(open: boolean, rev?: string): void
+  setFileView(view: 'none' | 'history' | 'blame'): void
+  setGraphOpen(open: boolean): void
   backToWelcome(): void
 
   // live actions
@@ -86,6 +168,11 @@ interface GitCityState {
   refreshStatus(): Promise<void>
   refreshBranches(): Promise<void>
   refreshStashes(): Promise<void>
+  refreshTags(): Promise<void>
+  setRebaseOpen(open: boolean): void
+  createTag(name: string, ref?: string): Promise<void>
+  deleteTag(name: string): Promise<void>
+  runInteractiveRebase(base: string | null, entries: RebaseEntry[]): Promise<boolean>
   refreshAnalysis(): Promise<void>
   jumpToNow(): void
   dismissError(): void
@@ -129,15 +216,19 @@ export const useStore = create<GitCityState>((set, get) => ({
   hovered: null,
   selected: null,
   colorMode: 'language',
-  night: false,
+  themeId: loadTheme(),
   progress: null,
   error: null,
   gitVersion: 'unknown',
+  recentRepos: loadRecent(),
+  searchOpen: false,
 
   repoPath: null,
   workingStatus: null,
   branches: [],
   stashes: [],
+  tags: [],
+  rebaseOpen: false,
   panel: 'none',
   opInProgress: null,
   opError: null,
@@ -146,6 +237,10 @@ export const useStore = create<GitCityState>((set, get) => ({
   historyStale: false,
   effect: null,
   reanalyzing: false,
+  diffOpen: false,
+  diffRev: null,
+  fileView: 'none',
+  graphOpen: false,
 
   init: () => {
     // absent when the renderer runs in a plain browser (vite preview) instead of Electron
@@ -156,6 +251,7 @@ export const useStore = create<GitCityState>((set, get) => ({
       if (reasons.includes('head') || reasons.includes('refs')) {
         void get().refreshBranches()
         void get().refreshStashes()
+        void get().refreshTags()
         // external HEAD move: don't surprise-reanalyze; offer a reload pill
         const s = get()
         if (s.opInProgress === null && s.reanalyzing === false) set({ historyStale: true })
@@ -171,7 +267,19 @@ export const useStore = create<GitCityState>((set, get) => ({
     if (!hasApi()) return
     const path = await window.gitCity.selectFolder()
     if (!path) return
+    await get().openPath(path)
+  },
+
+  openPath: async (path: string) => {
+    if (!hasApi()) return
     await loadRepo(set, get, () => window.gitCity.analyzeRepo(path, 50), path)
+  },
+
+  setSearchOpen: (searchOpen) => set({ searchOpen }),
+
+  clearRecent: () => {
+    saveRecent([])
+    set({ recentRepos: [] })
   },
 
   openUrl: async (url: string) => {
@@ -197,25 +305,30 @@ export const useStore = create<GitCityState>((set, get) => ({
   setHovered: (hovered) => set({ hovered }),
   setSelected: (selected) => set({ selected }),
   setColorMode: (colorMode) => set({ colorMode }),
-  toggleNight: () => set((s) => ({ night: !s.night })),
+  setTheme: (themeId) => {
+    saveTheme(themeId)
+    set({ themeId })
+  },
+  // Opening without an explicit rev replaces the history/blame panel (they share
+  // the same spot); opening WITH a rev (from a history commit) keeps history
+  // underneath so closing the diff returns to it.
+  setDiffOpen: (diffOpen, rev) =>
+    set((s) => ({
+      diffOpen,
+      diffRev: diffOpen ? (rev ?? null) : null,
+      fileView: diffOpen && rev === undefined ? 'none' : s.fileView
+    })),
+  setFileView: (fileView) =>
+    set({ fileView, diffOpen: fileView !== 'none' ? false : get().diffOpen }),
+  setGraphOpen: (graphOpen) => set({ graphOpen }),
   backToWelcome: () => {
     if (hasApi()) void window.gitCity.watchStop()
     lastFingerprint = ''
     set({
+      ...REPO_STATE_RESET,
       screen: 'welcome',
       analysis: null,
-      selected: null,
-      hovered: null,
-      playing: false,
-      repoPath: null,
-      workingStatus: null,
-      branches: [],
-      stashes: [],
-      panel: 'none',
-      mergeView: null,
-      historyStale: false,
-      opError: null,
-      confirm: null
+      repoPath: null
     })
   },
 
@@ -256,6 +369,56 @@ export const useStore = create<GitCityState>((set, get) => ({
     }
   },
 
+  refreshTags: async () => {
+    const { repoPath } = get()
+    if (!hasApi() || !repoPath) return
+    try {
+      set({ tags: await window.gitCity.tags(repoPath) })
+    } catch {
+      /* ignore */
+    }
+  },
+
+  setRebaseOpen: (rebaseOpen) => set({ rebaseOpen }),
+
+  createTag: (name, ref) =>
+    runOp(set, get, 'Creating tag…', (repo) => window.gitCity.createTag(repo, name, ref)),
+  deleteTag: (name) =>
+    runOp(set, get, 'Deleting tag…', (repo) => window.gitCity.deleteTag(repo, name)),
+
+  runInteractiveRebase: async (base, entries) => {
+    const { repoPath } = get()
+    if (!hasApi() || !repoPath) return false
+    set({ opInProgress: { label: 'Rebasing…' }, opError: null })
+    let result: OpResult
+    try {
+      result = await window.gitCity.rebaseInteractive(repoPath, base, entries)
+    } catch (err) {
+      set({ opInProgress: null, opError: { message: cleanError(err) } })
+      return false
+    }
+    set({ opInProgress: null })
+    await get().refreshStatus()
+    await get().refreshBranches()
+    if (!result.ok) {
+      if (result.code === 'conflict') {
+        set({
+          rebaseOpen: false,
+          mergeView: { active: result.conflicts?.[0] ?? null, source: 'rebase' }
+        })
+      } else {
+        set({
+          opError: { message: result.message ?? 'Rebase failed.', gitOutput: result.gitOutput }
+        })
+      }
+      return false
+    }
+    set({ rebaseOpen: false })
+    triggerEffect(set, get, 'commit-settle')
+    await get().refreshAnalysis()
+    return true
+  },
+
   refreshAnalysis: async () => {
     const { repoPath } = get()
     if (!hasApi() || !repoPath) return
@@ -291,10 +454,8 @@ export const useStore = create<GitCityState>((set, get) => ({
 
   // --- mutating actions (all funnel through runOp) ---
   stage: (paths) => runOp(set, get, 'Staging…', (repo) => window.gitCity.stage(repo, paths)),
-  unstage: (paths) =>
-    runOp(set, get, 'Unstaging…', (repo) => window.gitCity.unstage(repo, paths)),
-  discard: (paths) =>
-    runOp(set, get, 'Discarding…', (repo) => window.gitCity.discard(repo, paths)),
+  unstage: (paths) => runOp(set, get, 'Unstaging…', (repo) => window.gitCity.unstage(repo, paths)),
+  discard: (paths) => runOp(set, get, 'Discarding…', (repo) => window.gitCity.discard(repo, paths)),
   commit: (message, amend) =>
     runOp(
       set,
@@ -332,9 +493,7 @@ export const useStore = create<GitCityState>((set, get) => ({
       { reanalyze: andSwitch }
     ),
   deleteBranch: (name, force) =>
-    runOp(set, get, 'Deleting branch…', (repo) =>
-      window.gitCity.deleteBranch(repo, name, force)
-    ),
+    runOp(set, get, 'Deleting branch…', (repo) => window.gitCity.deleteBranch(repo, name, force)),
   merge: (name) =>
     runOp(set, get, `Merging ${name}…`, (repo) => window.gitCity.merge(repo, name), {
       reanalyze: true,
@@ -443,6 +602,7 @@ async function runOp(
   await get().refreshStatus()
   await get().refreshBranches()
   await get().refreshStashes()
+  await get().refreshTags()
 
   if (!result.ok) {
     if (result.code === 'conflict' && opts.conflictsOpenMerge) {
@@ -450,7 +610,9 @@ async function runOp(
       set({ mergeView: { active: result.conflicts?.[0] ?? null, source: src } })
     }
     if (result.code !== 'conflict') {
-      set({ opError: { message: result.message ?? 'Operation failed.', gitOutput: result.gitOutput } })
+      set({
+        opError: { message: result.message ?? 'Operation failed.', gitOutput: result.gitOutput }
+      })
     }
     return
   }
@@ -478,22 +640,23 @@ async function loadRepo(
   try {
     const analysis = await analyze()
     lastFingerprint = ''
+    // remember it, most-recent first, no duplicates
+    const recent = [path, ...get().recentRepos.filter((p) => p !== path)].slice(0, RECENT_MAX)
+    saveRecent(recent)
     set({
+      ...REPO_STATE_RESET,
+      recentRepos: recent,
       analysis,
       repoPath: path,
       snapshotIndex: analysis.snapshots.length - 1,
-      screen: 'city',
-      selected: null,
-      hovered: null,
-      playing: false,
-      panel: 'none',
-      historyStale: false
+      screen: 'city'
     })
     if (hasApi()) {
       await window.gitCity.watchStart(path)
       await get().refreshStatus()
       await get().refreshBranches()
       await get().refreshStashes()
+      await get().refreshTags()
     }
   } catch (err) {
     set({ screen: 'welcome', error: cleanError(err) })

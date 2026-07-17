@@ -62,6 +62,181 @@
   color: var(--accent-2);
 }
 
+/* ---------- shared dropdown picker (theme + color mode) ---------- */
+.picker {
+  position: relative;
+}
+.picker-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(14px);
+  z-index: 30;
+  min-width: 184px;
+  transform-origin: top right;
+  animation: pop-in 0.14s ease;
+}
+.picker-menu button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  text-align: left;
+  padding: 8px 11px;
+  font-size: 13px;
+  border-color: transparent;
+  background: transparent;
+  border-radius: 8px;
+}
+.picker-menu button:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+.picker-menu button.active {
+  background: rgba(255, 179, 71, 0.14);
+  color: var(--accent);
+}
+.picker-hint {
+  font-size: 11px;
+  color: var(--text-dim);
+  font-weight: 400;
+}
+.picker-menu button.active .picker-hint {
+  color: rgba(255, 179, 71, 0.7);
+}
+.theme-glyph {
+  display: inline-block;
+  width: 18px;
+}
+
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* ---------- legend ---------- */
+.legend {
+  position: absolute;
+  left: 16px;
+  bottom: 92px;
+  min-width: 150px;
+  max-width: 230px;
+  padding: 10px 12px;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(14px);
+  z-index: 15;
+}
+.legend-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-dim);
+  margin-bottom: 8px;
+}
+.legend-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+}
+.legend-swatch {
+  width: 11px;
+  height: 11px;
+  border-radius: 3px;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12) inset;
+}
+.legend-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.legend-bar {
+  height: 10px;
+  border-radius: 5px;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12) inset;
+}
+.legend-ends {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11.5px;
+  color: var(--text-dim);
+  margin-top: 5px;
+}
+
+/* ---------- modern UI polish (layers over styles.css) ---------- */
+.hud-top button {
+  border-radius: 9px;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+.side-panel,
+.details {
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5);
+  border-radius: 14px;
+  animation: pop-in 0.16s ease;
+}
+.tooltip {
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+}
+.modal-card {
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55);
+  animation: pop-in 0.16s ease;
+}
+.op-toast {
+  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.5);
+  animation: pop-in 0.16s ease;
+}
+.file-row,
+.branch-row,
+.stash-row,
+.rail-item {
+  transition: background 0.12s ease;
+}
+.file-row {
+  border-radius: 8px;
+  margin: 0 6px;
+  padding-left: 8px;
+  padding-right: 8px;
+}
+.status-chip {
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08) inset;
+}
+.merge-view {
+  animation: fade-in 0.18s ease;
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
 /* ---------- side panels ---------- */
 .side-panel {
   position: absolute;
@@ -78,12 +253,34 @@
   z-index: 20;
   overflow: hidden;
 }
+/* error state shared by the async panels (diff, history, graph, rebase) */
+.panel-error {
+  margin: 14px;
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 107, 107, 0.35);
+  border-radius: 10px;
+  background: rgba(255, 107, 107, 0.08);
+  color: var(--text);
+  font-size: 12.5px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.panel-error button {
+  flex-shrink: 0;
+}
+
+/* single definition — previously split across the "modern UI polish" block
+   and here with conflicting padding */
 .panel-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 14px;
+  padding: 14px 16px;
+  font-size: 14px;
   font-weight: 600;
+  letter-spacing: 0.2px;
   border-bottom: 1px solid var(--panel-border);
 }
 .panel-head .close,
@@ -501,4 +698,540 @@
 .binary-resolve code {
   font-family: Consolas, monospace;
   color: var(--accent);
+}
+
+/* ---------- details action row ---------- */
+.details-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+.details-actions button {
+  flex: 1;
+  padding: 6px 4px;
+  font-size: 12.5px;
+  border-color: var(--accent-2);
+  color: var(--accent-2);
+}
+.diff-panel {
+  position: absolute;
+  top: 60px;
+  right: 16px;
+  bottom: 96px;
+  width: 440px;
+  max-width: 46vw;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 14px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(14px);
+  display: flex;
+  flex-direction: column;
+  /* above .filehist-panel (22): a diff opened from a history commit overlays it */
+  z-index: 23;
+  overflow: hidden;
+  animation: pop-in 0.16s ease;
+}
+.diff-head-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.diff-path {
+  font-family: Consolas, monospace;
+  font-size: 13px;
+  color: var(--accent);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  direction: rtl;
+  text-align: left;
+}
+.diff-meta {
+  font-size: 11.5px;
+  color: var(--text-dim);
+}
+.diff-add {
+  color: var(--ok);
+}
+.diff-del {
+  color: var(--danger);
+}
+.diff-body {
+  flex: 1;
+  overflow: auto;
+  padding: 4px 0 8px;
+  font-family: Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.diff-hunk {
+  margin-bottom: 8px;
+}
+.diff-hunk-header {
+  padding: 3px 12px;
+  color: var(--accent-2);
+  background: rgba(110, 200, 255, 0.06);
+  position: sticky;
+  top: 0;
+}
+.diff-line {
+  display: flex;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.diff-gutter {
+  width: 20px;
+  flex-shrink: 0;
+  text-align: center;
+  color: var(--text-dim);
+  user-select: none;
+}
+.diff-text {
+  flex: 1;
+  padding-right: 10px;
+}
+/* scoped to .diff-line so the +N/−N counts in the header don't pick up the tint */
+.diff-line.diff-add {
+  background: rgba(125, 216, 125, 0.1);
+}
+.diff-line.diff-del {
+  background: rgba(255, 107, 107, 0.1);
+}
+.diff-line.diff-add .diff-gutter {
+  color: var(--ok);
+}
+.diff-line.diff-del .diff-gutter {
+  color: var(--danger);
+}
+
+/* ---------- file history + blame panel ---------- */
+.filehist-panel {
+  position: absolute;
+  top: 60px;
+  right: 16px;
+  bottom: 96px;
+  width: 460px;
+  max-width: 48vw;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 14px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(14px);
+  display: flex;
+  flex-direction: column;
+  z-index: 22;
+  overflow: hidden;
+  animation: pop-in 0.16s ease;
+}
+.filehist-tabs {
+  display: flex;
+  gap: 4px;
+}
+.filehist-tabs button {
+  padding: 5px 12px;
+  font-size: 13px;
+  border-color: transparent;
+  background: transparent;
+}
+.filehist-tabs button.active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.filehist-path {
+  padding: 6px 16px;
+  font-family: Consolas, monospace;
+  font-size: 12px;
+  color: var(--accent);
+  border-bottom: 1px solid var(--panel-border);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  direction: rtl;
+  text-align: left;
+}
+.filehist-body {
+  flex: 1;
+  overflow: auto;
+}
+.commit-list {
+  padding: 6px 0;
+}
+.commit-item {
+  padding: 8px 16px;
+  cursor: pointer;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+.commit-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+.commit-row1 {
+  display: flex;
+  gap: 8px;
+  font-size: 13px;
+}
+.commit-hash {
+  font-family: Consolas, monospace;
+  color: var(--accent-2);
+  flex-shrink: 0;
+}
+.commit-subject {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.commit-row2 {
+  font-size: 11.5px;
+  color: var(--text-dim);
+  margin-top: 2px;
+}
+.blame-view {
+  font-family: Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  padding: 4px 0;
+}
+.blame-line {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 0 10px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.blame-line:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+.blame-gutter {
+  display: inline-flex;
+  gap: 6px;
+  width: 150px;
+  flex-shrink: 0;
+  overflow: hidden;
+  color: var(--text-dim);
+}
+.blame-hash {
+  color: var(--accent-2);
+}
+.blame-author {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.blame-lineno {
+  width: 34px;
+  flex-shrink: 0;
+  text-align: right;
+  color: var(--text-dim);
+  user-select: none;
+}
+.blame-text {
+  flex: 1;
+}
+
+/* ---------- commit graph ---------- */
+.graph-panel {
+  position: absolute;
+  top: 60px;
+  left: 16px;
+  bottom: 16px;
+  width: 680px;
+  max-width: 60vw;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 14px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(14px);
+  display: flex;
+  flex-direction: column;
+  z-index: 24;
+  overflow: hidden;
+  animation: pop-in 0.16s ease;
+}
+.graph-scroll {
+  flex: 1;
+  overflow: auto;
+}
+.graph-inner {
+  position: relative;
+}
+.graph-svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+}
+.graph-row {
+  position: absolute;
+  right: 0;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 12px;
+  font-size: 13px;
+  cursor: pointer;
+  border-radius: 7px;
+}
+.graph-row:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+.graph-row.active {
+  background: rgba(110, 200, 255, 0.1);
+}
+.ref-chip {
+  font-size: 11px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  flex-shrink: 0;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.ref-head {
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+}
+.ref-branch {
+  background: rgba(125, 216, 125, 0.18);
+  color: var(--ok);
+}
+.ref-remote {
+  background: rgba(110, 200, 255, 0.16);
+  color: var(--accent-2);
+}
+.ref-tag {
+  background: rgba(255, 179, 71, 0.18);
+  color: var(--accent);
+}
+.graph-subject {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
+}
+.graph-meta {
+  font-family: Consolas, monospace;
+  font-size: 11.5px;
+  color: var(--text-dim);
+  flex-shrink: 0;
+}
+.graph-actions {
+  display: flex;
+  gap: 5px;
+  flex-shrink: 0;
+}
+.graph-actions button {
+  padding: 2px 9px;
+  font-size: 11.5px;
+}
+
+/* ---------- welcome: recent repos + drag-drop ---------- */
+.recent {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.recent-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-dim);
+  margin-bottom: 2px;
+}
+.recent-head button {
+  padding: 1px 8px;
+  font-size: 11px;
+  border: none;
+  background: none;
+  color: var(--text-dim);
+  text-transform: none;
+  letter-spacing: 0;
+}
+.recent-head button:hover {
+  color: var(--text);
+  background: none;
+}
+.recent-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  text-align: left;
+  padding: 7px 11px;
+  border-color: transparent;
+  background: rgba(255, 255, 255, 0.04);
+}
+.recent-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+.recent-name {
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.recent-path {
+  font-size: 11px;
+  color: var(--text-dim);
+  font-family: Consolas, monospace;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  direction: rtl;
+}
+.welcome.dragging {
+  outline: 2px dashed var(--accent-2);
+  outline-offset: -14px;
+}
+.drop-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(11, 14, 20, 0.75);
+  color: var(--accent-2);
+  font-size: 19px;
+  font-weight: 600;
+  pointer-events: none;
+  z-index: 200;
+}
+
+/* ---------- building search ---------- */
+.search-box {
+  position: absolute;
+  top: 62px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 460px;
+  max-width: 80vw;
+  z-index: 35;
+}
+.search-box input {
+  background: var(--panel);
+  border: 1px solid var(--accent-2);
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(14px);
+  padding: 11px 14px;
+}
+.search-results {
+  margin-top: 6px;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(14px);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  padding: 5px;
+  gap: 2px;
+}
+.search-results button {
+  text-align: left;
+  font-family: Consolas, monospace;
+  font-size: 12px;
+  padding: 7px 10px;
+  border-color: transparent;
+  background: transparent;
+  border-radius: 7px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.search-results button:hover,
+.search-results button.active {
+  background: rgba(110, 200, 255, 0.14);
+}
+.search-results.empty {
+  padding: 10px 12px;
+  font-size: 12.5px;
+  color: var(--text-dim);
+  font-style: italic;
+}
+
+/* ---------- interactive rebase ---------- */
+.rebase-panel {
+  position: absolute;
+  top: 60px;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 96px;
+  width: 620px;
+  max-width: 90vw;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 14px;
+  box-shadow: 0 22px 60px rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(14px);
+  display: flex;
+  flex-direction: column;
+  z-index: 40;
+  overflow: hidden;
+  animation: pop-in 0.16s ease;
+}
+.rebase-hint {
+  padding: 8px 16px;
+  font-size: 12px;
+  color: var(--text-dim);
+  border-bottom: 1px solid var(--panel-border);
+}
+.rebase-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  font-size: 13px;
+}
+.rebase-row.action-drop {
+  opacity: 0.45;
+  text-decoration: line-through;
+}
+.rebase-row.action-squash {
+  background: rgba(255, 179, 71, 0.08);
+}
+.rebase-reorder {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.rebase-reorder button {
+  padding: 0 6px;
+  font-size: 10px;
+  line-height: 1.3;
+}
+.rebase-hash {
+  font-family: Consolas, monospace;
+  color: var(--accent-2);
+  flex-shrink: 0;
+}
+.rebase-subject {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rebase-actions {
+  display: flex;
+  gap: 3px;
+  flex-shrink: 0;
+}
+.rebase-actions button {
+  padding: 2px 8px;
+  font-size: 11.5px;
+}
+.rebase-actions button.active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.rebase-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--panel-border);
 }

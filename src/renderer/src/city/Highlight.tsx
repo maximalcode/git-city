@@ -46,7 +46,13 @@ function Marker({
   return (
     <mesh position={[rect.x + rect.w / 2, (h + m) / 2, rect.y + rect.h / 2]}>
       <boxGeometry args={[rect.w + m, h + m, rect.h + m]} />
-      <meshBasicMaterial color={color} transparent opacity={opacity} toneMapped={false} depthWrite={false} />
+      <meshBasicMaterial
+        color={color}
+        transparent
+        opacity={opacity}
+        toneMapped={false}
+        depthWrite={false}
+      />
     </mesh>
   )
 }

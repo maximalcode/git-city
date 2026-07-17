@@ -4,7 +4,10 @@ import { cityLayout, squarify, type Rect } from './treemap'
 const rectArea = (r: Rect): number => r.w * r.h
 
 const overlaps = (a: Rect, b: Rect): boolean =>
-  a.x < b.x + b.w - 1e-9 && b.x < a.x + a.w - 1e-9 && a.y < b.y + b.h - 1e-9 && b.y < a.y + a.h - 1e-9
+  a.x < b.x + b.w - 1e-9 &&
+  b.x < a.x + a.w - 1e-9 &&
+  a.y < b.y + b.h - 1e-9 &&
+  b.y < a.y + a.h - 1e-9
 
 describe('squarify', () => {
   const rect: Rect = { x: 0, y: 0, w: 60, h: 40 }

@@ -1,7 +1,7 @@
 import { ipcMain, shell } from 'electron'
 import type { WebContents } from 'electron'
-import { resolve } from 'path'
-import type { OpResult, ProgressInfo, RepoChangeReason } from '../shared/types'
+import { resolve, sep } from 'path'
+import type { OpResult, ProgressInfo, RebaseEntry, RepoChangeReason } from '../shared/types'
 import {
   cherryPick,
   cherryPickAbort,
@@ -11,12 +11,17 @@ import {
   rebaseOnto
 } from './git/advanced'
 import { analyzeIncremental } from './git/analyze'
+import { getFileDiff } from './git/diff'
+import { commitGraph } from './git/graph'
+import { blameFile, fileHistory } from './git/history'
+import { createTag, deleteTag, listTags } from './git/tags'
+import { getRebaseTodo, runInteractiveRebase } from './git/rebaseInteractive'
 import { createBranch, deleteBranch, listBranches, switchBranch } from './git/branches'
 import { commit, getLastCommitMessage } from './git/commit'
 import { readConflictFile, resolveConflictFile, resolveWholeFile } from './git/conflicts'
 import { mergeAbort, mergeBranch, mergeContinue } from './git/merge'
 import { withRepoLock } from './git/queue'
-import { failFromError } from './git/result'
+import { FriendlyError, failFromError } from './git/result'
 import { discardFiles, stageFiles, unstageFiles } from './git/stage'
 import { stashApply, stashDrop, stashList, stashPop, stashPush } from './git/stash'
 import { getWorkingStatus } from './git/status'
@@ -27,6 +32,26 @@ const watcher = new RepoWatcher()
 let watchedSender: WebContents | null = null
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
+
+/**
+ * Read-only channels: log the real failure in the main process, but surface a
+ * clean generic message to the renderer — raw git stderr routinely contains
+ * absolute paths and repo internals that don't belong in the UI.
+ */
+function readOnly<T>(
+  channel: string,
+  fn: (repoPath: string, ...args: never[]) => Promise<T> | T
+): void {
+  ipcMain.handle(`git-city:${channel}`, async (_event, repoPath: string, ...args: unknown[]) => {
+    try {
+      return await fn(repoPath, ...(args as never[]))
+    } catch (err) {
+      if (err instanceof FriendlyError) throw new Error(err.message)
+      console.error(`[git-city] ${channel} failed:`, err)
+      throw new Error(`Could not load ${channel.replace(/-/g, ' ')}.`)
+    }
+  })
+}
 
 /**
  * Every mutating op: serialized per repo, watcher muted while it runs (one
@@ -74,21 +99,28 @@ export function registerOpsIpc(): void {
   })
 
   // --- read-only ---
-  ipcMain.handle('git-city:status', (_e, repoPath: string) => getWorkingStatus(repoPath))
-  ipcMain.handle('git-city:branches', (_e, repoPath: string) => listBranches(repoPath))
-  ipcMain.handle('git-city:stash-list', (_e, repoPath: string) => stashList(repoPath))
-  ipcMain.handle('git-city:last-commit-message', (_e, repoPath: string) =>
-    getLastCommitMessage(repoPath)
+  readOnly('status', (repo) => getWorkingStatus(repo))
+  readOnly('branches', (repo) => listBranches(repo))
+  readOnly('stash-list', (repo) => stashList(repo))
+  readOnly('last-commit-message', (repo) => getLastCommitMessage(repo))
+  readOnly('conflict-read', (repo, path: string) => readConflictFile(repo, path))
+  readOnly('diff', (repo, path: string, rev?: string) =>
+    getFileDiff(repo, path, rev ? { rev } : {})
   )
-  ipcMain.handle('git-city:conflict-read', (_e, repoPath: string, path: string) =>
-    readConflictFile(repoPath, path)
-  )
+  readOnly('file-history', (repo, path: string) => fileHistory(repo, path))
+  readOnly('blame', (repo, path: string, rev?: string) => blameFile(repo, path, rev))
+  readOnly('commit-graph', (repo, limit?: number) => commitGraph(repo, limit ?? 500))
+  readOnly('tags', (repo) => listTags(repo))
+  readOnly('rebase-todo', (repo, count: number) => getRebaseTodo(repo, count))
   ipcMain.handle('git-city:analyze-incremental', (_e, repoPath: string) =>
     withRepoLock(repoPath, () => analyzeIncremental(repoPath))
   )
   ipcMain.handle('git-city:open-in-editor', (_e, repoPath: string, path: string) => {
-    const abs = resolve(repoPath, path)
-    if (!abs.startsWith(resolve(repoPath))) return // never escape the repo
+    const root = resolve(repoPath)
+    const abs = resolve(root, path)
+    // never escape the repo — a bare prefix check would admit sibling dirs
+    // like C:\repo-evil for C:\repo, so require the separator (or the root itself)
+    if (abs !== root && !abs.startsWith(root + sep)) return
     void shell.openPath(abs)
   })
 
@@ -137,9 +169,7 @@ export function registerOpsIpc(): void {
   mutating('branch-create', (repo, name: string, andSwitch: boolean) =>
     createBranch(repo, name, andSwitch)
   )
-  mutating('branch-delete', (repo, name: string, force: boolean) =>
-    deleteBranch(repo, name, force)
-  )
+  mutating('branch-delete', (repo, name: string, force: boolean) => deleteBranch(repo, name, force))
 
   // --- merge + conflicts ---
   mutating('merge', (repo, branch: string) => mergeBranch(repo, branch))
@@ -167,4 +197,11 @@ export function registerOpsIpc(): void {
   mutating('rebase', (repo, onto: string) => rebaseOnto(repo, onto))
   mutating('rebase-continue', (repo) => rebaseContinue(repo))
   mutating('rebase-abort', (repo) => rebaseAbort(repo))
+
+  // --- tags + interactive rebase ---
+  mutating('tag-create', (repo, name: string, ref?: string) => createTag(repo, name, ref))
+  mutating('tag-delete', (repo, name: string) => deleteTag(repo, name))
+  mutating('rebase-interactive', (repo, base: string | null, entries: RebaseEntry[]) =>
+    runInteractiveRebase(repo, base, entries)
+  )
 }

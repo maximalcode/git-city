@@ -34,11 +34,7 @@ for (let y = 0; y < S; y++) {
     }
     // background with a soft warm glow low-center
     const glow = Math.max(0, 1 - Math.hypot(x - S / 2, y - 400) / 420)
-    let c = [
-      bg[0] + glow * 26,
-      bg[1] + glow * 18,
-      bg[2] + glow * 8
-    ]
+    let c = [bg[0] + glow * 26, bg[1] + glow * 18, bg[2] + glow * 8]
     if (y >= GROUND_Y) c = ground
     for (const [x0, x1, yTop, r, g, b] of buildings) {
       if (x >= x0 && x < x1 && y >= yTop && y < GROUND_Y) {

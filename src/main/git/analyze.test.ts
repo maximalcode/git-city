@@ -8,11 +8,10 @@ import { analyzeRepo, pickSampleIndices } from './analyze'
 let repo: string
 
 const git = (...args: string[]): void => {
-  execFileSync(
-    'git',
-    ['-c', 'user.name=Test', '-c', 'user.email=test@example.com', ...args],
-    { cwd: repo, stdio: 'pipe' }
-  )
+  execFileSync('git', ['-c', 'user.name=Test', '-c', 'user.email=test@example.com', ...args], {
+    cwd: repo,
+    stdio: 'pipe'
+  })
 }
 
 const lines = (n: number, tag: string): string =>

@@ -107,7 +107,7 @@ export default function ChangesPanel(): React.JSX.Element | null {
     <div className="side-panel changes-panel">
       <div className="panel-head">
         <span>Changes</span>
-        <button className="close" onClick={() => setPanel('none')}>
+        <button className="close" aria-label="Close" onClick={() => setPanel('none')}>
           ✕
         </button>
       </div>

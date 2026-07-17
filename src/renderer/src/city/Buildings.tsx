@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef } from 'react'
 import { useFrame, type ThreeEvent } from '@react-three/fiber'
 import { Color, InstancedMesh, Object3D } from 'three'
 import { useStore } from '../store'
+import { getTheme } from './themes'
+import { createBuildingMaterial } from './buildingMaterial'
 import type { CityModel, Targets } from './cityData'
 
 const dummy = new Object3D()
@@ -19,6 +21,24 @@ export default function Buildings({ model, targets }: Props): React.JSX.Element 
   const meshRef = useRef<InstancedMesh>(null!)
   const setHovered = useStore((s) => s.setHovered)
   const setSelected = useStore((s) => s.setSelected)
+  const theme = getTheme(useStore((s) => s.themeId))
+  const { material, win } = useMemo(() => createBuildingMaterial(), [])
+
+  // passed as a prop (not JSX-created), so R3F won't dispose it for us
+  useEffect(() => () => material.dispose(), [material])
+
+  // push theme-driven material + window uniforms
+  useEffect(() => {
+    material.roughness = theme.building.roughness
+    material.metalness = theme.building.metalness
+    if (material.flatShading !== theme.lowPoly) {
+      material.flatShading = theme.lowPoly
+      material.needsUpdate = true
+    }
+    win.enabled.value = theme.windows.enabled ? 1 : 0
+    win.color.value.set(theme.windows.color)
+    win.intensity.value = theme.windows.intensity
+  }, [material, win, theme])
 
   const n = model.paths.length
   const anim = useMemo(
@@ -40,7 +60,7 @@ export default function Buildings({ model, targets }: Props): React.JSX.Element 
     if (anim.settled) return
     const mesh = meshRef.current
     if (!mesh) return
-    const k = 1 - Math.exp(-Math.min(dt, 0.1) * 5)
+    const k = 1 - Math.exp(-Math.min(dt, 0.1) * theme.lerpSpeed)
     let maxDelta = 0
 
     for (let i = 0; i < n; i++) {
@@ -68,7 +88,10 @@ export default function Buildings({ model, targets }: Props): React.JSX.Element 
         const cd = Math.abs(tc - nc)
         if (cd > maxDelta) maxDelta = cd
       }
-      mesh.setColorAt(i, colorScratch.setRGB(anim.colors[i * 3], anim.colors[i * 3 + 1], anim.colors[i * 3 + 2]))
+      mesh.setColorAt(
+        i,
+        colorScratch.setRGB(anim.colors[i * 3], anim.colors[i * 3 + 1], anim.colors[i * 3 + 2])
+      )
     }
 
     mesh.instanceMatrix.needsUpdate = true
@@ -104,9 +127,9 @@ export default function Buildings({ model, targets }: Props): React.JSX.Element 
       onPointerMove={onMove}
       onPointerOut={() => setHovered(null)}
       onClick={onClick}
+      material={material}
     >
       <boxGeometry />
-      <meshStandardMaterial roughness={0.55} metalness={0.15} />
     </instancedMesh>
   )
 }

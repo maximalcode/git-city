@@ -17,33 +17,29 @@ afterAll(() => {
 })
 
 describe.skipIf(!enabled)('clone + analyze a real GitHub repo', () => {
-  it(
-    'clones expressjs/express and replays its history',
-    async () => {
-      const path = await cloneRepo('https://github.com/expressjs/express', base, () => {})
-      expect(path).toMatch(/express$/)
+  it('clones expressjs/express and replays its history', async () => {
+    const path = await cloneRepo('https://github.com/expressjs/express', base, () => {})
+    expect(path).toMatch(/express$/)
 
-      const progress: number[] = []
-      const result = await analyzeRepo(path, 50, (p) => {
-        if (p.phase === 'reading-history') progress.push(p.done)
-      })
+    const progress: number[] = []
+    const result = await analyzeRepo(path, 50, (p) => {
+      if (p.phase === 'reading-history') progress.push(p.done)
+    })
 
-      expect(result.info.name).toBe('express')
-      expect(result.info.commitCount).toBeGreaterThan(3000)
-      expect(result.snapshots.length).toBeGreaterThanOrEqual(50)
+    expect(result.info.name).toBe('express')
+    expect(result.info.commitCount).toBeGreaterThan(3000)
+    expect(result.snapshots.length).toBeGreaterThanOrEqual(50)
 
-      const head = result.snapshots[result.snapshots.length - 1]
-      const paths = new Set(head.files.map((f) => f.path))
-      expect(paths.has('package.json')).toBe(true)
-      expect(paths.has('lib/express.js')).toBe(true)
+    const head = result.snapshots[result.snapshots.length - 1]
+    const paths = new Set(head.files.map((f) => f.path))
+    expect(paths.has('package.json')).toBe(true)
+    expect(paths.has('lib/express.js')).toBe(true)
 
-      // sanity: line counts are plausible and cumulative commits grow over time
-      const pkg = head.files.find((f) => f.path === 'package.json')!
-      expect(pkg.loc).toBeGreaterThan(30)
-      expect(pkg.commits).toBeGreaterThan(100)
-      const first = result.snapshots[0]
-      expect(first.files.length).toBeLessThan(head.files.length)
-    },
-    240_000
-  )
+    // sanity: line counts are plausible and cumulative commits grow over time
+    const pkg = head.files.find((f) => f.path === 'package.json')!
+    expect(pkg.loc).toBeGreaterThan(30)
+    expect(pkg.commits).toBeGreaterThan(100)
+    const first = result.snapshots[0]
+    expect(first.files.length).toBeLessThan(head.files.length)
+  }, 240_000)
 })

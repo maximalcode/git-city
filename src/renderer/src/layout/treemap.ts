@@ -168,7 +168,12 @@ export function cityLayout(files: CityInput[], size = 140): CityLayout {
 
     for (const { payload, rect: r } of squarify(items, rect)) {
       if (payload.dir) {
-        districts.push({ path: payload.dir.path, name: payload.dir.name, depth: depth + 1, rect: r })
+        districts.push({
+          path: payload.dir.path,
+          name: payload.dir.name,
+          depth: depth + 1,
+          rect: r
+        })
         recurse(payload.dir, inset(r, pad), depth + 1)
       } else if (payload.file) {
         plots.push({ path: payload.file.path, rect: inset(r, pad * 0.55) })

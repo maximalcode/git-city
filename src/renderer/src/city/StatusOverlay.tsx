@@ -100,12 +100,7 @@ export default function StatusOverlay({
   if (!live || n === 0) return null
 
   return (
-    <instancedMesh
-      key={n}
-      ref={meshRef}
-      args={[undefined, undefined, n]}
-      frustumCulled={false}
-    >
+    <instancedMesh key={n} ref={meshRef} args={[undefined, undefined, n]} frustumCulled={false}>
       <boxGeometry />
       <meshBasicMaterial transparent opacity={0.22} toneMapped={false} depthWrite={false} />
     </instancedMesh>

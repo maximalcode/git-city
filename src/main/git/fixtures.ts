@@ -99,10 +99,7 @@ export function makeRepoPair(prefix = 'git-city-pair-'): RepoPair {
  * case where every branch except the default is a remote-tracking ref
  * (refs/remotes/origin/*), not a local branch.
  */
-export function makeCloneWithRemoteBranches(
-  names: string[],
-  prefix = 'git-city-rb-'
-): FixtureRepo {
+export function makeCloneWithRemoteBranches(names: string[], prefix = 'git-city-rb-'): FixtureRepo {
   const base = mkdtempSync(join(tmpdir(), prefix))
   const origin = join(base, 'origin.git')
   execFileSync('git', ['init', '--bare', '-b', 'main', origin], { stdio: 'pipe' })

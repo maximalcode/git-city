@@ -8,7 +8,7 @@ export default function OpErrorToast(): React.JSX.Element | null {
 
   return (
     <div className="op-toast">
-      <button className="close" onClick={dismiss}>
+      <button className="close" aria-label="Close" onClick={dismiss}>
         ✕
       </button>
       <div className="op-toast-msg">{opError.message}</div>

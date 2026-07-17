@@ -2,7 +2,7 @@ import { Color } from 'three'
 import type { RepoAnalysis, Snapshot } from '../../../shared/types'
 import { cityLayout, type CityLayout } from '../layout/treemap'
 import { languageOf } from '../lib/languages'
-import type { ColorMode } from '../store'
+import { buildColorer, type ColorMode } from './colorModes'
 
 /**
  * The static city model: layout is computed once per analysis over the union
@@ -48,9 +48,6 @@ export function buildCityModel(analysis: RepoAnalysis): CityModel {
   return { layout, paths, indexOf, langColors, citySize }
 }
 
-const HEAT_COLD = new Color('#2e4a7a')
-const HEAT_WARM = new Color('#f5a623')
-const HEAT_HOT = new Color('#ff4757')
 const scratch = new Color()
 
 export function snapshotTargets(
@@ -63,24 +60,13 @@ export function snapshotTargets(
   const colors = new Float32Array(n * 3)
 
   const byPath = new Map(snapshot.files.map((f) => [f.path, f]))
-  let maxCommits = 1
-  if (colorMode === 'heat') {
-    for (const f of snapshot.files) if (f.commits > maxCommits) maxCommits = f.commits
-  }
+  const colorer = buildColorer(model, snapshot, colorMode)
 
   for (let i = 0; i < n; i++) {
     const f = byPath.get(model.paths[i])
     if (!f) continue
     heights[i] = heightFor(f.loc)
-    let c: Color
-    if (colorMode === 'heat') {
-      const t = Math.sqrt(f.commits / maxCommits)
-      c = scratch.copy(HEAT_COLD)
-      if (t < 0.5) c.lerp(HEAT_WARM, t * 2)
-      else c.copy(HEAT_WARM).lerp(HEAT_HOT, (t - 0.5) * 2)
-    } else {
-      c = model.langColors[i]
-    }
+    const c = colorer.colorFor(f, i, scratch)
     colors[i * 3] = c.r
     colors[i * 3 + 1] = c.g
     colors[i * 3 + 2] = c.b

@@ -1,6 +1,13 @@
 import type { OpResult } from '../../shared/types'
 import type { GitResult } from './exec'
 
+/**
+ * An error whose message is written for the user and safe to show verbatim.
+ * The read-only IPC boundary forwards these; everything else is replaced with
+ * a generic message (raw git stderr can contain absolute paths).
+ */
+export class FriendlyError extends Error {}
+
 /** Map raw git stderr/stdout onto our uniform failure codes. */
 export function classifyGitError(text: string): NonNullable<OpResult['code']> {
   if (

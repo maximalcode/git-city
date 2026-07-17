@@ -1,6 +1,6 @@
 import { ipcMain, shell } from 'electron'
 import type { WebContents } from 'electron'
-import { resolve } from 'path'
+import { resolve, sep } from 'path'
 import type { OpResult, ProgressInfo, RebaseEntry, RepoChangeReason } from '../shared/types'
 import {
   cherryPick,
@@ -21,7 +21,7 @@ import { commit, getLastCommitMessage } from './git/commit'
 import { readConflictFile, resolveConflictFile, resolveWholeFile } from './git/conflicts'
 import { mergeAbort, mergeBranch, mergeContinue } from './git/merge'
 import { withRepoLock } from './git/queue'
-import { failFromError } from './git/result'
+import { FriendlyError, failFromError } from './git/result'
 import { discardFiles, stageFiles, unstageFiles } from './git/stage'
 import { stashApply, stashDrop, stashList, stashPop, stashPush } from './git/stash'
 import { getWorkingStatus } from './git/status'
@@ -32,6 +32,26 @@ const watcher = new RepoWatcher()
 let watchedSender: WebContents | null = null
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
+
+/**
+ * Read-only channels: log the real failure in the main process, but surface a
+ * clean generic message to the renderer — raw git stderr routinely contains
+ * absolute paths and repo internals that don't belong in the UI.
+ */
+function readOnly<T>(
+  channel: string,
+  fn: (repoPath: string, ...args: never[]) => Promise<T> | T
+): void {
+  ipcMain.handle(`git-city:${channel}`, async (_event, repoPath: string, ...args: unknown[]) => {
+    try {
+      return await fn(repoPath, ...(args as never[]))
+    } catch (err) {
+      if (err instanceof FriendlyError) throw new Error(err.message)
+      console.error(`[git-city] ${channel} failed:`, err)
+      throw new Error(`Could not load ${channel.replace(/-/g, ' ')}.`)
+    }
+  })
+}
 
 /**
  * Every mutating op: serialized per repo, watcher muted while it runs (one
@@ -79,37 +99,28 @@ export function registerOpsIpc(): void {
   })
 
   // --- read-only ---
-  ipcMain.handle('git-city:status', (_e, repoPath: string) => getWorkingStatus(repoPath))
-  ipcMain.handle('git-city:branches', (_e, repoPath: string) => listBranches(repoPath))
-  ipcMain.handle('git-city:stash-list', (_e, repoPath: string) => stashList(repoPath))
-  ipcMain.handle('git-city:last-commit-message', (_e, repoPath: string) =>
-    getLastCommitMessage(repoPath)
+  readOnly('status', (repo) => getWorkingStatus(repo))
+  readOnly('branches', (repo) => listBranches(repo))
+  readOnly('stash-list', (repo) => stashList(repo))
+  readOnly('last-commit-message', (repo) => getLastCommitMessage(repo))
+  readOnly('conflict-read', (repo, path: string) => readConflictFile(repo, path))
+  readOnly('diff', (repo, path: string, rev?: string) =>
+    getFileDiff(repo, path, rev ? { rev } : {})
   )
-  ipcMain.handle('git-city:conflict-read', (_e, repoPath: string, path: string) =>
-    readConflictFile(repoPath, path)
-  )
-  ipcMain.handle('git-city:diff', (_e, repoPath: string, path: string, rev?: string) =>
-    getFileDiff(repoPath, path, rev ? { rev } : {})
-  )
-  ipcMain.handle('git-city:file-history', (_e, repoPath: string, path: string) =>
-    fileHistory(repoPath, path)
-  )
-  ipcMain.handle('git-city:blame', (_e, repoPath: string, path: string, rev?: string) =>
-    blameFile(repoPath, path, rev)
-  )
-  ipcMain.handle('git-city:commit-graph', (_e, repoPath: string, limit?: number) =>
-    commitGraph(repoPath, limit ?? 500)
-  )
-  ipcMain.handle('git-city:tags', (_e, repoPath: string) => listTags(repoPath))
-  ipcMain.handle('git-city:rebase-todo', (_e, repoPath: string, count: number) =>
-    getRebaseTodo(repoPath, count)
-  )
+  readOnly('file-history', (repo, path: string) => fileHistory(repo, path))
+  readOnly('blame', (repo, path: string, rev?: string) => blameFile(repo, path, rev))
+  readOnly('commit-graph', (repo, limit?: number) => commitGraph(repo, limit ?? 500))
+  readOnly('tags', (repo) => listTags(repo))
+  readOnly('rebase-todo', (repo, count: number) => getRebaseTodo(repo, count))
   ipcMain.handle('git-city:analyze-incremental', (_e, repoPath: string) =>
     withRepoLock(repoPath, () => analyzeIncremental(repoPath))
   )
   ipcMain.handle('git-city:open-in-editor', (_e, repoPath: string, path: string) => {
-    const abs = resolve(repoPath, path)
-    if (!abs.startsWith(resolve(repoPath))) return // never escape the repo
+    const root = resolve(repoPath)
+    const abs = resolve(root, path)
+    // never escape the repo — a bare prefix check would admit sibling dirs
+    // like C:\repo-evil for C:\repo, so require the separator (or the root itself)
+    if (abs !== root && !abs.startsWith(root + sep)) return
     void shell.openPath(abs)
   })
 

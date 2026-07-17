@@ -1,4 +1,4 @@
-import { writeFile } from 'fs/promises'
+import { unlink, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import type { OpResult, RebaseEntry } from '../../shared/types'
@@ -79,7 +79,12 @@ export async function runInteractiveRebase(
   if (base) args.push(base)
   else args.push('--root')
 
-  const res = await runGitResult(repoPath, args, { env })
-  if (res.code === 0) return ok()
-  return withConflicts(repoPath, failFrom(res))
+  try {
+    const res = await runGitResult(repoPath, args, { env })
+    if (res.code === 0) return ok()
+    return withConflicts(repoPath, failFrom(res))
+  } finally {
+    // the todo file lives in the shared temp dir — don't leave it behind
+    await unlink(todoFile).catch(() => {})
+  }
 }

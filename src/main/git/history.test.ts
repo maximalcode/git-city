@@ -31,7 +31,12 @@ describe('parseBlamePorcelain', () => {
     ].join('\n')
     const lines = parseBlamePorcelain(raw)
     expect(lines).toHaveLength(3)
-    expect(lines[0]).toMatchObject({ lineNo: 1, author: 'Alice', text: 'line one', commitShort: 'aaaaaaa' })
+    expect(lines[0]).toMatchObject({
+      lineNo: 1,
+      author: 'Alice',
+      text: 'line one',
+      commitShort: 'aaaaaaa'
+    })
     // repeated sha resolves author from the cache
     expect(lines[1]).toMatchObject({ lineNo: 2, author: 'Alice', text: 'line two' })
     expect(lines[2]).toMatchObject({ lineNo: 3, author: 'Bob', text: 'line three' })

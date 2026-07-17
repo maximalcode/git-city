@@ -65,7 +65,9 @@ export async function getFileDiff(
   if (opts.rev) {
     const r = await runGitResult(repoPath, ['show', '--format=', '-M', opts.rev, '--', path])
     if (r.code !== 0) {
-      throw new FriendlyError(`Cannot show ${opts.rev.slice(0, 7)} — the commit may no longer exist.`)
+      throw new FriendlyError(
+        `Cannot show ${opts.rev.slice(0, 7)} — the commit may no longer exist.`
+      )
     }
     raw = r.stdout
     title = `commit ${opts.rev.slice(0, 7)}`

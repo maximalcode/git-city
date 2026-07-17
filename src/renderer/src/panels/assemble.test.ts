@@ -4,11 +4,18 @@ import { assemble, type Choice } from './MergeView'
 
 const segs: ConflictSegment[] = [
   { kind: 'text', text: 'before\n' },
-  { kind: 'conflict', id: 0, ours: 'ours\n', theirs: 'theirs\n', oursLabel: 'HEAD', theirsLabel: 'feat' },
+  {
+    kind: 'conflict',
+    id: 0,
+    ours: 'ours\n',
+    theirs: 'theirs\n',
+    oursLabel: 'HEAD',
+    theirsLabel: 'feat'
+  },
   { kind: 'text', text: 'after\n' }
 ]
 
-const m = <V,>(entries: [number, V][] = []): Map<number, V> => new Map(entries)
+const m = <V>(entries: [number, V][] = []): Map<number, V> => new Map(entries)
 
 describe('MergeView assemble', () => {
   it('defaults an untouched hunk to ours', () => {

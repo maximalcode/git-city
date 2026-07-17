@@ -156,12 +156,7 @@ async function listRemotes(repoPath: string): Promise<RemoteInfo[]> {
 }
 
 async function countStashes(repoPath: string): Promise<number> {
-  const res = await runGitResult(repoPath, [
-    'rev-list',
-    '--walk-reflogs',
-    '--count',
-    'refs/stash'
-  ])
+  const res = await runGitResult(repoPath, ['rev-list', '--walk-reflogs', '--count', 'refs/stash'])
   if (res.code !== 0) return 0
   const n = parseInt(res.stdout.trim(), 10)
   return Number.isFinite(n) ? n : 0

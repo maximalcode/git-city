@@ -169,9 +169,7 @@ export function registerOpsIpc(): void {
   mutating('branch-create', (repo, name: string, andSwitch: boolean) =>
     createBranch(repo, name, andSwitch)
   )
-  mutating('branch-delete', (repo, name: string, force: boolean) =>
-    deleteBranch(repo, name, force)
-  )
+  mutating('branch-delete', (repo, name: string, force: boolean) => deleteBranch(repo, name, force))
 
   // --- merge + conflicts ---
   mutating('merge', (repo, branch: string) => mergeBranch(repo, branch))

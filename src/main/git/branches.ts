@@ -118,10 +118,7 @@ export async function createBranch(
 ): Promise<OpResult> {
   const bad = optionLikeName(name)
   if (bad) return bad
-  const res = await runGitResult(
-    repoPath,
-    andSwitch ? ['switch', '-c', name] : ['branch', name]
-  )
+  const res = await runGitResult(repoPath, andSwitch ? ['switch', '-c', name] : ['branch', name])
   return res.code === 0 ? ok() : failFrom(res)
 }
 

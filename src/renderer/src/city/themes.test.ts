@@ -4,13 +4,7 @@ import { DEFAULT_THEME_ID, getTheme, THEMES } from './themes'
 describe('theme registry', () => {
   it('exposes the four aesthetics + realistic day/night', () => {
     const ids = THEMES.map((t) => t.id)
-    expect(ids).toEqual([
-      'realistic-day',
-      'realistic-night',
-      'neon',
-      'golden-hour',
-      'midnight-ink'
-    ])
+    expect(ids).toEqual(['realistic-day', 'realistic-night', 'neon', 'golden-hour', 'midnight-ink'])
   })
 
   it('has unique ids', () => {

@@ -6,7 +6,16 @@ const ROW_H = 34
 const LANE_W = 20
 const DOT = 5
 const PAD_LEFT = 12
-const LANE_COLORS = ['#6ec8ff', '#ffb347', '#7dd87d', '#ff6b6b', '#c084fc', '#f472b6', '#22d3ee', '#facc15']
+const LANE_COLORS = [
+  '#6ec8ff',
+  '#ffb347',
+  '#7dd87d',
+  '#ff6b6b',
+  '#c084fc',
+  '#f472b6',
+  '#22d3ee',
+  '#facc15'
+]
 const laneColor = (lane: number): string => LANE_COLORS[lane % LANE_COLORS.length]
 
 const cx = (lane: number): number => PAD_LEFT + lane * LANE_W + LANE_W / 2
@@ -138,7 +147,11 @@ export default function CommitGraphPanel(): React.JSX.Element | null {
                     {c.refs
                       .filter((r) => r.kind === 'branch')
                       .map((r) => (
-                        <button key={r.name} disabled={busy} onClick={() => void switchBranch(r.name)}>
+                        <button
+                          key={r.name}
+                          disabled={busy}
+                          onClick={() => void switchBranch(r.name)}
+                        >
                           Checkout {r.name}
                         </button>
                       ))}

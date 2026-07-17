@@ -30,7 +30,10 @@ describe('authorColor', () => {
 
 function model(paths: string[]): CityModel {
   return {
-    layout: { plots: paths.map((p) => ({ path: p, rect: { x: 0, y: 0, w: 1, h: 1 } })), districts: [] },
+    layout: {
+      plots: paths.map((p) => ({ path: p, rect: { x: 0, y: 0, w: 1, h: 1 } })),
+      districts: []
+    },
     paths,
     indexOf: new Map(paths.map((p, i) => [p, i])),
     langColors: paths.map(() => new Color('#3178c6')),
@@ -47,7 +50,14 @@ const snapshot: Snapshot = {
   files: [
     { path: 'a.ts', loc: 100, commits: 5, lastTouched: 1000, lastAuthor: 'Alice', binary: false },
     { path: 'b.test.ts', loc: 50, commits: 1, lastTouched: 5000, lastAuthor: 'Bob', binary: false },
-    { path: 'README.md', loc: 20, commits: 2, lastTouched: 3000, lastAuthor: 'Alice', binary: false }
+    {
+      path: 'README.md',
+      loc: 20,
+      commits: 2,
+      lastTouched: 3000,
+      lastAuthor: 'Alice',
+      binary: false
+    }
   ]
 }
 

@@ -79,7 +79,8 @@ export default function MergeView(): React.JSX.Element | null {
       }
     }
   }
-  const setEdit = (id: number, text: string): void => setEdits((prev) => new Map(prev).set(id, text))
+  const setEdit = (id: number, text: string): void =>
+    setEdits((prev) => new Map(prev).set(id, text))
 
   const markResolved = (): void => {
     if (!file || !active) return
@@ -107,7 +108,11 @@ export default function MergeView(): React.JSX.Element | null {
         <button onClick={doAbort} className="danger" disabled={busy}>
           Abort {source}
         </button>
-        <button className="primary" disabled={busy || !allResolved} onClick={() => void continueOp()}>
+        <button
+          className="primary"
+          disabled={busy || !allResolved}
+          onClick={() => void continueOp()}
+        >
           Continue
         </button>
         <button className="close" aria-label="Close" onClick={closeMergeView}>

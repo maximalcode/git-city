@@ -1,4 +1,10 @@
-import { BoxGeometry, ConeGeometry, CylinderGeometry, OctahedronGeometry, type BufferGeometry } from 'three'
+import {
+  BoxGeometry,
+  ConeGeometry,
+  CylinderGeometry,
+  OctahedronGeometry,
+  type BufferGeometry
+} from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 
 /**

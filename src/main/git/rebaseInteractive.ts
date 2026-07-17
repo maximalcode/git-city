@@ -60,7 +60,8 @@ export async function runInteractiveRebase(
   entries: RebaseEntry[]
 ): Promise<OpResult> {
   const ordered = [...entries].reverse() // oldest-first for the todo
-  if (ordered.length === 0) return { ok: false, code: 'nothing-to-do', message: 'Nothing to rebase.' }
+  if (ordered.length === 0)
+    return { ok: false, code: 'nothing-to-do', message: 'Nothing to rebase.' }
   // a squash can't be the first line — promote it to pick
   if (ordered[0].action === 'squash') ordered[0] = { ...ordered[0], action: 'pick' }
   if (ordered.every((e) => e.action === 'drop')) {

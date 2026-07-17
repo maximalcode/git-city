@@ -30,8 +30,7 @@ function fourCommits(): FixtureRepo {
   r.commitAll('D')
   return r
 }
-const subjects = (r: FixtureRepo): string[] =>
-  r.git('log', '--format=%s').trim().split('\n')
+const subjects = (r: FixtureRepo): string[] => r.git('log', '--format=%s').trim().split('\n')
 
 describe('tags', () => {
   it('creates, lists and deletes tags', async () => {

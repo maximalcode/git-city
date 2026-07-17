@@ -8,7 +8,12 @@
   --accent-2: #6ec8ff;
   --danger: #ff6b6b;
   --ok: #7dd87d;
-  font-family: 'Segoe UI', 'SF Pro Display', -apple-system, system-ui, sans-serif;
+  font-family:
+    'Segoe UI',
+    'SF Pro Display',
+    -apple-system,
+    system-ui,
+    sans-serif;
 }
 
 * {
@@ -35,7 +40,10 @@ button {
   background: rgba(255, 255, 255, 0.06);
   border-radius: 8px;
   padding: 8px 14px;
-  transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    transform 0.1s ease;
 }
 button:hover {
   background: rgba(255, 255, 255, 0.12);
@@ -103,8 +111,7 @@ input[type='text']:focus {
   gap: 28px;
   background:
     radial-gradient(1200px 500px at 50% 120%, rgba(255, 179, 71, 0.12), transparent 60%),
-    radial-gradient(900px 400px at 15% -10%, rgba(110, 200, 255, 0.08), transparent 60%),
-    var(--bg);
+    radial-gradient(900px 400px at 15% -10%, rgba(110, 200, 255, 0.08), transparent 60%), var(--bg);
 }
 .welcome h1 {
   font-size: 52px;

@@ -24,11 +24,7 @@ export async function listTags(repoPath: string): Promise<TagInfo[]> {
   return tags
 }
 
-export async function createTag(
-  repoPath: string,
-  name: string,
-  ref?: string
-): Promise<OpResult> {
+export async function createTag(repoPath: string, name: string, ref?: string): Promise<OpResult> {
   const trimmed = name.trim()
   if (!trimmed) return { ok: false, code: 'nothing-to-do', message: 'Tag name is empty.' }
   const bad = optionLikeName(trimmed) ?? (ref ? optionLikeName(ref) : null)

@@ -1,7 +1,12 @@
 import { readFileSync, rmSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { afterAll, describe, expect, it } from 'vitest'
-import { parseConflictSegments, readConflictFile, resolveConflictFile, resolveWholeFile } from './conflicts'
+import {
+  parseConflictSegments,
+  readConflictFile,
+  resolveConflictFile,
+  resolveWholeFile
+} from './conflicts'
 import { makeTempRepo, type FixtureRepo } from './fixtures'
 import { mergeAbort, mergeBranch, mergeContinue } from './merge'
 import { getWorkingStatus } from './status'
@@ -116,9 +121,7 @@ describe('conflict resolution end to end', () => {
     expect(seg.ours.endsWith('\r\n')).toBe(true)
 
     // assemble "ours" resolution exactly like the UI does: concatenate segments
-    const text = file.segments
-      .map((s) => (s.kind === 'text' ? s.text : s.ours))
-      .join('')
+    const text = file.segments.map((s) => (s.kind === 'text' ? s.text : s.ours)).join('')
     await resolveConflictFile(r.path, 'f.txt', text)
     const bytes = readFileSync(join(r.path, 'f.txt'))
     expect(bytes.toString('utf8')).toBe('line1\r\nfrom main\r\nline3\r\n')

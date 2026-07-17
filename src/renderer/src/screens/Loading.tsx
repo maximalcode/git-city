@@ -17,7 +17,7 @@ export default function Loading(): React.JSX.Element {
         <div style={{ width: `${pct}%` }} />
       </div>
       <div className="phase">
-        {progress ? PHASE_LABEL[progress.phase] ?? progress.phase : 'Starting…'}
+        {progress ? (PHASE_LABEL[progress.phase] ?? progress.phase) : 'Starting…'}
         {progress && progress.phase === 'reading-history' && progress.total > 1
           ? ` ${progress.done.toLocaleString()} / ${progress.total.toLocaleString()} commits`
           : ''}

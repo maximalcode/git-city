@@ -168,5 +168,7 @@ export const THEMES: Theme[] = [
 export const DEFAULT_THEME_ID = 'realistic-night'
 
 export function getTheme(id: string | undefined): Theme {
-  return THEMES.find((t) => t.id === id) ?? THEMES.find((t) => t.id === DEFAULT_THEME_ID) ?? THEMES[0]
+  return (
+    THEMES.find((t) => t.id === id) ?? THEMES.find((t) => t.id === DEFAULT_THEME_ID) ?? THEMES[0]
+  )
 }

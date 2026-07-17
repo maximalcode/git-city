@@ -10,10 +10,7 @@ export function useHotkeys(map: Record<string, () => void>, enabled = true): voi
     if (!enabled) return
     const onKey = (e: KeyboardEvent): void => {
       const t = e.target as HTMLElement | null
-      if (
-        t &&
-        (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)
-      ) {
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) {
         return
       }
       if (e.ctrlKey || e.metaKey || e.altKey) return

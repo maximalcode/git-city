@@ -60,7 +60,13 @@ function SettleRing({
   return (
     <mesh ref={ref} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.3, 0]}>
       <ringGeometry args={[0.82, 1, 64]} />
-      <meshBasicMaterial color="#ffd27a" transparent opacity={0.6} toneMapped={false} depthWrite={false} />
+      <meshBasicMaterial
+        color="#ffd27a"
+        transparent
+        opacity={0.6}
+        toneMapped={false}
+        depthWrite={false}
+      />
     </mesh>
   )
 }
@@ -100,7 +106,13 @@ function Beam({
     <group>
       <mesh ref={column} position={[0, top / 2, 0]}>
         <cylinderGeometry args={[0.6, 0.6, top, 12, 1, true]} />
-        <meshBasicMaterial color={color} transparent opacity={0} toneMapped={false} depthWrite={false} />
+        <meshBasicMaterial
+          color={color}
+          transparent
+          opacity={0}
+          toneMapped={false}
+          depthWrite={false}
+        />
       </mesh>
       <mesh ref={packet} position={[0, 1, 0]}>
         <boxGeometry args={[2.2, 2.2, 2.2]} />

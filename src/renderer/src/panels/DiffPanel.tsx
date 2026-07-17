@@ -24,8 +24,7 @@ export default function DiffPanel(): React.JSX.Element | null {
   const [retryNonce, setRetryNonce] = useState(0)
 
   // An explicit rev (opened from a history commit) wins over the timeline context.
-  const rev =
-    diffRev ?? (!live && analysis ? analysis.snapshots[snapshotIndex]?.hash : undefined)
+  const rev = diffRev ?? (!live && analysis ? analysis.snapshots[snapshotIndex]?.hash : undefined)
 
   useEffect(() => {
     if (!diffOpen || !selected || !repoPath || !hasApi()) {
@@ -87,7 +86,9 @@ export default function DiffPanel(): React.JSX.Element | null {
             <button onClick={() => setRetryNonce((n) => n + 1)}>Retry</button>
           </div>
         )}
-        {!loading && diff && diff.binary && <div className="empty">Binary file — no line diff.</div>}
+        {!loading && diff && diff.binary && (
+          <div className="empty">Binary file — no line diff.</div>
+        )}
         {!loading && diff && !diff.binary && diff.hunks.length === 0 && (
           <div className="empty">No changes to show.</div>
         )}
@@ -98,7 +99,9 @@ export default function DiffPanel(): React.JSX.Element | null {
               <div className="diff-hunk-header">{h.header}</div>
               {h.lines.map((l, li) => (
                 <div key={li} className={`diff-line diff-${l.kind}`}>
-                  <span className="diff-gutter">{l.kind === 'add' ? '+' : l.kind === 'del' ? '−' : ' '}</span>
+                  <span className="diff-gutter">
+                    {l.kind === 'add' ? '+' : l.kind === 'del' ? '−' : ' '}
+                  </span>
                   <span className="diff-text">{l.text || ' '}</span>
                 </div>
               ))}

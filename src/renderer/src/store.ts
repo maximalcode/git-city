@@ -318,7 +318,8 @@ export const useStore = create<GitCityState>((set, get) => ({
       diffRev: diffOpen ? (rev ?? null) : null,
       fileView: diffOpen && rev === undefined ? 'none' : s.fileView
     })),
-  setFileView: (fileView) => set({ fileView, diffOpen: fileView !== 'none' ? false : get().diffOpen }),
+  setFileView: (fileView) =>
+    set({ fileView, diffOpen: fileView !== 'none' ? false : get().diffOpen }),
   setGraphOpen: (graphOpen) => set({ graphOpen }),
   backToWelcome: () => {
     if (hasApi()) void window.gitCity.watchStop()
@@ -401,9 +402,14 @@ export const useStore = create<GitCityState>((set, get) => ({
     await get().refreshBranches()
     if (!result.ok) {
       if (result.code === 'conflict') {
-        set({ rebaseOpen: false, mergeView: { active: result.conflicts?.[0] ?? null, source: 'rebase' } })
+        set({
+          rebaseOpen: false,
+          mergeView: { active: result.conflicts?.[0] ?? null, source: 'rebase' }
+        })
       } else {
-        set({ opError: { message: result.message ?? 'Rebase failed.', gitOutput: result.gitOutput } })
+        set({
+          opError: { message: result.message ?? 'Rebase failed.', gitOutput: result.gitOutput }
+        })
       }
       return false
     }
@@ -448,10 +454,8 @@ export const useStore = create<GitCityState>((set, get) => ({
 
   // --- mutating actions (all funnel through runOp) ---
   stage: (paths) => runOp(set, get, 'Staging…', (repo) => window.gitCity.stage(repo, paths)),
-  unstage: (paths) =>
-    runOp(set, get, 'Unstaging…', (repo) => window.gitCity.unstage(repo, paths)),
-  discard: (paths) =>
-    runOp(set, get, 'Discarding…', (repo) => window.gitCity.discard(repo, paths)),
+  unstage: (paths) => runOp(set, get, 'Unstaging…', (repo) => window.gitCity.unstage(repo, paths)),
+  discard: (paths) => runOp(set, get, 'Discarding…', (repo) => window.gitCity.discard(repo, paths)),
   commit: (message, amend) =>
     runOp(
       set,
@@ -489,9 +493,7 @@ export const useStore = create<GitCityState>((set, get) => ({
       { reanalyze: andSwitch }
     ),
   deleteBranch: (name, force) =>
-    runOp(set, get, 'Deleting branch…', (repo) =>
-      window.gitCity.deleteBranch(repo, name, force)
-    ),
+    runOp(set, get, 'Deleting branch…', (repo) => window.gitCity.deleteBranch(repo, name, force)),
   merge: (name) =>
     runOp(set, get, `Merging ${name}…`, (repo) => window.gitCity.merge(repo, name), {
       reanalyze: true,
@@ -608,7 +610,9 @@ async function runOp(
       set({ mergeView: { active: result.conflicts?.[0] ?? null, source: src } })
     }
     if (result.code !== 'conflict') {
-      set({ opError: { message: result.message ?? 'Operation failed.', gitOutput: result.gitOutput } })
+      set({
+        opError: { message: result.message ?? 'Operation failed.', gitOutput: result.gitOutput }
+      })
     }
     return
   }

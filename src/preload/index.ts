@@ -52,13 +52,13 @@ const api: GitCityApi = {
   merge: (repoPath, branch) => ipcRenderer.invoke('git-city:merge', repoPath, branch),
   mergeAbort: (repoPath) => ipcRenderer.invoke('git-city:merge-abort', repoPath),
   mergeContinue: (repoPath) => ipcRenderer.invoke('git-city:merge-continue', repoPath),
-  getFileDiff: (repoPath, path, rev) =>
-    ipcRenderer.invoke('git-city:diff', repoPath, path, rev),
+  getFileDiff: (repoPath, path, rev) => ipcRenderer.invoke('git-city:diff', repoPath, path, rev),
   fileHistory: (repoPath, path) => ipcRenderer.invoke('git-city:file-history', repoPath, path),
   blame: (repoPath, path, rev) => ipcRenderer.invoke('git-city:blame', repoPath, path, rev),
   commitGraph: (repoPath, limit) => ipcRenderer.invoke('git-city:commit-graph', repoPath, limit),
   tags: (repoPath) => ipcRenderer.invoke('git-city:tags', repoPath),
-  createTag: (repoPath, name, ref) => ipcRenderer.invoke('git-city:tag-create', repoPath, name, ref),
+  createTag: (repoPath, name, ref) =>
+    ipcRenderer.invoke('git-city:tag-create', repoPath, name, ref),
   deleteTag: (repoPath, name) => ipcRenderer.invoke('git-city:tag-delete', repoPath, name),
   rebaseTodo: (repoPath, count) => ipcRenderer.invoke('git-city:rebase-todo', repoPath, count),
   rebaseInteractive: (repoPath, base, entries) =>
@@ -68,8 +68,7 @@ const api: GitCityApi = {
     ipcRenderer.invoke('git-city:conflict-resolve', repoPath, path, text),
   conflictResolveWhole: (repoPath, path, side) =>
     ipcRenderer.invoke('git-city:conflict-resolve-whole', repoPath, path, side),
-  openInEditor: (repoPath, path) =>
-    ipcRenderer.invoke('git-city:open-in-editor', repoPath, path),
+  openInEditor: (repoPath, path) => ipcRenderer.invoke('git-city:open-in-editor', repoPath, path),
 
   // --- stash ---
   stashList: (repoPath) => ipcRenderer.invoke('git-city:stash-list', repoPath),

@@ -2,12 +2,7 @@ import { rmSync } from 'fs'
 import { dirname } from 'path'
 import { afterAll, describe, expect, it } from 'vitest'
 import { createBranch, deleteBranch, listBranches, switchBranch } from './branches'
-import {
-  makeCloneWithRemoteBranches,
-  makeRepoPair,
-  makeTempRepo,
-  type RepoPair
-} from './fixtures'
+import { makeCloneWithRemoteBranches, makeRepoPair, makeTempRepo, type RepoPair } from './fixtures'
 import { getWorkingStatus } from './status'
 import { fetchRemote, pullRemote, pushRemote } from './sync'
 
@@ -134,7 +129,10 @@ describe('branches', () => {
     expect(names).toContain('origin/experiment')
     expect(branches.find((b) => b.name === 'origin/hotfix')?.isRemote).toBe(true)
     // the local default is present and current, and origin/HEAD is filtered out
-    expect(branches.find((b) => b.name === 'main')).toMatchObject({ current: true, isRemote: false })
+    expect(branches.find((b) => b.name === 'main')).toMatchObject({
+      current: true,
+      isRemote: false
+    })
     expect(names).not.toContain('origin/HEAD')
     // origin/main is deduped away (a local 'main' already tracks it)
     expect(names).not.toContain('origin/main')

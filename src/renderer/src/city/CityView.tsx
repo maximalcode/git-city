@@ -61,7 +61,12 @@ export default function CityView(): React.JSX.Element {
       <Canvas
         shadows
         dpr={[1, 1.75]}
-        camera={{ position: [size * 0.9, size * 0.75, size * 0.9], fov: 40, near: 0.5, far: size * 30 }}
+        camera={{
+          position: [size * 0.9, size * 0.75, size * 0.9],
+          fov: 40,
+          near: 0.5,
+          far: size * 30
+        }}
         onPointerMissed={() => useStore.getState().setSelected(null)}
       >
         <color attach="background" args={[bg]} />
@@ -115,7 +120,11 @@ export default function CityView(): React.JSX.Element {
           ) : (
             <></>
           )}
-          <Bloom luminanceThreshold={theme.bloom.threshold} intensity={theme.bloom.intensity} mipmapBlur />
+          <Bloom
+            luminanceThreshold={theme.bloom.threshold}
+            intensity={theme.bloom.intensity}
+            mipmapBlur
+          />
           <Vignette darkness={theme.vignette} />
         </EffectComposer>
       </Canvas>

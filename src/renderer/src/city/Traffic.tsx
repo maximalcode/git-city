@@ -26,7 +26,16 @@ interface LayerSpec {
   spin: boolean
 }
 
-const CAR_COLORS = ['#e74c3c', '#3498db', '#f1c40f', '#2ecc71', '#ecf0f1', '#e67e22', '#e84393', '#00cec9']
+const CAR_COLORS = [
+  '#e74c3c',
+  '#3498db',
+  '#f1c40f',
+  '#2ecc71',
+  '#ecf0f1',
+  '#e67e22',
+  '#e84393',
+  '#00cec9'
+]
 const PERSON_COLORS = ['#d6a06a', '#c98b5e', '#e8c39e', '#8d5524', '#5b7fb4', '#b25f6e']
 const BIKE_COLORS = ['#dfe6e9', '#74b9ff', '#ffeaa7', '#fab1a0']
 
@@ -48,9 +57,36 @@ function layersForTheme(theme: Theme, nNodes: number): LayerSpec[] {
     ]
   }
   return [
-    { kind: 'car', count: Math.floor(base * 0.55), material: 'lit', palette: CAR_COLORS, color: '#fff', hover: 0, speed: 0.5, spin: false },
-    { kind: 'person', count: Math.floor(base * 0.3), material: 'lit', palette: PERSON_COLORS, color: '#fff', hover: 0, speed: 0.24, spin: false },
-    { kind: 'bike', count: Math.floor(base * 0.15), material: 'lit', palette: BIKE_COLORS, color: '#fff', hover: 0, speed: 0.34, spin: false }
+    {
+      kind: 'car',
+      count: Math.floor(base * 0.55),
+      material: 'lit',
+      palette: CAR_COLORS,
+      color: '#fff',
+      hover: 0,
+      speed: 0.5,
+      spin: false
+    },
+    {
+      kind: 'person',
+      count: Math.floor(base * 0.3),
+      material: 'lit',
+      palette: PERSON_COLORS,
+      color: '#fff',
+      hover: 0,
+      speed: 0.24,
+      spin: false
+    },
+    {
+      kind: 'bike',
+      count: Math.floor(base * 0.15),
+      material: 'lit',
+      palette: BIKE_COLORS,
+      color: '#fff',
+      hover: 0,
+      speed: 0.34,
+      spin: false
+    }
   ]
 }
 
@@ -110,8 +146,8 @@ function AgentLayer({ spec, nodes }: { spec: LayerSpec; nodes: Nodes }): React.J
   const seed = useRef(1)
 
   const pick = (): number => {
-    seed.current = (seed.current * 1.618) % 1000 + 0.123
-    const r = ((Math.sin(seed.current) * 43758.5453) % 1 + 1) % 1
+    seed.current = ((seed.current * 1.618) % 1000) + 0.123
+    const r = (((Math.sin(seed.current) * 43758.5453) % 1) + 1) % 1
     const target = r * nodes.total
     let lo = 0
     let hi = nodes.cumulative.length - 1
@@ -151,7 +187,13 @@ function AgentLayer({ spec, nodes }: { spec: LayerSpec; nodes: Nodes }): React.J
   const pool = useMemo(() => {
     const arr: Agent[] = []
     for (let i = 0; i < spec.count; i++) {
-      const a: Agent = { from: 0, to: 1, t: 0, speed: spec.speed, phase: (i * 1.37) % (Math.PI * 2) }
+      const a: Agent = {
+        from: 0,
+        to: 1,
+        t: 0,
+        speed: spec.speed,
+        phase: (i * 1.37) % (Math.PI * 2)
+      }
       respawn(a)
       a.t = i / Math.max(1, spec.count)
       arr.push(a)

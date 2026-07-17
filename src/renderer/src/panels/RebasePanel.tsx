@@ -61,9 +61,8 @@ export default function RebasePanel(): React.JSX.Element | null {
       return next
     })
 
-  const changed =
-    entries.some((e) => e.action !== 'pick') // squash/drop present
-    // reorder detection is implicit; applying a pure reorder is still a valid rebase
+  const changed = entries.some((e) => e.action !== 'pick') // squash/drop present
+  // reorder detection is implicit; applying a pure reorder is still a valid rebase
 
   const apply = (): void =>
     askConfirm({
@@ -84,7 +83,9 @@ export default function RebasePanel(): React.JSX.Element | null {
       </div>
 
       {hasMerges && (
-        <div className="panel-banner">Range contains merge commits — rebase may behave unexpectedly.</div>
+        <div className="panel-banner">
+          Range contains merge commits — rebase may behave unexpectedly.
+        </div>
       )}
 
       <div className="rebase-hint">
@@ -107,7 +108,11 @@ export default function RebasePanel(): React.JSX.Element | null {
                 <button disabled={i === 0} onClick={() => move(i, -1)} title="Move up">
                   ↑
                 </button>
-                <button disabled={i === entries.length - 1} onClick={() => move(i, 1)} title="Move down">
+                <button
+                  disabled={i === entries.length - 1}
+                  onClick={() => move(i, 1)}
+                  title="Move down"
+                >
                   ↓
                 </button>
               </div>
@@ -130,7 +135,11 @@ export default function RebasePanel(): React.JSX.Element | null {
 
       <div className="rebase-foot">
         <button onClick={() => setRebaseOpen(false)}>Cancel</button>
-        <button className="danger" disabled={busy || loading || entries.length === 0} onClick={apply}>
+        <button
+          className="danger"
+          disabled={busy || loading || entries.length === 0}
+          onClick={apply}
+        >
           Rebase {entries.length} commits{changed ? '' : ' (reorder)'}
         </button>
       </div>

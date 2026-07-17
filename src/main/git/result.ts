@@ -20,7 +20,9 @@ export function classifyGitError(text: string): NonNullable<OpResult['code']> {
   if (/\[rejected\]|failed to push some refs|non-fast-forward|fetch first/i.test(text)) {
     return 'rejected'
   }
-  if (/no upstream branch|no tracking information|The current branch .* has no upstream/i.test(text)) {
+  if (
+    /no upstream branch|no tracking information|The current branch .* has no upstream/i.test(text)
+  ) {
     return 'no-upstream'
   }
   if (

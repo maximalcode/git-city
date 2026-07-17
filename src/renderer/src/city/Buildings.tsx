@@ -88,7 +88,10 @@ export default function Buildings({ model, targets }: Props): React.JSX.Element 
         const cd = Math.abs(tc - nc)
         if (cd > maxDelta) maxDelta = cd
       }
-      mesh.setColorAt(i, colorScratch.setRGB(anim.colors[i * 3], anim.colors[i * 3 + 1], anim.colors[i * 3 + 2]))
+      mesh.setColorAt(
+        i,
+        colorScratch.setRGB(anim.colors[i * 3], anim.colors[i * 3 + 1], anim.colors[i * 3 + 2])
+      )
     }
 
     mesh.instanceMatrix.needsUpdate = true

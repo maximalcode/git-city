@@ -58,13 +58,71 @@ const KIND_LABEL: Record<FileKind, string> = {
 }
 
 const CODE_EXT = new Set([
-  'ts', 'tsx', 'js', 'jsx', 'mjs', 'cjs', 'py', 'rb', 'go', 'rs', 'java', 'kt', 'swift',
-  'c', 'h', 'cpp', 'cc', 'hpp', 'cs', 'php', 'vue', 'svelte', 'scala', 'clj', 'ex', 'exs',
-  'erl', 'hs', 'lua', 'dart', 'r', 'zig', 'sh', 'bash', 'ps1'
+  'ts',
+  'tsx',
+  'js',
+  'jsx',
+  'mjs',
+  'cjs',
+  'py',
+  'rb',
+  'go',
+  'rs',
+  'java',
+  'kt',
+  'swift',
+  'c',
+  'h',
+  'cpp',
+  'cc',
+  'hpp',
+  'cs',
+  'php',
+  'vue',
+  'svelte',
+  'scala',
+  'clj',
+  'ex',
+  'exs',
+  'erl',
+  'hs',
+  'lua',
+  'dart',
+  'r',
+  'zig',
+  'sh',
+  'bash',
+  'ps1'
 ])
-const CONFIG_EXT = new Set(['json', 'yml', 'yaml', 'toml', 'ini', 'env', 'cfg', 'conf', 'lock', 'xml'])
+const CONFIG_EXT = new Set([
+  'json',
+  'yml',
+  'yaml',
+  'toml',
+  'ini',
+  'env',
+  'cfg',
+  'conf',
+  'lock',
+  'xml'
+])
 const DOCS_EXT = new Set(['md', 'mdx', 'txt', 'rst', 'adoc'])
-const ASSET_EXT = new Set(['png', 'jpg', 'jpeg', 'gif', 'svg', 'ico', 'webp', 'woff', 'woff2', 'ttf', 'otf', 'mp3', 'mp4', 'wav'])
+const ASSET_EXT = new Set([
+  'png',
+  'jpg',
+  'jpeg',
+  'gif',
+  'svg',
+  'ico',
+  'webp',
+  'woff',
+  'woff2',
+  'ttf',
+  'otf',
+  'mp3',
+  'mp4',
+  'wav'
+])
 
 export function categorize(path: string): FileKind {
   const lower = path.toLowerCase()
@@ -101,7 +159,10 @@ const RECENCY = ['#38506e', '#3aa0c0', '#52e07a'].map((c) => new Color(c)) // ol
 const SIZE = ['#ded1ff', '#8b5cf6', '#5b21b6'].map((c) => new Color(c)) // small → large
 
 function topBy(counts: Map<string, number>, n: number): string[] {
-  return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, n).map((e) => e[0])
+  return [...counts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, n)
+    .map((e) => e[0])
 }
 
 /** Build a per-mode colorer + legend for one snapshot. */
@@ -186,7 +247,9 @@ export function buildColorer(model: CityModel, snapshot: Snapshot, mode: ColorMo
   const present = new Set<FileKind>()
   for (const f of files) present.add(categorize(f.path))
   const kindColor = new Map<FileKind, Color>()
-  ;(Object.keys(KIND_COLORS) as FileKind[]).forEach((k) => kindColor.set(k, new Color(KIND_COLORS[k])))
+  ;(Object.keys(KIND_COLORS) as FileKind[]).forEach((k) =>
+    kindColor.set(k, new Color(KIND_COLORS[k]))
+  )
   const order: FileKind[] = ['code', 'test', 'config', 'docs', 'assets', 'other']
   return {
     colorFor: (f, _i, out) => out.copy(kindColor.get(categorize(f.path))!),

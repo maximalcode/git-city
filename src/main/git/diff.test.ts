@@ -47,7 +47,9 @@ describe('parseUnifiedDiff', () => {
   })
 
   it('detects binary diffs', () => {
-    const p = parseUnifiedDiff('diff --git a/i.png b/i.png\nBinary files a/i.png and b/i.png differ')
+    const p = parseUnifiedDiff(
+      'diff --git a/i.png b/i.png\nBinary files a/i.png and b/i.png differ'
+    )
     expect(p.binary).toBe(true)
     expect(p.hunks).toHaveLength(0)
   })

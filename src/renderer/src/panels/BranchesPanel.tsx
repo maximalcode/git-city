@@ -5,6 +5,7 @@ import { useStore } from '../store'
 export default function BranchesPanel(): React.JSX.Element | null {
   const panel = useStore((s) => s.panel)
   const branches = useStore((s) => s.branches)
+  const tags = useStore((s) => s.tags)
   const status = useStore((s) => s.workingStatus)
   const busy = useStore((s) => s.opInProgress !== null)
   const setPanel = useStore((s) => s.setPanel)
@@ -15,8 +16,12 @@ export default function BranchesPanel(): React.JSX.Element | null {
   const rebaseOnto = useStore((s) => s.rebaseOnto)
   const stashPush = useStore((s) => s.stashPush)
   const askConfirm = useStore((s) => s.askConfirm)
+  const createTag = useStore((s) => s.createTag)
+  const deleteTag = useStore((s) => s.deleteTag)
+  const setRebaseOpen = useStore((s) => s.setRebaseOpen)
 
   const [newName, setNewName] = useState('')
+  const [newTag, setNewTag] = useState('')
 
   if (panel !== 'branches') return null
 
@@ -150,6 +155,61 @@ export default function BranchesPanel(): React.JSX.Element | null {
               </button>
               <button disabled={busy} onClick={() => void merge(b.name)}>
                 Merge
+              </button>
+            </div>
+          </div>
+        ))}
+
+        <div className="section-head">
+          <span>Tags ({tags.length})</span>
+          <button disabled={busy} onClick={() => setRebaseOpen(true)} title="Interactive rebase">
+            ⤥ Rebase…
+          </button>
+        </div>
+        <div className="new-branch">
+          <input
+            type="text"
+            placeholder="New tag on HEAD"
+            value={newTag}
+            onChange={(e) => setNewTag(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && newTag.trim()) {
+                void createTag(newTag.trim())
+                setNewTag('')
+              }
+            }}
+          />
+          <button
+            disabled={busy || !newTag.trim()}
+            onClick={() => {
+              void createTag(newTag.trim())
+              setNewTag('')
+            }}
+          >
+            Tag
+          </button>
+        </div>
+        {tags.map((t) => (
+          <div key={t.name} className="branch-row">
+            <div className="branch-main">
+              <span className="ref-chip ref-tag">🏷 {t.name}</span>
+              <span className="branch-label">{t.target}</span>
+            </div>
+            <div className="branch-actions">
+              <button
+                className="danger"
+                disabled={busy}
+                onClick={() =>
+                  askConfirm({
+                    title: `Delete tag "${t.name}"?`,
+                    body: 'This removes the local tag.',
+                    confirmLabel: 'Delete',
+                    danger: true,
+                    onConfirm: () => void deleteTag(t.name)
+                  })
+                }
+              >
+                Delete
               </button>
             </div>
           </div>

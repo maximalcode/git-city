@@ -112,6 +112,22 @@ export interface StashEntry {
   date: number
 }
 
+export interface TagInfo {
+  name: string
+  /** short hash of the tagged commit */
+  target: string
+  /** unix ms */
+  date: number
+  subject: string
+}
+
+export interface RebaseEntry {
+  hash: string
+  shortHash: string
+  subject: string
+  action: 'pick' | 'squash' | 'drop'
+}
+
 /**
  * Uniform result of every mutating git operation. Expected git failures
  * (conflicts, auth, rejections) come back here — never as thrown errors,
@@ -158,11 +174,74 @@ export type ConflictSegment =
 
 export type RepoChangeReason = 'worktree' | 'index' | 'head' | 'refs'
 
+export interface DiffLine {
+  kind: 'add' | 'del' | 'ctx'
+  text: string
+}
+export interface DiffHunk {
+  header: string
+  lines: DiffLine[]
+}
+export interface DiffFile {
+  path: string
+  /** human label for what this diff represents, e.g. "Uncommitted changes" */
+  title: string
+  binary: boolean
+  hunks: DiffHunk[]
+  additions: number
+  deletions: number
+}
+
+export interface FileCommit {
+  hash: string
+  shortHash: string
+  author: string
+  /** unix ms */
+  date: number
+  subject: string
+}
+
+export interface BlameLine {
+  lineNo: number
+  commitShort: string
+  author: string
+  /** unix ms */
+  date: number
+  text: string
+}
+
+export interface GraphRef {
+  name: string
+  kind: 'head' | 'branch' | 'remote' | 'tag'
+}
+export interface GraphCommit {
+  hash: string
+  shortHash: string
+  parents: string[]
+  author: string
+  /** unix ms */
+  date: number
+  refs: GraphRef[]
+  subject: string
+  /** assigned column in the graph */
+  lane: number
+  /** row index (0 = newest) */
+  row: number
+}
+export interface CommitGraph {
+  commits: GraphCommit[]
+  laneCount: number
+  /** true when the log was capped at the limit */
+  truncated: boolean
+}
+
 /** API exposed to the renderer via the preload bridge. */
 export interface GitCityApi {
   /** Returns the installed git version, or null if git is missing. */
   checkGit(): Promise<string | null>
   selectFolder(): Promise<string | null>
+  /** Resolve a dropped File to its absolute path (File.path is gone in Electron 35). */
+  pathForFile(file: File): string
   analyzeRepo(repoPath: string, samples: number): Promise<RepoAnalysis>
   /** Incremental history update after our own HEAD move; null → caller should run a full analyze. */
   analyzeIncremental(repoPath: string): Promise<RepoAnalysis | null>
@@ -200,6 +279,30 @@ export interface GitCityApi {
   merge(repoPath: string, branch: string): Promise<OpResult>
   mergeAbort(repoPath: string): Promise<OpResult>
   mergeContinue(repoPath: string): Promise<OpResult>
+  /** Unified diff for a file: working changes (no rev) or a commit's change (rev). */
+  getFileDiff(repoPath: string, path: string, rev?: string): Promise<DiffFile>
+  /** Commit history for a file (follows renames). */
+  fileHistory(repoPath: string, path: string): Promise<FileCommit[]>
+  /** Per-line blame for a file. */
+  blame(repoPath: string, path: string, rev?: string): Promise<BlameLine[]>
+  /** Full commit graph across all refs (branch/merge topology). */
+  commitGraph(repoPath: string, limit?: number): Promise<CommitGraph>
+
+  // --- tags ---
+  tags(repoPath: string): Promise<TagInfo[]>
+  createTag(repoPath: string, name: string, ref?: string): Promise<OpResult>
+  deleteTag(repoPath: string, name: string): Promise<OpResult>
+
+  // --- interactive rebase ---
+  rebaseTodo(
+    repoPath: string,
+    count: number
+  ): Promise<{ entries: RebaseEntry[]; base: string | null; hasMerges: boolean }>
+  rebaseInteractive(
+    repoPath: string,
+    base: string | null,
+    entries: RebaseEntry[]
+  ): Promise<OpResult>
   conflictRead(repoPath: string, path: string): Promise<ConflictFile>
   conflictResolve(repoPath: string, path: string, text: string): Promise<OpResult>
   conflictResolveWhole(repoPath: string, path: string, side: 'ours' | 'theirs'): Promise<OpResult>

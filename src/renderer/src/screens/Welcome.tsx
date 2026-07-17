@@ -1,17 +1,45 @@
 import { useState } from 'react'
 import { useStore } from '../store'
 
+/** Last path segment, for showing a repo's folder name. */
+function baseName(p: string): string {
+  const parts = p.replace(/[\\/]+$/, '').split(/[\\/]/)
+  return parts[parts.length - 1] || p
+}
+
 export default function Welcome(): React.JSX.Element {
-  const { openLocal, openUrl, error, gitVersion } = useStore()
+  const { openLocal, openPath, openUrl, error, gitVersion, recentRepos, clearRecent } = useStore()
   const [url, setUrl] = useState('')
+  const [dragging, setDragging] = useState(false)
   const gitMissing = gitVersion === null
 
   const submitUrl = (): void => {
     if (url.trim()) void openUrl(url)
   }
 
+  const onDrop = (e: React.DragEvent): void => {
+    e.preventDefault()
+    setDragging(false)
+    if (gitMissing || !('gitCity' in window)) return
+    const file = e.dataTransfer.files?.[0]
+    if (!file) return
+    const path = window.gitCity.pathForFile(file)
+    if (path) void openPath(path)
+  }
+
   return (
-    <div className="welcome">
+    <div
+      className={`welcome ${dragging ? 'dragging' : ''}`}
+      onDragOver={(e) => {
+        e.preventDefault()
+        if (!dragging) setDragging(true)
+      }}
+      onDragLeave={(e) => {
+        // only clear when the pointer actually leaves the window
+        if (e.currentTarget === e.target) setDragging(false)
+      }}
+      onDrop={onDrop}
+    >
       <h1>Git City</h1>
       <p className="tagline">Watch your repository come alive as a city.</p>
 
@@ -27,6 +55,27 @@ export default function Welcome(): React.JSX.Element {
         <button className="primary" onClick={() => void openLocal()} disabled={gitMissing}>
           Open a local repository…
         </button>
+
+        {recentRepos.length > 0 && (
+          <div className="recent">
+            <div className="recent-head">
+              <span>Recent</span>
+              <button onClick={clearRecent}>Clear</button>
+            </div>
+            {recentRepos.map((p) => (
+              <button
+                key={p}
+                className="recent-item"
+                title={p}
+                disabled={gitMissing}
+                onClick={() => void openPath(p)}
+              >
+                <span className="recent-name">{baseName(p)}</span>
+                <span className="recent-path">{p}</span>
+              </button>
+            ))}
+          </div>
+        )}
 
         <div className="divider">or paste a repository URL</div>
 
@@ -45,10 +94,12 @@ export default function Welcome(): React.JSX.Element {
         </div>
 
         <p className="hint">
-          Public repositories only. Folders become districts, files become buildings — height is
-          lines of code. Drag the timeline to travel through the project&apos;s history.
+          Drag a repo folder anywhere onto this window to open it. Public repositories only for
+          cloning. Folders become districts, files become buildings — height is lines of code.
         </p>
       </div>
+
+      {dragging && <div className="drop-overlay">Drop a repository folder to open it</div>}
     </div>
   )
 }

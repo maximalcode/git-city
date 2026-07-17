@@ -24,13 +24,13 @@ export interface GitResult {
 export function runGitResult(
   cwd: string,
   args: string[],
-  opts?: { signal?: AbortSignal }
+  opts?: { signal?: AbortSignal; env?: Record<string, string> }
 ): Promise<GitResult> {
   return new Promise((resolve, reject) => {
     const child = spawn('git', args, {
       cwd,
       stdio: ['ignore', 'pipe', 'pipe'],
-      env: GIT_ENV,
+      env: opts?.env ? { ...GIT_ENV, ...opts.env } : GIT_ENV,
       signal: opts?.signal
     })
     let stdout = ''

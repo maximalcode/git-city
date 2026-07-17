@@ -1,15 +1,20 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import type { Snapshot } from '../../../shared/types'
 import { languageOf } from '../lib/languages'
-import { useStore } from '../store'
+import { useHotkeys } from '../lib/useHotkeys'
+import { useStore, type ColorMode } from '../store'
 import type { CityModel } from './cityData'
+import { THEMES, getTheme } from './themes'
+import { COLOR_MODES } from './colorModes'
+import Legend from './Legend'
+import SearchBox from './SearchBox'
 
 interface Props {
   snapshot: Snapshot
   model: CityModel
 }
 
-export default function Hud({ snapshot }: Props): React.JSX.Element {
+export default function Hud({ snapshot, model }: Props): React.JSX.Element {
   const analysis = useStore((s) => s.analysis)!
   const snapshotIndex = useStore((s) => s.snapshotIndex)
   const setSnapshotIndex = useStore((s) => s.setSnapshotIndex)
@@ -17,8 +22,8 @@ export default function Hud({ snapshot }: Props): React.JSX.Element {
   const setPlaying = useStore((s) => s.setPlaying)
   const colorMode = useStore((s) => s.colorMode)
   const setColorMode = useStore((s) => s.setColorMode)
-  const night = useStore((s) => s.night)
-  const toggleNight = useStore((s) => s.toggleNight)
+  const themeId = useStore((s) => s.themeId)
+  const setTheme = useStore((s) => s.setTheme)
   const hovered = useStore((s) => s.hovered)
   const selected = useStore((s) => s.selected)
   const setSelected = useStore((s) => s.setSelected)
@@ -29,6 +34,8 @@ export default function Hud({ snapshot }: Props): React.JSX.Element {
   const opInProgress = useStore((s) => s.opInProgress)
   const reanalyzing = useStore((s) => s.reanalyzing)
   const historyStale = useStore((s) => s.historyStale)
+  const graphOpen = useStore((s) => s.graphOpen)
+  const setGraphOpen = useStore((s) => s.setGraphOpen)
   const fetch = useStore((s) => s.fetch)
   const pull = useStore((s) => s.pull)
   const push = useStore((s) => s.push)
@@ -37,6 +44,31 @@ export default function Hud({ snapshot }: Props): React.JSX.Element {
 
   const byPath = useMemo(() => new Map(snapshot.files.map((f) => [f.path, f])), [snapshot])
   const totalLoc = useMemo(() => snapshot.files.reduce((a, f) => a + f.loc, 0), [snapshot])
+
+  const hotkeys = useMemo(
+    () => ({
+      c: () => useStore.getState().setPanel('changes'),
+      b: () => useStore.getState().setPanel('branches'),
+      s: () => useStore.getState().setPanel('stashes'),
+      g: () => useStore.getState().setGraphOpen(!useStore.getState().graphOpen),
+      '/': () => useStore.getState().setSearchOpen(true),
+      space: () => {
+        const st = useStore.getState()
+        st.setPlaying(!st.playing)
+      },
+      escape: () => {
+        const st = useStore.getState()
+        st.setSearchOpen(false)
+        st.setPanel('none')
+        st.setDiffOpen(false)
+        st.setFileView('none')
+        st.setGraphOpen(false)
+        st.setSelected(null)
+      }
+    }),
+    []
+  )
+  useHotkeys(hotkeys)
 
   const last = analysis.snapshots.length - 1
   const hoveredFile = hovered ? byPath.get(hovered) : undefined
@@ -107,6 +139,16 @@ export default function Hud({ snapshot }: Props): React.JSX.Element {
         >
           ⊟ Stash{st && st.stashCount > 0 ? ` (${st.stashCount})` : ''}
         </button>
+        <button
+          className={graphOpen ? 'active' : ''}
+          onClick={() => setGraphOpen(!graphOpen)}
+          title="Commit graph (G)"
+        >
+          ⑃ Graph
+        </button>
+        <button onClick={() => useStore.getState().setSearchOpen(true)} title="Find a file (/)">
+          ⌕
+        </button>
 
         <div className="spacer" />
 
@@ -127,21 +169,8 @@ export default function Hud({ snapshot }: Props): React.JSX.Element {
           </button>
         )}
 
-        <button
-          className={colorMode === 'language' ? 'active' : ''}
-          onClick={() => setColorMode('language')}
-          title="Color buildings by file language"
-        >
-          Language
-        </button>
-        <button
-          className={colorMode === 'heat' ? 'active' : ''}
-          onClick={() => setColorMode('heat')}
-          title="Color buildings by how often they change"
-        >
-          Activity
-        </button>
-        <button onClick={toggleNight}>{night ? '☀ Day' : '☾ Night'}</button>
+        <ColorModePicker colorMode={colorMode} setColorMode={setColorMode} />
+        <ThemePicker themeId={themeId} setTheme={setTheme} />
         <button onClick={backToWelcome}>⌂ Open another</button>
       </div>
 
@@ -187,8 +216,16 @@ export default function Hud({ snapshot }: Props): React.JSX.Element {
             <span>Last author</span>
             <span>{selectedFile.lastAuthor}</span>
           </div>
+          <div className="details-actions">
+            <button onClick={() => useStore.getState().setDiffOpen(true)}>⌗ Diff</button>
+            <button onClick={() => useStore.getState().setFileView('history')}>◷ History</button>
+            <button onClick={() => useStore.getState().setFileView('blame')}>◨ Blame</button>
+          </div>
         </div>
       )}
+
+      <SearchBox model={model} />
+      <Legend model={model} snapshot={snapshot} />
 
       <div className="hud-bottom">
         <div className="commit-info">
@@ -233,5 +270,75 @@ export default function Hud({ snapshot }: Props): React.JSX.Element {
         </div>
       </div>
     </>
+  )
+}
+
+function ColorModePicker({
+  colorMode,
+  setColorMode
+}: {
+  colorMode: ColorMode
+  setColorMode: (m: ColorMode) => void
+}): React.JSX.Element {
+  const [open, setOpen] = useState(false)
+  const active = COLOR_MODES.find((m) => m.id === colorMode) ?? COLOR_MODES[0]
+  return (
+    <div className="picker">
+      <button className="active" onClick={() => setOpen((o) => !o)} title="Color the city by…">
+        ◑ {active.name}
+      </button>
+      {open && (
+        <div className="picker-menu" onMouseLeave={() => setOpen(false)}>
+          {COLOR_MODES.map((m) => (
+            <button
+              key={m.id}
+              className={m.id === colorMode ? 'active' : ''}
+              title={m.hint}
+              onClick={() => {
+                setColorMode(m.id)
+                setOpen(false)
+              }}
+            >
+              {m.name}
+              <span className="picker-hint">{m.hint}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ThemePicker({
+  themeId,
+  setTheme
+}: {
+  themeId: string
+  setTheme: (id: string) => void
+}): React.JSX.Element {
+  const [open, setOpen] = useState(false)
+  const active = getTheme(themeId)
+  return (
+    <div className="picker">
+      <button className="active" onClick={() => setOpen((o) => !o)} title="Theme">
+        {active.glyph} {active.name}
+      </button>
+      {open && (
+        <div className="picker-menu" onMouseLeave={() => setOpen(false)}>
+          {THEMES.map((t) => (
+            <button
+              key={t.id}
+              className={t.id === themeId ? 'active' : ''}
+              onClick={() => {
+                setTheme(t.id)
+                setOpen(false)
+              }}
+            >
+              <span className="theme-glyph">{t.glyph}</span> {t.name}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   )
 }

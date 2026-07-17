@@ -1,7 +1,7 @@
 import { ipcMain, shell } from 'electron'
 import type { WebContents } from 'electron'
 import { resolve } from 'path'
-import type { OpResult, ProgressInfo, RepoChangeReason } from '../shared/types'
+import type { OpResult, ProgressInfo, RebaseEntry, RepoChangeReason } from '../shared/types'
 import {
   cherryPick,
   cherryPickAbort,
@@ -11,6 +11,11 @@ import {
   rebaseOnto
 } from './git/advanced'
 import { analyzeIncremental } from './git/analyze'
+import { getFileDiff } from './git/diff'
+import { commitGraph } from './git/graph'
+import { blameFile, fileHistory } from './git/history'
+import { createTag, deleteTag, listTags } from './git/tags'
+import { getRebaseTodo, runInteractiveRebase } from './git/rebaseInteractive'
 import { createBranch, deleteBranch, listBranches, switchBranch } from './git/branches'
 import { commit, getLastCommitMessage } from './git/commit'
 import { readConflictFile, resolveConflictFile, resolveWholeFile } from './git/conflicts'
@@ -82,6 +87,22 @@ export function registerOpsIpc(): void {
   )
   ipcMain.handle('git-city:conflict-read', (_e, repoPath: string, path: string) =>
     readConflictFile(repoPath, path)
+  )
+  ipcMain.handle('git-city:diff', (_e, repoPath: string, path: string, rev?: string) =>
+    getFileDiff(repoPath, path, rev ? { rev } : {})
+  )
+  ipcMain.handle('git-city:file-history', (_e, repoPath: string, path: string) =>
+    fileHistory(repoPath, path)
+  )
+  ipcMain.handle('git-city:blame', (_e, repoPath: string, path: string, rev?: string) =>
+    blameFile(repoPath, path, rev)
+  )
+  ipcMain.handle('git-city:commit-graph', (_e, repoPath: string, limit?: number) =>
+    commitGraph(repoPath, limit ?? 500)
+  )
+  ipcMain.handle('git-city:tags', (_e, repoPath: string) => listTags(repoPath))
+  ipcMain.handle('git-city:rebase-todo', (_e, repoPath: string, count: number) =>
+    getRebaseTodo(repoPath, count)
   )
   ipcMain.handle('git-city:analyze-incremental', (_e, repoPath: string) =>
     withRepoLock(repoPath, () => analyzeIncremental(repoPath))
@@ -167,4 +188,11 @@ export function registerOpsIpc(): void {
   mutating('rebase', (repo, onto: string) => rebaseOnto(repo, onto))
   mutating('rebase-continue', (repo) => rebaseContinue(repo))
   mutating('rebase-abort', (repo) => rebaseAbort(repo))
+
+  // --- tags + interactive rebase ---
+  mutating('tag-create', (repo, name: string, ref?: string) => createTag(repo, name, ref))
+  mutating('tag-delete', (repo, name: string) => deleteTag(repo, name))
+  mutating('rebase-interactive', (repo, base: string | null, entries: RebaseEntry[]) =>
+    runInteractiveRebase(repo, base, entries)
+  )
 }

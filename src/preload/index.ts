@@ -1,9 +1,11 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import type { GitCityApi, ProgressInfo, RepoChangeReason } from '../shared/types'
 
 const api: GitCityApi = {
   checkGit: () => ipcRenderer.invoke('git-city:check-git'),
   selectFolder: () => ipcRenderer.invoke('git-city:select-folder'),
+  // Electron 35 removed File.path; webUtils is the supported way to resolve a dropped folder
+  pathForFile: (file) => webUtils.getPathForFile(file),
   analyzeRepo: (repoPath, samples) => ipcRenderer.invoke('git-city:analyze', repoPath, samples),
   analyzeIncremental: (repoPath) => ipcRenderer.invoke('git-city:analyze-incremental', repoPath),
   cloneRepo: (url) => ipcRenderer.invoke('git-city:clone', url),
@@ -50,6 +52,17 @@ const api: GitCityApi = {
   merge: (repoPath, branch) => ipcRenderer.invoke('git-city:merge', repoPath, branch),
   mergeAbort: (repoPath) => ipcRenderer.invoke('git-city:merge-abort', repoPath),
   mergeContinue: (repoPath) => ipcRenderer.invoke('git-city:merge-continue', repoPath),
+  getFileDiff: (repoPath, path, rev) =>
+    ipcRenderer.invoke('git-city:diff', repoPath, path, rev),
+  fileHistory: (repoPath, path) => ipcRenderer.invoke('git-city:file-history', repoPath, path),
+  blame: (repoPath, path, rev) => ipcRenderer.invoke('git-city:blame', repoPath, path, rev),
+  commitGraph: (repoPath, limit) => ipcRenderer.invoke('git-city:commit-graph', repoPath, limit),
+  tags: (repoPath) => ipcRenderer.invoke('git-city:tags', repoPath),
+  createTag: (repoPath, name, ref) => ipcRenderer.invoke('git-city:tag-create', repoPath, name, ref),
+  deleteTag: (repoPath, name) => ipcRenderer.invoke('git-city:tag-delete', repoPath, name),
+  rebaseTodo: (repoPath, count) => ipcRenderer.invoke('git-city:rebase-todo', repoPath, count),
+  rebaseInteractive: (repoPath, base, entries) =>
+    ipcRenderer.invoke('git-city:rebase-interactive', repoPath, base, entries),
   conflictRead: (repoPath, path) => ipcRenderer.invoke('git-city:conflict-read', repoPath, path),
   conflictResolve: (repoPath, path, text) =>
     ipcRenderer.invoke('git-city:conflict-resolve', repoPath, path, text),

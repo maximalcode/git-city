@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { RebaseEntry } from '../../../shared/types'
-import { useStore } from '../store'
+import { hasApi, useStore } from '../store'
 
 const LOAD_COUNT = 15
 
@@ -23,7 +23,7 @@ export default function RebasePanel(): React.JSX.Element | null {
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
-    if (!rebaseOpen || !repoPath || !('gitCity' in window)) return
+    if (!rebaseOpen || !repoPath || !hasApi()) return
     let cancelled = false
     setLoading(true)
     void window.gitCity

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { CommitGraph, GraphCommit } from '../../../shared/types'
-import { useStore } from '../store'
+import { hasApi, useStore } from '../store'
 
 const ROW_H = 34
 const LANE_W = 20
@@ -26,7 +26,7 @@ export default function CommitGraphPanel(): React.JSX.Element | null {
   const [active, setActive] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!graphOpen || !repoPath || !('gitCity' in window)) return
+    if (!graphOpen || !repoPath || !hasApi()) return
     let cancelled = false
     setLoading(true)
     void window.gitCity

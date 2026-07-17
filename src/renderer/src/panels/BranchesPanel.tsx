@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { BranchInfo } from '../../../shared/types'
+import { AheadBehind } from '../lib/format'
 import { useStore } from '../store'
 
 export default function BranchesPanel(): React.JSX.Element | null {
@@ -109,11 +110,7 @@ export default function BranchesPanel(): React.JSX.Element | null {
             <div className="branch-main">
               <span className="branch-dot" />
               <span className="branch-label">{b.name}</span>
-              {(b.ahead > 0 || b.behind > 0) && (
-                <span className="ab-badge">
-                  {b.ahead > 0 && `↑${b.ahead}`} {b.behind > 0 && `↓${b.behind}`}
-                </span>
-              )}
+              <AheadBehind ahead={b.ahead} behind={b.behind} />
             </div>
             {!b.current && (
               <div className="branch-actions">

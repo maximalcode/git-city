@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { DiffFile } from '../../../shared/types'
-import { isLiveState, useStore } from '../store'
+import { hasApi, isLiveState, useStore } from '../store'
 
 /**
  * Shows the diff for the selected building's file. Context-aware: when viewing
@@ -26,7 +26,7 @@ export default function DiffPanel(): React.JSX.Element | null {
     diffRev ?? (!live && analysis ? analysis.snapshots[snapshotIndex]?.hash : undefined)
 
   useEffect(() => {
-    if (!diffOpen || !selected || !repoPath || !('gitCity' in window)) {
+    if (!diffOpen || !selected || !repoPath || !hasApi()) {
       setDiff(null)
       return
     }

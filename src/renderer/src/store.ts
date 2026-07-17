@@ -72,7 +72,35 @@ function cleanError(err: unknown): string {
   return msg.replace(/^Error invoking remote method '[^']+':\s*(Error:\s*)?/, '')
 }
 
-const hasApi = (): boolean => 'gitCity' in window
+/** Whether the preload API exists (absent when the renderer runs in a plain browser). */
+export const hasApi = (): boolean => 'gitCity' in window
+
+/**
+ * Everything scoped to one open repo. Applied on BOTH leaving the city and
+ * loading a repo, so stale panels/dialogs/effects can never leak between repos
+ * no matter which path a future feature takes.
+ */
+const REPO_STATE_RESET: Partial<GitCityState> = {
+  selected: null,
+  hovered: null,
+  playing: false,
+  searchOpen: false,
+  workingStatus: null,
+  branches: [],
+  stashes: [],
+  tags: [],
+  rebaseOpen: false,
+  panel: 'none',
+  opError: null,
+  confirm: null,
+  mergeView: null,
+  historyStale: false,
+  effect: null,
+  diffOpen: false,
+  diffRev: null,
+  fileView: 'none',
+  graphOpen: false
+}
 
 /** Cheap fingerprint so identical statuses (editor atomic-save churn) don't re-render. */
 function statusFingerprint(s: WorkingStatus | null): string {
@@ -296,27 +324,10 @@ export const useStore = create<GitCityState>((set, get) => ({
     if (hasApi()) void window.gitCity.watchStop()
     lastFingerprint = ''
     set({
+      ...REPO_STATE_RESET,
       screen: 'welcome',
       analysis: null,
-      selected: null,
-      hovered: null,
-      playing: false,
-      repoPath: null,
-      workingStatus: null,
-      branches: [],
-      stashes: [],
-      tags: [],
-      rebaseOpen: false,
-      panel: 'none',
-      mergeView: null,
-      historyStale: false,
-      opError: null,
-      confirm: null,
-      diffOpen: false,
-      diffRev: null,
-      fileView: 'none',
-      graphOpen: false,
-      effect: null
+      repoPath: null
     })
   },
 
@@ -629,18 +640,12 @@ async function loadRepo(
     const recent = [path, ...get().recentRepos.filter((p) => p !== path)].slice(0, RECENT_MAX)
     saveRecent(recent)
     set({
+      ...REPO_STATE_RESET,
       recentRepos: recent,
       analysis,
       repoPath: path,
       snapshotIndex: analysis.snapshots.length - 1,
-      screen: 'city',
-      selected: null,
-      hovered: null,
-      playing: false,
-      panel: 'none',
-      historyStale: false,
-      // a stale settle-ring/beam from the previous repo must not replay here
-      effect: null
+      screen: 'city'
     })
     if (hasApi()) {
       await window.gitCity.watchStart(path)

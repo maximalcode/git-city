@@ -52,6 +52,18 @@ export function ok(message?: string): OpResult {
   return { ok: true, message }
 }
 
+/**
+ * Guard for user-supplied names passed to git as positionals: a name starting
+ * with '-' would be parsed as an option (e.g. a tag named '-d' turning a
+ * create into a delete). Returns a failure OpResult, or null when fine.
+ */
+export function optionLikeName(name: string): OpResult | null {
+  if (name.startsWith('-')) {
+    return { ok: false, code: 'unknown', message: `Invalid name: ${name}` }
+  }
+  return null
+}
+
 /** Build a failed OpResult from a finished git process. */
 export function failFrom(res: GitResult, friendly?: string): OpResult {
   const output = `${res.stderr}\n${res.stdout}`.trim()

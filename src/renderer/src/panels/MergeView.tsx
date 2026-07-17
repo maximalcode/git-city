@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { ConflictFile, ConflictSegment } from '../../../shared/types'
-import { useStore } from '../store'
+import { hasApi, useStore } from '../store'
 
 export type Choice = 'ours' | 'theirs' | 'both' | 'edit'
 
@@ -47,7 +47,7 @@ export default function MergeView(): React.JSX.Element | null {
   const [edits, setEdits] = useState<Map<number, string>>(new Map())
 
   useEffect(() => {
-    if (!mergeView || !active || !repoPath || !('gitCity' in window)) {
+    if (!mergeView || !active || !repoPath || !hasApi()) {
       setFile(null)
       return
     }
@@ -171,7 +171,7 @@ export default function MergeView(): React.JSX.Element | null {
                 <button
                   disabled={busy}
                   onClick={() =>
-                    repoPath && 'gitCity' in window && window.gitCity.openInEditor(repoPath, active)
+                    repoPath && hasApi() && window.gitCity.openInEditor(repoPath, active)
                   }
                 >
                   Open in external editor

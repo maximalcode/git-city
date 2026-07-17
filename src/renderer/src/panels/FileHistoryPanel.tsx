@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { BlameLine, FileCommit } from '../../../shared/types'
-import { useStore } from '../store'
+import { hasApi, useStore } from '../store'
+import { formatDate } from '../lib/format'
 
 /**
  * Right-side panel showing either a file's commit history or its per-line
@@ -17,7 +18,7 @@ export default function FileHistoryPanel(): React.JSX.Element | null {
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
-    if (fileView === 'none' || !selected || !repoPath || !('gitCity' in window)) return
+    if (fileView === 'none' || !selected || !repoPath || !hasApi()) return
     let cancelled = false
     setLoading(true)
     setCommits(null)
@@ -75,7 +76,7 @@ export default function FileHistoryPanel(): React.JSX.Element | null {
                   <span className="commit-subject">{c.subject}</span>
                 </div>
                 <div className="commit-row2">
-                  {c.author} · {new Date(c.date).toLocaleDateString()}
+                  {c.author} · {formatDate(c.date)}
                 </div>
               </div>
             ))}
@@ -87,7 +88,7 @@ export default function FileHistoryPanel(): React.JSX.Element | null {
             {blame.length === 0 && <div className="empty">No blame available.</div>}
             {blame.map((l) => (
               <div key={l.lineNo} className="blame-line">
-                <span className="blame-gutter" title={`${l.author} · ${new Date(l.date).toLocaleDateString()}`}>
+                <span className="blame-gutter" title={`${l.author} · ${formatDate(l.date)}`}>
                   <span className="blame-hash">{l.commitShort}</span>
                   <span className="blame-author">{l.author}</span>
                 </span>

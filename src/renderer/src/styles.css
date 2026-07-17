@@ -218,13 +218,6 @@ input[type='text']:focus {
   font-weight: 700;
   font-size: 17px;
 }
-.hud-top .branch {
-  color: var(--text-dim);
-  font-size: 13px;
-  border: 1px solid var(--panel-border);
-  border-radius: 999px;
-  padding: 2px 10px;
-}
 .hud-top .spacer {
   flex: 1;
 }

@@ -79,6 +79,8 @@ export async function blameFile(
   if (rev) args.push(rev)
   args.push('--', path)
   const res = await runGitResult(repoPath, args)
-  if (res.code !== 0) return []
+  // throw like fileHistory/commitGraph — the readOnly IPC wrapper contains the
+  // raw stderr and the panel shows a proper error state instead of "no blame"
+  if (res.code !== 0) throw new Error(`git blame failed: ${res.stderr.trim()}`)
   return parseBlamePorcelain(res.stdout)
 }

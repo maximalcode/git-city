@@ -1,6 +1,6 @@
 import type { OpResult, TagInfo } from '../../shared/types'
 import { runGit, runGitResult } from './exec'
-import { failFrom, ok } from './result'
+import { failFrom, ok, optionLikeName } from './result'
 
 /** List tags with their target short-hash and subject, newest first. */
 export async function listTags(repoPath: string): Promise<TagInfo[]> {
@@ -31,6 +31,8 @@ export async function createTag(
 ): Promise<OpResult> {
   const trimmed = name.trim()
   if (!trimmed) return { ok: false, code: 'nothing-to-do', message: 'Tag name is empty.' }
+  const bad = optionLikeName(trimmed) ?? (ref ? optionLikeName(ref) : null)
+  if (bad) return bad
   const args = ['tag', trimmed]
   if (ref) args.push(ref)
   const res = await runGitResult(repoPath, args)
@@ -38,6 +40,8 @@ export async function createTag(
 }
 
 export async function deleteTag(repoPath: string, name: string): Promise<OpResult> {
+  const bad = optionLikeName(name)
+  if (bad) return bad
   const res = await runGitResult(repoPath, ['tag', '-d', name])
   return res.code === 0 ? ok() : failFrom(res)
 }

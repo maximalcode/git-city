@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useStore } from '../store'
+import { hasApi, useStore } from '../store'
 
 /** Last path segment, for showing a repo's folder name. */
 function baseName(p: string): string {
@@ -8,7 +8,15 @@ function baseName(p: string): string {
 }
 
 export default function Welcome(): React.JSX.Element {
-  const { openLocal, openPath, openUrl, error, gitVersion, recentRepos, clearRecent } = useStore()
+  // per-field selectors: a whole-store subscription would re-render Welcome on
+  // every unrelated store change
+  const openLocal = useStore((s) => s.openLocal)
+  const openPath = useStore((s) => s.openPath)
+  const openUrl = useStore((s) => s.openUrl)
+  const error = useStore((s) => s.error)
+  const gitVersion = useStore((s) => s.gitVersion)
+  const recentRepos = useStore((s) => s.recentRepos)
+  const clearRecent = useStore((s) => s.clearRecent)
   const [url, setUrl] = useState('')
   const [dragging, setDragging] = useState(false)
   const gitMissing = gitVersion === null
@@ -20,7 +28,7 @@ export default function Welcome(): React.JSX.Element {
   const onDrop = (e: React.DragEvent): void => {
     e.preventDefault()
     setDragging(false)
-    if (gitMissing || !('gitCity' in window)) return
+    if (gitMissing || !hasApi()) return
     const file = e.dataTransfer.files?.[0]
     if (!file) return
     const path = window.gitCity.pathForFile(file)

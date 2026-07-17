@@ -1,7 +1,9 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import type { Snapshot } from '../../../shared/types'
 import { languageOf } from '../lib/languages'
 import { useHotkeys } from '../lib/useHotkeys'
+import { AheadBehind, formatDate } from '../lib/format'
+import Picker from '../lib/Picker'
 import { useStore, type ColorMode } from '../store'
 import type { CityModel } from './cityData'
 import { THEMES, getTheme } from './themes'
@@ -73,7 +75,6 @@ export default function Hud({ snapshot, model }: Props): React.JSX.Element {
   const last = analysis.snapshots.length - 1
   const hoveredFile = hovered ? byPath.get(hovered) : undefined
   const selectedFile = selected ? byPath.get(selected) : undefined
-  const date = new Date(snapshot.date)
 
   const st = workingStatus
   const busy = opInProgress !== null
@@ -110,11 +111,7 @@ export default function Hud({ snapshot, model }: Props): React.JSX.Element {
             >
               ↑ {hasUpstream ? 'Push' : 'Publish'}
             </button>
-            {st && (st.ahead > 0 || st.behind > 0) && (
-              <span className="ab-badge">
-                {st.ahead > 0 && `↑${st.ahead}`} {st.behind > 0 && `↓${st.behind}`}
-              </span>
-            )}
+            {st && <AheadBehind ahead={st.ahead} behind={st.behind} />}
           </span>
         )}
 
@@ -210,7 +207,7 @@ export default function Hud({ snapshot, model }: Props): React.JSX.Element {
           </div>
           <div className="row">
             <span>Last change</span>
-            <span>{new Date(selectedFile.lastTouched).toLocaleDateString()}</span>
+            <span>{formatDate(selectedFile.lastTouched)}</span>
           </div>
           <div className="row">
             <span>Last author</span>
@@ -234,7 +231,7 @@ export default function Hud({ snapshot, model }: Props): React.JSX.Element {
             {snapshot.message}
           </span>
           <span>
-            {snapshot.author} · {date.toLocaleDateString()} · commit {snapshot.index + 1} of{' '}
+            {snapshot.author} · {formatDate(snapshot.date)} · commit {snapshot.index + 1} of{' '}
             {analysis.info.commitCount.toLocaleString()}
           </span>
           {snapshotIndex < last && st?.branch && (
@@ -280,32 +277,15 @@ function ColorModePicker({
   colorMode: ColorMode
   setColorMode: (m: ColorMode) => void
 }): React.JSX.Element {
-  const [open, setOpen] = useState(false)
   const active = COLOR_MODES.find((m) => m.id === colorMode) ?? COLOR_MODES[0]
   return (
-    <div className="picker">
-      <button className="active" onClick={() => setOpen((o) => !o)} title="Color the city by…">
-        ◑ {active.name}
-      </button>
-      {open && (
-        <div className="picker-menu" onMouseLeave={() => setOpen(false)}>
-          {COLOR_MODES.map((m) => (
-            <button
-              key={m.id}
-              className={m.id === colorMode ? 'active' : ''}
-              title={m.hint}
-              onClick={() => {
-                setColorMode(m.id)
-                setOpen(false)
-              }}
-            >
-              {m.name}
-              <span className="picker-hint">{m.hint}</span>
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
+    <Picker
+      buttonLabel={<>◑ {active.name}</>}
+      title="Color the city by…"
+      items={COLOR_MODES.map((m) => ({ id: m.id, label: m.name, hint: m.hint }))}
+      activeId={colorMode}
+      onPick={(id) => setColorMode(id as ColorMode)}
+    />
   )
 }
 
@@ -316,29 +296,25 @@ function ThemePicker({
   themeId: string
   setTheme: (id: string) => void
 }): React.JSX.Element {
-  const [open, setOpen] = useState(false)
   const active = getTheme(themeId)
   return (
-    <div className="picker">
-      <button className="active" onClick={() => setOpen((o) => !o)} title="Theme">
-        {active.glyph} {active.name}
-      </button>
-      {open && (
-        <div className="picker-menu" onMouseLeave={() => setOpen(false)}>
-          {THEMES.map((t) => (
-            <button
-              key={t.id}
-              className={t.id === themeId ? 'active' : ''}
-              onClick={() => {
-                setTheme(t.id)
-                setOpen(false)
-              }}
-            >
-              <span className="theme-glyph">{t.glyph}</span> {t.name}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
+    <Picker
+      buttonLabel={
+        <>
+          {active.glyph} {active.name}
+        </>
+      }
+      title="Theme"
+      items={THEMES.map((t) => ({
+        id: t.id,
+        label: (
+          <>
+            <span className="theme-glyph">{t.glyph}</span> {t.name}
+          </>
+        )
+      }))}
+      activeId={themeId}
+      onPick={setTheme}
+    />
   )
 }

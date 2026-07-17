@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { formatDateTime } from '../lib/format'
 import { useStore } from '../store'
 
 export default function StashPanel(): React.JSX.Element | null {
@@ -71,7 +72,7 @@ export default function StashPanel(): React.JSX.Element | null {
             <div className="stash-msg" title={s.message}>
               {s.message}
             </div>
-            <div className="stash-date">{new Date(s.date).toLocaleString()}</div>
+            <div className="stash-date">{formatDateTime(s.date)}</div>
             <div className="branch-actions">
               <button disabled={busy} onClick={() => void stashPop(s.index)}>
                 Pop

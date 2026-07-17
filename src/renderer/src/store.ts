@@ -113,6 +113,8 @@ interface GitCityState {
   effect: { kind: EffectKind; nonce: number } | null
   reanalyzing: boolean
   diffOpen: boolean
+  /** Explicit revision to diff (set when opened from a history commit); null = context-derived. */
+  diffRev: string | null
   fileView: 'none' | 'history' | 'blame'
   graphOpen: boolean
 
@@ -128,7 +130,7 @@ interface GitCityState {
   setSelected(path: string | null): void
   setColorMode(mode: ColorMode): void
   setTheme(id: string): void
-  setDiffOpen(open: boolean): void
+  setDiffOpen(open: boolean, rev?: string): void
   setFileView(view: 'none' | 'history' | 'blame'): void
   setGraphOpen(open: boolean): void
   backToWelcome(): void
@@ -208,6 +210,7 @@ export const useStore = create<GitCityState>((set, get) => ({
   effect: null,
   reanalyzing: false,
   diffOpen: false,
+  diffRev: null,
   fileView: 'none',
   graphOpen: false,
 
@@ -278,7 +281,15 @@ export const useStore = create<GitCityState>((set, get) => ({
     saveTheme(themeId)
     set({ themeId })
   },
-  setDiffOpen: (diffOpen) => set({ diffOpen, fileView: diffOpen ? 'none' : get().fileView }),
+  // Opening without an explicit rev replaces the history/blame panel (they share
+  // the same spot); opening WITH a rev (from a history commit) keeps history
+  // underneath so closing the diff returns to it.
+  setDiffOpen: (diffOpen, rev) =>
+    set((s) => ({
+      diffOpen,
+      diffRev: diffOpen ? (rev ?? null) : null,
+      fileView: diffOpen && rev === undefined ? 'none' : s.fileView
+    })),
   setFileView: (fileView) => set({ fileView, diffOpen: fileView !== 'none' ? false : get().diffOpen }),
   setGraphOpen: (graphOpen) => set({ graphOpen }),
   backToWelcome: () => {
@@ -302,8 +313,10 @@ export const useStore = create<GitCityState>((set, get) => ({
       opError: null,
       confirm: null,
       diffOpen: false,
+      diffRev: null,
       fileView: 'none',
-      graphOpen: false
+      graphOpen: false,
+      effect: null
     })
   },
 
@@ -625,7 +638,9 @@ async function loadRepo(
       hovered: null,
       playing: false,
       panel: 'none',
-      historyStale: false
+      historyStale: false,
+      // a stale settle-ring/beam from the previous repo must not replay here
+      effect: null
     })
     if (hasApi()) {
       await window.gitCity.watchStart(path)

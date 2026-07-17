@@ -24,6 +24,9 @@ export default function Buildings({ model, targets }: Props): React.JSX.Element 
   const theme = getTheme(useStore((s) => s.themeId))
   const { material, win } = useMemo(() => createBuildingMaterial(), [])
 
+  // passed as a prop (not JSX-created), so R3F won't dispose it for us
+  useEffect(() => () => material.dispose(), [material])
+
   // push theme-driven material + window uniforms
   useEffect(() => {
     material.roughness = theme.building.roughness

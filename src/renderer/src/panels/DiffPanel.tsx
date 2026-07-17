@@ -15,12 +15,15 @@ export default function DiffPanel(): React.JSX.Element | null {
   const analysis = useStore((s) => s.analysis)
   const snapshotIndex = useStore((s) => s.snapshotIndex)
   const live = useStore(isLiveState)
+  const diffRev = useStore((s) => s.diffRev)
   const setDiffOpen = useStore((s) => s.setDiffOpen)
 
   const [diff, setDiff] = useState<DiffFile | null>(null)
   const [loading, setLoading] = useState(false)
 
-  const rev = !live && analysis ? analysis.snapshots[snapshotIndex]?.hash : undefined
+  // An explicit rev (opened from a history commit) wins over the timeline context.
+  const rev =
+    diffRev ?? (!live && analysis ? analysis.snapshots[snapshotIndex]?.hash : undefined)
 
   useEffect(() => {
     if (!diffOpen || !selected || !repoPath || !('gitCity' in window)) {

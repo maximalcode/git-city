@@ -15,7 +15,12 @@ export type AgentKind = 'car' | 'person' | 'bike' | 'futuristic'
  * every combination compatible.
  */
 function merge(parts: BufferGeometry[]): BufferGeometry {
-  return mergeGeometries(parts.map((g) => g.toNonIndexed()))!
+  const nonIndexed = parts.map((g) => g.toNonIndexed())
+  const merged = mergeGeometries(nonIndexed)!
+  // the merge copies vertex data — free the intermediates
+  for (const g of parts) g.dispose()
+  for (const g of nonIndexed) g.dispose()
+  return merged
 }
 
 /** Car: body + cabin, ~2.6 long. */
@@ -60,7 +65,22 @@ export function futuristicGeometry(): BufferGeometry {
   return merge([core, fin])
 }
 
+/**
+ * Cached per kind: agent layers remount on theme switch, and without a cache
+ * each remount would build (and leak) a fresh merged geometry. Cached
+ * geometries are shared — consumers must never dispose them.
+ */
+const geometryCache = new Map<AgentKind, BufferGeometry>()
+
 export function geometryFor(kind: AgentKind): BufferGeometry {
+  const cached = geometryCache.get(kind)
+  if (cached) return cached
+  const built = buildGeometry(kind)
+  geometryCache.set(kind, built)
+  return built
+}
+
+function buildGeometry(kind: AgentKind): BufferGeometry {
   switch (kind) {
     case 'car':
       return carGeometry()

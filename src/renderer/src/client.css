@@ -707,7 +707,8 @@
   backdrop-filter: blur(14px);
   display: flex;
   flex-direction: column;
-  z-index: 22;
+  /* above .filehist-panel (22): a diff opened from a history commit overlays it */
+  z-index: 23;
   overflow: hidden;
   animation: pop-in 0.16s ease;
 }

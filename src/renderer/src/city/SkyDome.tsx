@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 import { BackSide, Color, ShaderMaterial } from 'three'
 
 /**
@@ -15,14 +15,16 @@ export default function SkyDome({
   bottom: string
   radius: number
 }): React.JSX.Element {
+  // One material for the component's lifetime — theme changes only update the
+  // color uniforms, so nothing is reallocated (or leaked) on theme switch.
   const material = useMemo(() => {
     return new ShaderMaterial({
       side: BackSide,
       depthWrite: false,
       fog: false,
       uniforms: {
-        uTop: { value: new Color(top) },
-        uBottom: { value: new Color(bottom) }
+        uTop: { value: new Color() },
+        uBottom: { value: new Color() }
       },
       vertexShader: /* glsl */ `
         varying vec3 vPos;
@@ -43,8 +45,14 @@ export default function SkyDome({
         }
       `
     })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [top, bottom])
+  }, [])
+
+  useEffect(() => {
+    ;(material.uniforms.uTop.value as Color).set(top)
+    ;(material.uniforms.uBottom.value as Color).set(bottom)
+  }, [material, top, bottom])
+
+  useEffect(() => () => material.dispose(), [material])
 
   return (
     <mesh scale={[radius, radius, radius]} frustumCulled={false}>

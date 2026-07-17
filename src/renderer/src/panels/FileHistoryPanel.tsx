@@ -67,8 +67,8 @@ export default function FileHistoryPanel(): React.JSX.Element | null {
               <div
                 key={c.hash}
                 className="commit-item"
-                onClick={() => useStore.getState().setDiffOpen(true)}
-                title="View this file's diff"
+                onClick={() => useStore.getState().setDiffOpen(true, c.hash)}
+                title="View this commit's diff of the file"
               >
                 <div className="commit-row1">
                   <span className="commit-hash">{c.shortHash}</span>

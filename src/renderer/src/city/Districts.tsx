@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { CanvasTexture, Color, InstancedMesh, LinearFilter, Object3D } from 'three'
 import type { CityModel } from './cityData'
 import { useStore } from '../store'
@@ -86,6 +86,10 @@ function DistrictLabel({
     tex.minFilter = LinearFilter
     return { texture: tex, aspect: canvas.width / canvas.height }
   }, [name, labelColor])
+
+  // Material.dispose() never disposes its maps — free the canvas texture when
+  // the theme changes (new labelColor → new texture) and on unmount.
+  useEffect(() => () => texture.dispose(), [texture])
 
   const w = Math.min(width * 0.7, aspect * 2.2)
   const h = w / aspect

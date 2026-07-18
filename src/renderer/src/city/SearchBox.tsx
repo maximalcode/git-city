@@ -1,15 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useStore } from '../store'
-import type { CityModel } from './cityData'
 
 const MAX_RESULTS = 8
 
 /**
- * Fuzzy-ish path search over the city's buildings. Picking a result selects it,
- * which the camera fly-to in CameraRig picks up automatically.
- * Arrow keys move through the results, Enter picks the highlighted one.
+ * Fuzzy-ish path search over the scene's files (buildings or ships). Picking a
+ * result selects it, which the camera fly-to in CameraRig picks up
+ * automatically. Arrow keys move through the results, Enter picks the
+ * highlighted one.
  */
-export default function SearchBox({ model }: { model: CityModel }): React.JSX.Element | null {
+export default function SearchBox({
+  model
+}: {
+  model: { paths: string[] }
+}): React.JSX.Element | null {
   const searchOpen = useStore((s) => s.searchOpen)
   const setSearchOpen = useStore((s) => s.setSearchOpen)
   const setSelected = useStore((s) => s.setSelected)

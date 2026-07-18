@@ -4,16 +4,18 @@ import { languageOf } from '../lib/languages'
 import { useHotkeys } from '../lib/useHotkeys'
 import { AheadBehind, formatDate } from '../lib/format'
 import Picker from '../lib/Picker'
-import { useStore, type ColorMode } from '../store'
-import type { CityModel } from './cityData'
+import { useStore, type ColorMode, type ViewMode } from '../store'
 import { THEMES, getTheme } from './themes'
-import { COLOR_MODES } from './colorModes'
+import { COLOR_MODES, type ColorContext } from './colorModes'
 import Legend from './Legend'
 import SearchBox from './SearchBox'
 
+/** The slice of a scene model the HUD needs — CityModel and FleetModel both satisfy it. */
+export type HudModel = ColorContext & { paths: string[] }
+
 interface Props {
   snapshot: Snapshot
-  model: CityModel
+  model: HudModel
 }
 
 export default function Hud({ snapshot, model }: Props): React.JSX.Element {
@@ -26,6 +28,8 @@ export default function Hud({ snapshot, model }: Props): React.JSX.Element {
   const setColorMode = useStore((s) => s.setColorMode)
   const themeId = useStore((s) => s.themeId)
   const setTheme = useStore((s) => s.setTheme)
+  const viewMode = useStore((s) => s.viewMode)
+  const setViewMode = useStore((s) => s.setViewMode)
   const hovered = useStore((s) => s.hovered)
   const selected = useStore((s) => s.selected)
   const setSelected = useStore((s) => s.setSelected)
@@ -53,6 +57,10 @@ export default function Hud({ snapshot, model }: Props): React.JSX.Element {
       b: () => useStore.getState().setPanel('branches'),
       s: () => useStore.getState().setPanel('stashes'),
       g: () => useStore.getState().setGraphOpen(!useStore.getState().graphOpen),
+      v: () => {
+        const st = useStore.getState()
+        st.setViewMode(st.viewMode === 'city' ? 'fleet' : 'city')
+      },
       '/': () => useStore.getState().setSearchOpen(true),
       space: () => {
         const st = useStore.getState()
@@ -173,6 +181,7 @@ export default function Hud({ snapshot, model }: Props): React.JSX.Element {
           </button>
         )}
 
+        <ViewPicker viewMode={viewMode} setViewMode={setViewMode} />
         <ColorModePicker colorMode={colorMode} setColorMode={setColorMode} />
         <ThemePicker themeId={themeId} setTheme={setTheme} />
         <button onClick={backToWelcome}>⌂ Open another</button>
@@ -279,6 +288,42 @@ export default function Hud({ snapshot, model }: Props): React.JSX.Element {
         </div>
       </div>
     </>
+  )
+}
+
+const VIEW_MODES: { id: ViewMode; glyph: string; name: string; hint: string }[] = [
+  { id: 'city', glyph: '🏙', name: 'City', hint: 'Files as buildings in districts' },
+  { id: 'fleet', glyph: '🚀', name: 'Fleet', hint: 'Files as ships in squadron formations' }
+]
+
+function ViewPicker({
+  viewMode,
+  setViewMode
+}: {
+  viewMode: ViewMode
+  setViewMode: (m: ViewMode) => void
+}): React.JSX.Element {
+  const active = VIEW_MODES.find((m) => m.id === viewMode) ?? VIEW_MODES[0]
+  return (
+    <Picker
+      buttonLabel={
+        <>
+          {active.glyph} {active.name}
+        </>
+      }
+      title="View (V)"
+      items={VIEW_MODES.map((m) => ({
+        id: m.id,
+        label: (
+          <>
+            <span className="theme-glyph">{m.glyph}</span> {m.name}
+          </>
+        ),
+        hint: m.hint
+      }))}
+      activeId={viewMode}
+      onPick={(id) => setViewMode(id as ViewMode)}
+    />
   )
 }
 

@@ -37,6 +37,8 @@ export interface FleetModel {
   langColors: Color[]
   /** squadron id per ship (for regroup effects / debugging) */
   squadronOf: Uint16Array
+  /** base heading per ship (squadrons face along their district's long axis) */
+  yaw: Float32Array
   worldSize: number
 }
 
@@ -53,8 +55,14 @@ export function shipClassFor(weight: number): ShipClass {
   return SHIP_CLASS.fighter
 }
 
+/**
+ * Within-class size variation. The class already encodes the big steps
+ * (fighter/freighter/capital hulls differ ~2.5× each), so the per-LOC scale
+ * only breathes gently — otherwise a huge capital would overflow its
+ * formation slot.
+ */
 export function shipScaleFor(loc: number): number {
-  return Math.min(3.5, Math.max(0.55, Math.pow(loc, 0.5) * 0.09))
+  return Math.min(1.8, Math.max(0.55, 0.7 + 0.15 * Math.log10(loc + 1)))
 }
 
 interface Squadron {
@@ -111,6 +119,7 @@ export function buildFleetModel(analysis: RepoAnalysis): FleetModel {
   const positions = new Float32Array(n * 3)
   const classes = new Uint8Array(n)
   const squadronOf = new Uint16Array(n)
+  const yaw = new Float32Array(n)
 
   let ship = 0
   let squadronId = 0
@@ -152,6 +161,8 @@ export function buildFleetModel(analysis: RepoAnalysis): FleetModel {
       positions[ship * 3 + 2] = z
       classes[ship] = shipClassFor(f.weight)
       squadronOf[ship] = squadronId
+      // hulls face +X; squadrons flying along z turn to face +Z
+      yaw[ship] = alongX ? 0 : -Math.PI / 2
       ship++
     }
     squadronId++
@@ -159,7 +170,7 @@ export function buildFleetModel(analysis: RepoAnalysis): FleetModel {
 
   const indexOf = new Map(paths.map((p, i) => [p, i]))
   const langColors = paths.map((p) => new Color(languageOf(p).color))
-  return { paths, indexOf, positions, classes, langColors, squadronOf, worldSize }
+  return { paths, indexOf, positions, classes, langColors, squadronOf, yaw, worldSize }
 }
 
 const scratch = new Color()

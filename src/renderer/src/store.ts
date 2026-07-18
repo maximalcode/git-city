@@ -31,6 +31,24 @@ function saveTheme(id: string): void {
   }
 }
 
+export type ViewMode = 'city' | 'fleet'
+const VIEW_KEY = 'gitcity.view'
+function loadViewMode(): ViewMode {
+  try {
+    const v = localStorage.getItem(VIEW_KEY)
+    return v === 'fleet' ? 'fleet' : 'city'
+  } catch {
+    return 'city'
+  }
+}
+function saveViewMode(mode: ViewMode): void {
+  try {
+    localStorage.setItem(VIEW_KEY, mode)
+  } catch {
+    /* private mode / no storage — view just won't persist */
+  }
+}
+
 const RECENT_KEY = 'gitcity.recent'
 const RECENT_MAX = 8
 function loadRecent(): string[] {
@@ -109,9 +127,7 @@ export function statusFingerprint(s: WorkingStatus | null): string {
   if (!s) return ''
   return `${s.headHash}|${s.opState}|${s.ahead},${s.behind}|${s.branch}|${s.upstream ?? ''}|${
     s.stashCount
-  }|${s.files
-    .map((f) => `${f.path}:${f.index}${f.worktree}${f.conflicted ? 'C' : ''}`)
-    .join(',')}`
+  }|${s.files.map((f) => `${f.path}:${f.index}${f.worktree}${f.conflicted ? 'C' : ''}`).join(',')}`
 }
 
 interface GitCityState {
@@ -123,6 +139,7 @@ interface GitCityState {
   selected: string | null
   colorMode: ColorMode
   themeId: string
+  viewMode: ViewMode
   progress: ProgressInfo | null
   error: string | null
   gitVersion: string | null | 'unknown'
@@ -162,6 +179,7 @@ interface GitCityState {
   setSelected(path: string | null): void
   setColorMode(mode: ColorMode): void
   setTheme(id: string): void
+  setViewMode(mode: ViewMode): void
   setDiffOpen(open: boolean, rev?: string): void
   setFileView(view: 'none' | 'history' | 'blame'): void
   setGraphOpen(open: boolean): void
@@ -221,6 +239,7 @@ export const useStore = create<GitCityState>((set, get) => ({
   selected: null,
   colorMode: 'language',
   themeId: loadTheme(),
+  viewMode: loadViewMode(),
   progress: null,
   error: null,
   gitVersion: 'unknown',
@@ -312,6 +331,11 @@ export const useStore = create<GitCityState>((set, get) => ({
   setTheme: (themeId) => {
     saveTheme(themeId)
     set({ themeId })
+  },
+  // user preference like the theme: persisted, survives repo switches
+  setViewMode: (viewMode) => {
+    saveViewMode(viewMode)
+    set({ viewMode })
   },
   // Opening without an explicit rev replaces the history/blame panel (they share
   // the same spot); opening WITH a rev (from a history commit) keeps history

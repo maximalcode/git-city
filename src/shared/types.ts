@@ -235,6 +235,27 @@ export interface CommitGraph {
   truncated: boolean
 }
 
+/** One HEAD movement from the reflog (git's undo/recovery history). */
+export interface ReflogEntry {
+  /** 0 = most recent (HEAD@{0}) */
+  index: number
+  /** e.g. 'HEAD@{2}' */
+  selector: string
+  hash: string
+  shortHash: string
+  /** action word(s) before the colon: commit, reset, checkout, merge, rebase, pull… */
+  action: string
+  /** reflog detail after the action, e.g. 'moving to HEAD~1' */
+  message: string
+  /** the target commit's own subject line */
+  subject: string
+  author: string
+  /** unix ms */
+  date: number
+}
+
+export type ResetMode = 'soft' | 'mixed' | 'keep' | 'hard'
+
 /** API exposed to the renderer via the preload bridge. */
 export interface GitCityApi {
   /** Returns the installed git version, or null if git is missing. */
@@ -287,6 +308,13 @@ export interface GitCityApi {
   blame(repoPath: string, path: string, rev?: string): Promise<BlameLine[]>
   /** Full commit graph across all refs (branch/merge topology). */
   commitGraph(repoPath: string, limit?: number): Promise<CommitGraph>
+
+  // --- reflog (undo / recover) ---
+  reflog(repoPath: string, limit?: number): Promise<ReflogEntry[]>
+  /** Move the current branch to a reflog point (local ref only — never a remote). */
+  resetTo(repoPath: string, ref: string, mode: ResetMode): Promise<OpResult>
+  /** Non-destructively recover: create a new branch at a reflog point. */
+  recoverToBranch(repoPath: string, name: string, ref: string): Promise<OpResult>
 
   // --- tags ---
   tags(repoPath: string): Promise<TagInfo[]>

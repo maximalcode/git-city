@@ -56,6 +56,10 @@ const api: GitCityApi = {
   fileHistory: (repoPath, path) => ipcRenderer.invoke('git-city:file-history', repoPath, path),
   blame: (repoPath, path, rev) => ipcRenderer.invoke('git-city:blame', repoPath, path, rev),
   commitGraph: (repoPath, limit) => ipcRenderer.invoke('git-city:commit-graph', repoPath, limit),
+  reflog: (repoPath, limit) => ipcRenderer.invoke('git-city:reflog', repoPath, limit),
+  resetTo: (repoPath, ref, mode) => ipcRenderer.invoke('git-city:reset-to', repoPath, ref, mode),
+  recoverToBranch: (repoPath, name, ref) =>
+    ipcRenderer.invoke('git-city:reflog-recover', repoPath, name, ref),
   tags: (repoPath) => ipcRenderer.invoke('git-city:tags', repoPath),
   createTag: (repoPath, name, ref) =>
     ipcRenderer.invoke('git-city:tag-create', repoPath, name, ref),

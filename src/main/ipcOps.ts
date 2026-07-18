@@ -1,7 +1,13 @@
 import { ipcMain, shell } from 'electron'
 import type { WebContents } from 'electron'
 import { resolve, sep } from 'path'
-import type { OpResult, ProgressInfo, RebaseEntry, RepoChangeReason } from '../shared/types'
+import type {
+  OpResult,
+  ProgressInfo,
+  RebaseEntry,
+  RepoChangeReason,
+  ResetMode
+} from '../shared/types'
 import {
   cherryPick,
   cherryPickAbort,
@@ -14,6 +20,7 @@ import { analyzeIncremental } from './git/analyze'
 import { getFileDiff } from './git/diff'
 import { commitGraph } from './git/graph'
 import { blameFile, fileHistory } from './git/history'
+import { getReflog, recoverToBranch, resetTo } from './git/reflog'
 import { createTag, deleteTag, listTags } from './git/tags'
 import { getRebaseTodo, runInteractiveRebase } from './git/rebaseInteractive'
 import { createBranch, deleteBranch, listBranches, switchBranch } from './git/branches'
@@ -110,6 +117,7 @@ export function registerOpsIpc(): void {
   readOnly('file-history', (repo, path: string) => fileHistory(repo, path))
   readOnly('blame', (repo, path: string, rev?: string) => blameFile(repo, path, rev))
   readOnly('commit-graph', (repo, limit?: number) => commitGraph(repo, limit ?? 500))
+  readOnly('reflog', (repo, limit?: number) => getReflog(repo, limit ?? 100))
   readOnly('tags', (repo) => listTags(repo))
   readOnly('rebase-todo', (repo, count: number) => getRebaseTodo(repo, count))
   ipcMain.handle('git-city:analyze-incremental', (_e, repoPath: string) =>
@@ -204,4 +212,8 @@ export function registerOpsIpc(): void {
   mutating('rebase-interactive', (repo, base: string | null, entries: RebaseEntry[]) =>
     runInteractiveRebase(repo, base, entries)
   )
+
+  // --- reflog (undo / recover) ---
+  mutating('reset-to', (repo, ref: string, mode: ResetMode) => resetTo(repo, ref, mode))
+  mutating('reflog-recover', (repo, name: string, ref: string) => recoverToBranch(repo, name, ref))
 }

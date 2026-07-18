@@ -41,7 +41,7 @@ const drawsOver = async (page: Page, ms: number): Promise<number> => {
   return (await draws(page)) - before
 }
 
-const setMode = (page: Page, mode: 'city' | 'fleet'): Promise<void> =>
+const setMode = (page: Page, mode: 'city' | 'forest'): Promise<void> =>
   page.evaluate((m) => {
     ;(
       window as unknown as { __gitCityMock: { store: { getState(): { setViewMode(x: string): void } } } }
@@ -55,7 +55,7 @@ const setTheme = (page: Page, id: string): Promise<void> =>
     ).__gitCityMock.store.getState().setTheme(t)
   }, id)
 
-test('city/fleet switching never freezes the render loop or errors', async ({ page }) => {
+test('city/forest switching never freezes the render loop or errors', async ({ page }) => {
   const errors: string[] = []
   page.on('console', (m) => {
     if (m.type() === 'error') errors.push(m.text())
@@ -83,14 +83,14 @@ test('city/fleet switching never freezes the render loop or errors', async ({ pa
   for (const t of themes) {
     await setTheme(page, t)
     for (let i = 0; i < 3; i++) {
-      await setMode(page, i % 2 ? 'city' : 'fleet')
+      await setMode(page, i % 2 ? 'city' : 'forest')
       await page.waitForTimeout(150)
     }
   }
 
   // no error boundary tripped, and the loop is STILL drawing (would be 0 if frozen)
   expect(await page.locator('.scene-error').count()).toBe(0)
-  await setMode(page, 'fleet')
+  await setMode(page, 'forest')
   await page.waitForTimeout(200)
   expect(await drawsOver(page, 600)).toBeGreaterThan(0)
 

@@ -8,6 +8,7 @@ import { getTheme } from './themes'
 import { buildCityModel, snapshotTargets } from './cityData'
 import Buildings from './Buildings'
 import Districts from './Districts'
+import Roads from './Roads'
 import Highlight from './Highlight'
 import StatusOverlay from './StatusOverlay'
 import ConstructionSites from './ConstructionSites'
@@ -105,6 +106,7 @@ export default function CityView(): React.JSX.Element {
         </mesh>
 
         <Districts model={model} />
+        <Roads model={model} />
         <Buildings model={model} targets={targets} />
         <Highlight model={model} targets={targets} />
         <StatusOverlay model={model} targets={targets} />

@@ -1,6 +1,7 @@
 import { Color } from 'three'
 import type { RepoAnalysis, Snapshot } from '../../../shared/types'
 import { cityLayout, type CityLayout } from '../layout/treemap'
+import { buildRoadGraph, type RoadGraph } from '../layout/roads'
 import { languageOf } from '../lib/languages'
 import { buildColorer, type ColorMode } from './colorModes'
 
@@ -12,6 +13,8 @@ import { buildColorer, type ColorMode } from './colorModes'
  */
 export interface CityModel {
   layout: CityLayout
+  /** street graph derived from layout.roads; shared by Roads + Traffic */
+  roadGraph: RoadGraph
   /** building index → file path */
   paths: string[]
   indexOf: Map<string, number>
@@ -42,10 +45,11 @@ export function buildCityModel(analysis: RepoAnalysis): CityModel {
   const files = Array.from(weights, ([path, weight]) => ({ path, weight }))
   const citySize = Math.max(80, Math.min(280, Math.sqrt(files.length) * 9))
   const layout = cityLayout(files, citySize)
+  const roadGraph = buildRoadGraph(layout.roads)
   const paths = layout.plots.map((p) => p.path)
   const indexOf = new Map(paths.map((p, i) => [p, i]))
   const langColors = paths.map((p) => new Color(languageOf(p).color))
-  return { layout, paths, indexOf, langColors, citySize }
+  return { layout, roadGraph, paths, indexOf, langColors, citySize }
 }
 
 const scratch = new Color()

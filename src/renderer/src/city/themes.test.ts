@@ -29,6 +29,9 @@ describe('theme registry', () => {
       expect(['none', 'motes', 'rain', 'confetti']).toContain(t.particles)
       expect(typeof t.lowPoly).toBe('boolean')
       expect(typeof t.windows.enabled).toBe('boolean')
+      expect(t.road.surface).toMatch(/^#[0-9a-f]{6}$/i)
+      expect(t.road.marking).toMatch(/^#[0-9a-f]{6}$/i)
+      expect(t.road.markingEmissive).toBeGreaterThanOrEqual(0)
     }
   })
 

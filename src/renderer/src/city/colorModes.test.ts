@@ -35,6 +35,7 @@ function model(paths: string[]): CityModel {
       districts: [],
       roads: []
     },
+    roadGraph: { nodes: [], edges: [], adjacency: [] },
     paths,
     indexOf: new Map(paths.map((p, i) => [p, i])),
     langColors: paths.map(() => new Color('#3178c6')),

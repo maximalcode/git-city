@@ -53,9 +53,17 @@ const api: GitCityApi = {
   mergeAbort: (repoPath) => ipcRenderer.invoke('git-city:merge-abort', repoPath),
   mergeContinue: (repoPath) => ipcRenderer.invoke('git-city:merge-continue', repoPath),
   getFileDiff: (repoPath, path, rev) => ipcRenderer.invoke('git-city:diff', repoPath, path, rev),
+  fileHunks: (repoPath, path, staged) =>
+    ipcRenderer.invoke('git-city:file-hunks', repoPath, path, staged),
+  applyHunk: (repoPath, path, header, mode) =>
+    ipcRenderer.invoke('git-city:apply-hunk', repoPath, path, header, mode),
   fileHistory: (repoPath, path) => ipcRenderer.invoke('git-city:file-history', repoPath, path),
   blame: (repoPath, path, rev) => ipcRenderer.invoke('git-city:blame', repoPath, path, rev),
   commitGraph: (repoPath, limit) => ipcRenderer.invoke('git-city:commit-graph', repoPath, limit),
+  reflog: (repoPath, limit) => ipcRenderer.invoke('git-city:reflog', repoPath, limit),
+  resetTo: (repoPath, ref, mode) => ipcRenderer.invoke('git-city:reset-to', repoPath, ref, mode),
+  recoverToBranch: (repoPath, name, ref) =>
+    ipcRenderer.invoke('git-city:reflog-recover', repoPath, name, ref),
   tags: (repoPath) => ipcRenderer.invoke('git-city:tags', repoPath),
   createTag: (repoPath, name, ref) =>
     ipcRenderer.invoke('git-city:tag-create', repoPath, name, ref),

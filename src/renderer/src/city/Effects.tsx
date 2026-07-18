@@ -25,6 +25,10 @@ export default function Effects({
   if (!active) return null
 
   const done = (): void => setActive(null)
+  if (active.kind === 'rewind') {
+    // undo / restore: a ring collapses INWARD — time running backward
+    return <RewindRing key={active.nonce} citySize={citySize} onDone={done} />
+  }
   if (active.kind === 'commit-settle') {
     // city: a ring settles across the ground; fleet: the formation regroups
     return mode === 'fleet' ? (
@@ -76,6 +80,48 @@ function SettleRing({
       <ringGeometry args={[0.82, 1, 64]} />
       <meshBasicMaterial
         color="#ffd27a"
+        transparent
+        opacity={0.6}
+        toneMapped={false}
+        depthWrite={false}
+      />
+    </mesh>
+  )
+}
+
+const REWIND_MS = 1000
+
+/** Undo/restore feedback: a large ring collapses inward — time reversing. */
+function RewindRing({
+  citySize,
+  onDone
+}: {
+  citySize: number
+  onDone: () => void
+}): React.JSX.Element {
+  const ref = useRef<Mesh>(null!)
+  const start = useRef<number | null>(null)
+
+  useFrame((state) => {
+    if (start.current === null) start.current = state.clock.elapsedTime
+    const t = (state.clock.elapsedTime - start.current) * 1000
+    const k = Math.min(t / REWIND_MS, 1)
+    const mesh = ref.current
+    if (mesh) {
+      // start wide, contract to the center (inverse of the settle ring)
+      const s = 0.1 + (1 - k) * citySize * 1.4
+      mesh.scale.set(s, s, s)
+      mesh.rotation.z = -k * Math.PI * 1.5 // spin backward
+      ;(mesh.material as MeshBasicMaterial).opacity = Math.sin(k * Math.PI) * 0.7
+    }
+    if (k >= 1) onDone()
+  })
+
+  return (
+    <mesh ref={ref} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.4, 0]}>
+      <ringGeometry args={[0.82, 1, 64]} />
+      <meshBasicMaterial
+        color="#9ecbff"
         transparent
         opacity={0.6}
         toneMapped={false}

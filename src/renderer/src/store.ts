@@ -3,9 +3,11 @@ import type {
   BranchInfo,
   OpResult,
   ProgressInfo,
+  HunkMode,
   RebaseEntry,
   RepoAnalysis,
   RepoOpState,
+  ResetMode,
   StashEntry,
   TagInfo,
   WorkingStatus
@@ -82,7 +84,7 @@ export interface MergeViewState {
   source: RepoOpState
 }
 
-export type EffectKind = 'commit-settle' | 'push' | 'pull'
+export type EffectKind = 'commit-settle' | 'push' | 'pull' | 'rewind'
 
 export function cleanError(err: unknown): string {
   const msg = err instanceof Error ? err.message : String(err)
@@ -108,6 +110,7 @@ const REPO_STATE_RESET: Partial<GitCityState> = {
   stashes: [],
   tags: [],
   rebaseOpen: false,
+  reflogOpen: false,
   panel: 'none',
   opError: null,
   confirm: null,
@@ -153,6 +156,7 @@ interface GitCityState {
   stashes: StashEntry[]
   tags: TagInfo[]
   rebaseOpen: boolean
+  reflogOpen: boolean
   panel: Panel
   opInProgress: { label: string } | null
   opError: { message: string; gitOutput?: string } | null
@@ -192,8 +196,13 @@ interface GitCityState {
   refreshStashes(): Promise<void>
   refreshTags(): Promise<void>
   setRebaseOpen(open: boolean): void
+  setReflogOpen(open: boolean): void
   createTag(name: string, ref?: string): Promise<void>
   deleteTag(name: string): Promise<void>
+  /** Undo the last thing that moved HEAD (reset --keep HEAD@{1}) — never loses uncommitted work. */
+  undoLast(): Promise<void>
+  resetToReflog(ref: string, mode: ResetMode): Promise<void>
+  recoverBranch(name: string, ref: string): Promise<void>
   runInteractiveRebase(base: string | null, entries: RebaseEntry[]): Promise<boolean>
   refreshAnalysis(): Promise<void>
   jumpToNow(): void
@@ -204,6 +213,7 @@ interface GitCityState {
   stage(paths: string[]): Promise<void>
   unstage(paths: string[]): Promise<void>
   discard(paths: string[]): Promise<void>
+  applyHunk(path: string, header: string, mode: HunkMode): Promise<void>
   commit(message: string, amend: boolean): Promise<void>
   fetch(): Promise<void>
   pull(): Promise<void>
@@ -252,6 +262,7 @@ export const useStore = create<GitCityState>((set, get) => ({
   stashes: [],
   tags: [],
   rebaseOpen: false,
+  reflogOpen: false,
   panel: 'none',
   opInProgress: null,
   opError: null,
@@ -408,11 +419,29 @@ export const useStore = create<GitCityState>((set, get) => ({
   },
 
   setRebaseOpen: (rebaseOpen) => set({ rebaseOpen }),
+  setReflogOpen: (reflogOpen) => set({ reflogOpen }),
 
   createTag: (name, ref) =>
     runOp(set, get, 'Creating tag…', (repo) => window.gitCity.createTag(repo, name, ref)),
   deleteTag: (name) =>
     runOp(set, get, 'Deleting tag…', (repo) => window.gitCity.deleteTag(repo, name)),
+
+  // HEAD@{1} is the position before the last HEAD move; --keep refuses rather
+  // than clobber uncommitted work, so one-click undo is always safe.
+  undoLast: () =>
+    runOp(set, get, 'Undoing…', (repo) => window.gitCity.resetTo(repo, 'HEAD@{1}', 'keep'), {
+      reanalyze: true,
+      effect: 'rewind'
+    }),
+  resetToReflog: (ref, mode) =>
+    runOp(set, get, 'Restoring…', (repo) => window.gitCity.resetTo(repo, ref, mode), {
+      reanalyze: true,
+      effect: 'rewind'
+    }),
+  recoverBranch: (name, ref) =>
+    runOp(set, get, 'Recovering…', (repo) => window.gitCity.recoverToBranch(repo, name, ref), {
+      reanalyze: true
+    }),
 
   runInteractiveRebase: async (base, entries) => {
     const { repoPath } = get()
@@ -484,6 +513,15 @@ export const useStore = create<GitCityState>((set, get) => ({
   stage: (paths) => runOp(set, get, 'Staging…', (repo) => window.gitCity.stage(repo, paths)),
   unstage: (paths) => runOp(set, get, 'Unstaging…', (repo) => window.gitCity.unstage(repo, paths)),
   discard: (paths) => runOp(set, get, 'Discarding…', (repo) => window.gitCity.discard(repo, paths)),
+  applyHunk: (path, header, mode) => {
+    const label =
+      mode === 'stage'
+        ? 'Staging hunk…'
+        : mode === 'unstage'
+          ? 'Unstaging hunk…'
+          : 'Discarding hunk…'
+    return runOp(set, get, label, (repo) => window.gitCity.applyHunk(repo, path, header, mode))
+  },
   commit: (message, amend) =>
     runOp(
       set,

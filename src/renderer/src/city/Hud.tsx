@@ -42,6 +42,9 @@ export default function Hud({ snapshot, model }: Props): React.JSX.Element {
   const historyStale = useStore((s) => s.historyStale)
   const graphOpen = useStore((s) => s.graphOpen)
   const setGraphOpen = useStore((s) => s.setGraphOpen)
+  const reflogOpen = useStore((s) => s.reflogOpen)
+  const setReflogOpen = useStore((s) => s.setReflogOpen)
+  const undoLast = useStore((s) => s.undoLast)
   const fetch = useStore((s) => s.fetch)
   const pull = useStore((s) => s.pull)
   const push = useStore((s) => s.push)
@@ -57,6 +60,7 @@ export default function Hud({ snapshot, model }: Props): React.JSX.Element {
       b: () => useStore.getState().setPanel('branches'),
       s: () => useStore.getState().setPanel('stashes'),
       g: () => useStore.getState().setGraphOpen(!useStore.getState().graphOpen),
+      u: () => useStore.getState().setReflogOpen(!useStore.getState().reflogOpen),
       v: () => {
         const st = useStore.getState()
         st.setViewMode(st.viewMode === 'city' ? 'fleet' : 'city')
@@ -74,6 +78,7 @@ export default function Hud({ snapshot, model }: Props): React.JSX.Element {
         st.setFileView('none')
         st.setGraphOpen(false)
         st.setRebaseOpen(false)
+        st.setReflogOpen(false)
         st.setSelected(null)
       }
     }),
@@ -153,6 +158,20 @@ export default function Hud({ snapshot, model }: Props): React.JSX.Element {
           title="Commit graph (G)"
         >
           ⑃ Graph
+        </button>
+        <button
+          disabled={busy}
+          onClick={() => void undoLast()}
+          title="Undo the last HEAD move — keeps your changes, itself undoable"
+        >
+          ⟲ Undo
+        </button>
+        <button
+          className={reflogOpen ? 'active' : ''}
+          onClick={() => setReflogOpen(!reflogOpen)}
+          title="Time machine — HEAD history, rewind & recover (U)"
+        >
+          ◷ Time machine
         </button>
         <button
           onClick={() => useStore.getState().setSearchOpen(true)}

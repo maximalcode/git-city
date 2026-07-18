@@ -24,19 +24,25 @@ export interface GitResult {
 export function runGitResult(
   cwd: string,
   args: string[],
-  opts?: { signal?: AbortSignal; env?: Record<string, string> }
+  opts?: { signal?: AbortSignal; env?: Record<string, string>; input?: string }
 ): Promise<GitResult> {
   return new Promise((resolve, reject) => {
+    const stdin: 'pipe' | 'ignore' = opts?.input !== undefined ? 'pipe' : 'ignore'
     const child = spawn('git', args, {
       cwd,
-      stdio: ['ignore', 'pipe', 'pipe'],
+      stdio: [stdin, 'pipe', 'pipe'],
       env: opts?.env ? { ...GIT_ENV, ...opts.env } : GIT_ENV,
       signal: opts?.signal
     })
     let stdout = ''
     let stderr = ''
-    child.stdout.on('data', (d) => (stdout += d))
-    child.stderr.on('data', (d) => (stderr += d))
+    if (opts?.input !== undefined && child.stdin) {
+      child.stdin.on('error', () => {}) // ignore EPIPE if git rejects before reading
+      child.stdin.write(opts.input)
+      child.stdin.end()
+    }
+    child.stdout!.on('data', (d) => (stdout += d))
+    child.stderr!.on('data', (d) => (stderr += d))
     child.on('error', (err) => {
       // AbortSignal fires 'error' with ABORT_ERR; surface as a normal failed result
       if ((err as NodeJS.ErrnoException).code === 'ABORT_ERR') {

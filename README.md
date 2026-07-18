@@ -39,12 +39,17 @@ and pulls warp in.
 **Git client**
 
 - Working-tree status overlaid on the city; stage/unstage/discard, commit
-  (+ amend)
+  (+ amend). Expand any changed file to **stage, unstage or discard
+  individual hunks** (`git add -p`, but visual)
 - Fetch / pull / push with progress and cancel — **force-push does not exist
   in this app, by design**
 - Branches (incl. remote-tracking), merge, rebase, cherry-pick, stashes, tags
 - Interactive rebase editor (reorder / squash / drop) — local history only
 - In-app merge-conflict resolver (ours / theirs / both / edit per hunk)
+- **Time machine (reflog):** one-click Undo of the last HEAD move (keeps your
+  uncommitted work and is itself undoable), plus a panel of every past HEAD
+  position — rewind the branch to any of them, or recover a "lost" commit as a
+  new branch. Local refs only; never force-pushes.
 - Per-file diff viewer, file history (follows renames) and blame
 - Commit graph with branch topology, ref chips, checkout/cherry-pick actions
 - Recent repos, drag-drop a folder to open, file search with fly-to
@@ -57,6 +62,7 @@ and pulls warp in.
 | `B`      | Branches panel                 |
 | `S`      | Stashes panel                  |
 | `G`      | Commit graph                   |
+| `U`      | Time machine (reflog undo)     |
 | `V`      | Toggle City / Fleet view       |
 | `/`      | Find a file (arrows + Enter)   |
 | `Space`  | Play/pause the timeline        |

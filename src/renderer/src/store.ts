@@ -102,10 +102,14 @@ const REPO_STATE_RESET: Partial<GitCityState> = {
   graphOpen: false
 }
 
-/** Cheap fingerprint so identical statuses (editor atomic-save churn) don't re-render. */
-function statusFingerprint(s: WorkingStatus | null): string {
+/** Cheap fingerprint so identical statuses (editor atomic-save churn) don't re-render.
+ *  Must cover every field the HUD renders: omitting one (e.g. upstream) makes ops whose
+ *  only effect is that field (publish) invisible to refreshStatus. Exported for tests. */
+export function statusFingerprint(s: WorkingStatus | null): string {
   if (!s) return ''
-  return `${s.headHash}|${s.opState}|${s.ahead},${s.behind}|${s.branch}|${s.files
+  return `${s.headHash}|${s.opState}|${s.ahead},${s.behind}|${s.branch}|${s.upstream ?? ''}|${
+    s.stashCount
+  }|${s.files
     .map((f) => `${f.path}:${f.index}${f.worktree}${f.conflicted ? 'C' : ''}`)
     .join(',')}`
 }

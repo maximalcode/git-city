@@ -4,11 +4,13 @@ import { languageOf } from '../lib/languages'
 import { useHotkeys } from '../lib/useHotkeys'
 import { AheadBehind, formatDate } from '../lib/format'
 import Picker from '../lib/Picker'
+import Icon from '../lib/icons'
 import { useStore, type ColorMode, type ViewMode } from '../store'
 import { THEMES, getTheme } from './themes'
 import { COLOR_MODES, type ColorContext } from './colorModes'
 import Legend from './Legend'
 import SearchBox from './SearchBox'
+import SideRail from './SideRail'
 
 /** The slice of a scene model the HUD needs — CityModel and ForestModel both satisfy it. */
 export type HudModel = ColorContext & { paths: string[] }
@@ -40,10 +42,6 @@ export default function Hud({ snapshot, model }: Props): React.JSX.Element {
   const opInProgress = useStore((s) => s.opInProgress)
   const reanalyzing = useStore((s) => s.reanalyzing)
   const historyStale = useStore((s) => s.historyStale)
-  const graphOpen = useStore((s) => s.graphOpen)
-  const setGraphOpen = useStore((s) => s.setGraphOpen)
-  const reflogOpen = useStore((s) => s.reflogOpen)
-  const setReflogOpen = useStore((s) => s.setReflogOpen)
   const undoLast = useStore((s) => s.undoLast)
   const fetch = useStore((s) => s.fetch)
   const pull = useStore((s) => s.pull)
@@ -95,119 +93,100 @@ export default function Hud({ snapshot, model }: Props): React.JSX.Element {
   const st = workingStatus
   const busy = opInProgress !== null
   const branchLabel = st ? (st.branch ?? `detached @ ${st.detachedAt}`) : analysis.info.branch
-  const changeCount = st?.files.length ?? 0
   const hasRemote = (st?.remotes.length ?? 0) > 0
   const hasUpstream = st?.upstream != null
   const opState = st?.opState ?? 'none'
 
   return (
     <>
+      <SideRail />
+
       <div className="hud-top">
-        <span className="repo-name">{analysis.info.name}</span>
-        <button
-          className={panel === 'branches' ? 'active' : ''}
-          onClick={() => setPanel('branches')}
-          title="Branches"
-        >
-          ⑂ {branchLabel}
-        </button>
-
-        {hasRemote && (
-          <span className="sync-group">
-            <button disabled={busy} onClick={() => void fetch()} title="Fetch">
-              ⭳ Fetch
-            </button>
-            <button disabled={busy || !hasUpstream} onClick={() => void pull()} title="Pull">
-              ↓ Pull
-            </button>
-            <button
-              disabled={busy}
-              onClick={() => void push(!hasUpstream)}
-              title={hasUpstream ? 'Push' : 'Publish this branch'}
-            >
-              ↑ {hasUpstream ? 'Push' : 'Publish'}
-            </button>
-            {st && <AheadBehind ahead={st.ahead} behind={st.behind} />}
-          </span>
-        )}
-
-        {opState !== 'none' && (
-          <span className="op-badge">
-            {opState.toUpperCase()}
-            {st?.rebaseProgress && ` ${st.rebaseProgress.done}/${st.rebaseProgress.total}`}
-          </span>
-        )}
-
-        <button
-          className={panel === 'changes' ? 'active' : ''}
-          onClick={() => setPanel('changes')}
-          title="Working tree changes"
-        >
-          ✎ Changes{changeCount > 0 ? ` (${changeCount})` : ''}
-        </button>
-        <button
-          className={panel === 'stashes' ? 'active' : ''}
-          onClick={() => setPanel('stashes')}
-          title="Stashes"
-        >
-          ⊟ Stash{st && st.stashCount > 0 ? ` (${st.stashCount})` : ''}
-        </button>
-        <button
-          className={graphOpen ? 'active' : ''}
-          onClick={() => setGraphOpen(!graphOpen)}
-          title="Commit graph (G)"
-        >
-          ⑃ Graph
-        </button>
-        <button
-          disabled={busy}
-          onClick={() => void undoLast()}
-          title="Undo the last HEAD move — keeps your changes, itself undoable"
-        >
-          ⟲ Undo
-        </button>
-        <button
-          className={reflogOpen ? 'active' : ''}
-          onClick={() => setReflogOpen(!reflogOpen)}
-          title="Time machine — HEAD history, rewind & recover (U)"
-        >
-          ◷ Time machine
-        </button>
-        <button
-          onClick={() => useStore.getState().setSearchOpen(true)}
-          title="Find a file (/)"
-          aria-label="Find a file"
-        >
-          ⌕
-        </button>
-
-        <div className="spacer" />
-
-        {busy && (
-          <span className="op-spinner">
-            <span className="spinner" /> {opInProgress?.label}
-            <button onClick={() => void cancelOp()}>Cancel</button>
-          </span>
-        )}
-        {!busy && reanalyzing && (
-          <span className="op-spinner">
-            <span className="spinner" /> updating history…
-          </span>
-        )}
-        {historyStale && !busy && !reanalyzing && (
-          <button className="stale-pill" onClick={() => void refreshAnalysis()}>
-            History changed — Reload
+        <div className="hud-zone hud-left">
+          <span className="repo-name">{analysis.info.name}</span>
+          <button
+            className={`branch-chip${panel === 'branches' ? ' active' : ''}`}
+            onClick={() => setPanel('branches')}
+            title="Current branch — click for branches (B)"
+          >
+            <Icon name="branch" size={15} />
+            {branchLabel}
           </button>
-        )}
+          <button
+            className="icon-btn"
+            disabled={busy}
+            onClick={() => void undoLast()}
+            title="Undo the last HEAD move — keeps your changes, itself undoable"
+            aria-label="Undo last change"
+          >
+            <Icon name="undo" size={16} />
+          </button>
+          {opState !== 'none' && (
+            <span className="op-badge">
+              {opState.toUpperCase()}
+              {st?.rebaseProgress && ` ${st.rebaseProgress.done}/${st.rebaseProgress.total}`}
+            </span>
+          )}
+        </div>
 
-        <ViewPicker viewMode={viewMode} setViewMode={setViewMode} />
-        <ColorModePicker colorMode={colorMode} setColorMode={setColorMode} />
-        <ThemePicker themeId={themeId} setTheme={setTheme} />
-        <button onClick={backToWelcome}>⌂ Open another</button>
+        <div className="hud-zone hud-center">
+          {hasRemote && (
+            <span className="sync-segment">
+              <button disabled={busy} onClick={() => void fetch()} title="Fetch">
+                <Icon name="fetch" size={15} />
+                Fetch
+              </button>
+              <button disabled={busy || !hasUpstream} onClick={() => void pull()} title="Pull">
+                <Icon name="pull" size={15} />
+                Pull
+              </button>
+              <button
+                className="primary"
+                disabled={busy}
+                onClick={() => void push(!hasUpstream)}
+                title={hasUpstream ? 'Push' : 'Publish this branch'}
+              >
+                <Icon name="push" size={15} />
+                {hasUpstream ? 'Push' : 'Publish'}
+              </button>
+            </span>
+          )}
+          {hasRemote && st && <AheadBehind ahead={st.ahead} behind={st.behind} />}
+          {busy && (
+            <span className="op-spinner">
+              <span className="spinner" /> {opInProgress?.label}
+              <button onClick={() => void cancelOp()}>Cancel</button>
+            </span>
+          )}
+          {!busy && reanalyzing && (
+            <span className="op-spinner">
+              <span className="spinner" /> updating history…
+            </span>
+          )}
+          {historyStale && !busy && !reanalyzing && (
+            <button className="stale-pill" onClick={() => void refreshAnalysis()}>
+              History changed — Reload
+            </button>
+          )}
+        </div>
+
+        <div className="hud-zone hud-right">
+          <ViewPicker viewMode={viewMode} setViewMode={setViewMode} />
+          <ColorModePicker colorMode={colorMode} setColorMode={setColorMode} />
+          <ThemePicker themeId={themeId} setTheme={setTheme} />
+          <button
+            className="icon-btn"
+            onClick={backToWelcome}
+            title="Open another repository"
+            aria-label="Open another repository"
+          >
+            <Icon name="open" size={16} />
+          </button>
+        </div>
       </div>
 
       {hoveredFile && hovered !== selected && (
-        <div className="tooltip" style={{ left: 16, bottom: 96 }}>
+        <div className="tooltip" style={{ left: 72, bottom: 96 }}>
           <div className="path">{hoveredFile.path}</div>
           <div className="meta">
             {languageOf(hoveredFile.path).name} · {hoveredFile.loc.toLocaleString()} lines ·{' '}

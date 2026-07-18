@@ -3,6 +3,7 @@ import { Canvas } from '@react-three/fiber'
 import { Bloom, EffectComposer, N8AO, Vignette } from '@react-three/postprocessing'
 import CameraControls from './CameraControls'
 import { useStore } from '../store'
+import { playStepMs } from '../lib/playback'
 import { getTheme } from './themes'
 import { buildCityModel, snapshotTargets } from './cityData'
 import Buildings from './Buildings'
@@ -23,8 +24,6 @@ import FileHistoryPanel from '../panels/FileHistoryPanel'
 import CommitGraphPanel from '../panels/CommitGraphPanel'
 import RebasePanel from '../panels/RebasePanel'
 
-const PLAY_STEP_MS = 800
-
 export default function CityView(): React.JSX.Element {
   const analysis = useStore((s) => s.analysis)!
   const snapshotIndex = useStore((s) => s.snapshotIndex)
@@ -40,6 +39,7 @@ export default function CityView(): React.JSX.Element {
     [model, snapshot, colorMode]
   )
 
+  const snapshotCount = analysis.snapshots.length
   useEffect(() => {
     if (!playing) return
     const id = setInterval(() => {
@@ -49,9 +49,9 @@ export default function CityView(): React.JSX.Element {
       } else {
         useStore.setState({ snapshotIndex: s.snapshotIndex + 1 })
       }
-    }, PLAY_STEP_MS)
+    }, playStepMs(snapshotCount))
     return () => clearInterval(id)
-  }, [playing])
+  }, [playing, snapshotCount])
 
   const size = model.citySize
   const bg = theme.background

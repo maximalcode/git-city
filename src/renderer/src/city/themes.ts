@@ -44,6 +44,8 @@ export interface Theme {
   // --- v4 ---
   /** street surfaces; markingEmissive > 0 adds a bloom-boosted marking overlay */
   road: { surface: string; marking: string; markingEmissive: number }
+  /** ground-floor shop windows + signage on tall buildings */
+  shopfront: { enabled: boolean; color: string; intensity: number }
 }
 
 export const THEMES: Theme[] = [
@@ -70,7 +72,8 @@ export const THEMES: Theme[] = [
     districtBase: '#232c3d',
     label: 'rgba(255, 255, 255, 0.65)',
     particles: 'motes',
-    road: { surface: '#2a3140', marking: '#c8cede', markingEmissive: 0 }
+    road: { surface: '#2a3140', marking: '#c8cede', markingEmissive: 0 },
+    shopfront: { enabled: false, color: '#ffd9a0', intensity: 0 }
   },
   {
     id: 'realistic-night',
@@ -95,7 +98,8 @@ export const THEMES: Theme[] = [
     districtBase: '#141a26',
     label: 'rgba(220, 230, 255, 0.5)',
     particles: 'motes',
-    road: { surface: '#10141e', marking: '#8f97ad', markingEmissive: 0 }
+    road: { surface: '#10141e', marking: '#8f97ad', markingEmissive: 0 },
+    shopfront: { enabled: true, color: '#ffd9a0', intensity: 1.6 }
   },
   {
     id: 'neon',
@@ -120,7 +124,8 @@ export const THEMES: Theme[] = [
     districtBase: '#160a33',
     label: 'rgba(120, 230, 255, 0.7)',
     particles: 'rain',
-    road: { surface: '#0c0622', marking: '#4de1ff', markingEmissive: 1.6 }
+    road: { surface: '#0c0622', marking: '#4de1ff', markingEmissive: 1.6 },
+    shopfront: { enabled: true, color: '#ff4da6', intensity: 2.6 }
   },
   {
     id: 'golden-hour',
@@ -145,7 +150,8 @@ export const THEMES: Theme[] = [
     districtBase: '#2a1c2e',
     label: 'rgba(255, 224, 190, 0.6)',
     particles: 'motes',
-    road: { surface: '#2c2030', marking: '#e8c8a0', markingEmissive: 0 }
+    road: { surface: '#2c2030', marking: '#e8c8a0', markingEmissive: 0 },
+    shopfront: { enabled: true, color: '#ffcf8a', intensity: 1.2 }
   },
   {
     id: 'midnight-ink',
@@ -170,7 +176,8 @@ export const THEMES: Theme[] = [
     districtBase: '#0e1119',
     label: 'rgba(180, 195, 235, 0.55)',
     particles: 'motes',
-    road: { surface: '#0c0f16', marking: '#7d8cb8', markingEmissive: 0.4 }
+    road: { surface: '#0c0f16', marking: '#7d8cb8', markingEmissive: 0.4 },
+    shopfront: { enabled: true, color: '#8fb0ff', intensity: 1.4 }
   }
 ]
 

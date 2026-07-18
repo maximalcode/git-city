@@ -32,6 +32,9 @@ describe('theme registry', () => {
       expect(t.road.surface).toMatch(/^#[0-9a-f]{6}$/i)
       expect(t.road.marking).toMatch(/^#[0-9a-f]{6}$/i)
       expect(t.road.markingEmissive).toBeGreaterThanOrEqual(0)
+      expect(typeof t.shopfront.enabled).toBe('boolean')
+      expect(t.shopfront.color).toMatch(/^#[0-9a-f]{6}$/i)
+      expect(t.shopfront.intensity).toBeGreaterThanOrEqual(0)
     }
   })
 

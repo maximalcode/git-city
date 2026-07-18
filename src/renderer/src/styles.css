@@ -272,6 +272,15 @@ input[type='text']:focus {
   flex-direction: column;
   gap: 8px;
   background: linear-gradient(0deg, rgba(11, 14, 20, 0.9), transparent);
+  /* let camera drags (incl. right-drag to rotate) pass through the empty bar;
+     the interactive controls opt back in below. Without this the whole bottom
+     strip swallowed pointer events and the camera "sometimes" wouldn't move. */
+  pointer-events: none;
+}
+.hud-bottom button,
+.hud-bottom input,
+.hud-bottom .msg {
+  pointer-events: auto;
 }
 .timeline-row {
   display: flex;

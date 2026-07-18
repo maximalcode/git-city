@@ -3,6 +3,7 @@ import {
   AdditiveBlending,
   CanvasTexture,
   ClampToEdgeWrapping,
+  DoubleSide,
   LinearFilter,
   LinearMipmapLinearFilter,
   RepeatWrapping
@@ -13,15 +14,22 @@ import { useStore } from '../store'
 import { getTheme } from './themes'
 
 /**
- * Street surfaces: one merged static mesh for all roads, plus (for themes with
- * markingEmissive) a second additive markings-only mesh that the bloom pass
- * picks up. Texture u repeats per dash cycle, v is clamped across the width.
+ * Street surfaces: raised sidewalks with curbs, the textured asphalt on top,
+ * zebra crosswalks at junctions, and (for neon themes) an additive markings
+ * overlay the bloom pass picks up. All static, built once per city model.
  */
 export default function Roads({ model }: { model: CityModel }): React.JSX.Element | null {
   const theme = getTheme(useStore((s) => s.themeId))
 
-  const geometry = useMemo(() => buildRoadGeometry(model.roadGraph), [model])
-  useEffect(() => () => geometry.dispose(), [geometry])
+  const geo = useMemo(() => buildRoadGeometry(model.roadGraph), [model])
+  useEffect(
+    () => () => {
+      geo.asphalt.dispose()
+      geo.sidewalk.dispose()
+      geo.crosswalk.dispose()
+    },
+    [geo]
+  )
 
   const surfaceTex = useMemo(
     () => makeRoadTexture(theme.road.surface, theme.road.marking, false),
@@ -40,11 +48,35 @@ export default function Roads({ model }: { model: CityModel }): React.JSX.Elemen
 
   return (
     <group>
-      <mesh geometry={geometry} receiveShadow>
+      {/* raised concrete sidewalks + curb faces (grayscale vertex colours shade
+          the curb; DoubleSide so the vertical faces light from both sides) */}
+      <mesh geometry={geo.sidewalk} receiveShadow castShadow>
+        <meshStandardMaterial
+          color={theme.road.sidewalk}
+          roughness={0.9}
+          metalness={0}
+          vertexColors
+          side={DoubleSide}
+        />
+      </mesh>
+
+      {/* asphalt carriageway */}
+      <mesh geometry={geo.asphalt} receiveShadow>
         <meshStandardMaterial map={surfaceTex} roughness={0.95} metalness={0} />
       </mesh>
+
+      {/* zebra crossings */}
+      <mesh geometry={geo.crosswalk}>
+        <meshStandardMaterial
+          color={theme.road.marking}
+          roughness={0.7}
+          metalness={0}
+          side={DoubleSide}
+        />
+      </mesh>
+
       {glowTex && (
-        <mesh geometry={geometry} position={[0, 0.006, 0]}>
+        <mesh geometry={geo.asphalt} position={[0, 0.006, 0]}>
           <meshBasicMaterial
             map={glowTex}
             blending={AdditiveBlending}

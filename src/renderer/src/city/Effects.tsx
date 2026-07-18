@@ -8,13 +8,7 @@ import { useStore, type EffectKind } from '../store'
  * store `effect.nonce` bump and unmounts when its clock runs out. All use
  * meshBasicMaterial toneMapped={false} so the existing Bloom pass makes them glow.
  */
-export default function Effects({
-  citySize,
-  mode = 'city'
-}: {
-  citySize: number
-  mode?: 'city' | 'fleet'
-}): React.JSX.Element | null {
+export default function Effects({ citySize }: { citySize: number }): React.JSX.Element | null {
   const effect = useStore((s) => s.effect)
   const [active, setActive] = useState<{ kind: EffectKind; nonce: number } | null>(null)
 
@@ -30,21 +24,16 @@ export default function Effects({
     return <RewindRing key={active.nonce} citySize={citySize} onDone={done} />
   }
   if (active.kind === 'commit-settle') {
-    // city: a ring settles across the ground; fleet: the formation regroups
-    return mode === 'fleet' ? (
-      <RegroupPulse key={active.nonce} citySize={citySize} onDone={done} />
-    ) : (
-      <SettleRing key={active.nonce} citySize={citySize} onDone={done} />
-    )
+    // a ring settles across the ground
+    return <SettleRing key={active.nonce} citySize={citySize} onDone={done} />
   }
-  // push: packet leaves through a portal above; pull: reinforcements warp in
+  // push: packet leaves upward; pull: reinforcements arrive from above
   return (
     <Beam
       key={active.nonce}
       citySize={citySize}
       direction={active.kind === 'push' ? 'up' : 'down'}
       color={active.kind === 'push' ? '#ffb347' : '#6ec8ff'}
-      portal={mode === 'fleet'}
       onDone={done}
     />
   )
@@ -137,19 +126,15 @@ function Beam({
   citySize,
   direction,
   color,
-  portal = false,
   onDone
 }: {
   citySize: number
   direction: 'up' | 'down'
   color: string
-  /** fleet mode: a glowing portal ring marks where the packet enters/exits */
-  portal?: boolean
   onDone: () => void
 }): React.JSX.Element {
   const packet = useRef<Mesh>(null!)
   const column = useRef<Mesh>(null!)
-  const ring = useRef<Mesh>(null!)
   const start = useRef<number | null>(null)
   const top = citySize * 0.9
 
@@ -162,13 +147,6 @@ function Beam({
     if (column.current) {
       const fade = Math.sin(k * Math.PI) // in then out
       ;(column.current.material as MeshBasicMaterial).opacity = fade * 0.35
-    }
-    if (ring.current) {
-      // portal dilates open, then collapses as the transfer completes
-      const open = Math.sin(Math.min(k * 1.6, 1) * Math.PI)
-      const s = Math.max(0.001, open * citySize * 0.25)
-      ring.current.scale.set(s, s, s)
-      ;(ring.current.material as MeshBasicMaterial).opacity = open * 0.7
     }
     if (k >= 1) onDone()
   })
@@ -185,63 +163,10 @@ function Beam({
           depthWrite={false}
         />
       </mesh>
-      {portal && (
-        <mesh ref={ring} rotation={[-Math.PI / 2, 0, 0]} position={[0, top, 0]}>
-          <ringGeometry args={[0.82, 1, 48]} />
-          <meshBasicMaterial
-            color={color}
-            transparent
-            opacity={0}
-            toneMapped={false}
-            depthWrite={false}
-          />
-        </mesh>
-      )}
       <mesh ref={packet} position={[0, 1, 0]}>
         <boxGeometry args={[2.2, 2.2, 2.2]} />
         <meshBasicMaterial color={color} toneMapped={false} />
       </mesh>
     </group>
-  )
-}
-
-const REGROUP_MS = 1100
-
-/** Fleet commit feedback: an expanding wireframe sphere washes over the formation. */
-function RegroupPulse({
-  citySize,
-  onDone
-}: {
-  citySize: number
-  onDone: () => void
-}): React.JSX.Element {
-  const ref = useRef<Mesh>(null!)
-  const start = useRef<number | null>(null)
-
-  useFrame((state) => {
-    if (start.current === null) start.current = state.clock.elapsedTime
-    const t = (state.clock.elapsedTime - start.current) * 1000
-    const k = Math.min(t / REGROUP_MS, 1)
-    const mesh = ref.current
-    if (mesh) {
-      const s = Math.max(0.1, k * citySize * 1.2)
-      mesh.scale.set(s, s, s)
-      ;(mesh.material as MeshBasicMaterial).opacity = (1 - k) * 0.5
-    }
-    if (k >= 1) onDone()
-  })
-
-  return (
-    <mesh ref={ref} position={[0, 30, 0]}>
-      <sphereGeometry args={[1, 24, 16]} />
-      <meshBasicMaterial
-        color="#ffd27a"
-        transparent
-        opacity={0.5}
-        toneMapped={false}
-        depthWrite={false}
-        wireframe
-      />
-    </mesh>
   )
 }

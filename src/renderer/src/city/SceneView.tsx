@@ -8,10 +8,10 @@ import { useStore } from '../store'
 import { playStepMs } from '../lib/playback'
 import { getTheme } from './themes'
 import { buildCityModel, snapshotTargets, type CityModel } from './cityData'
-import { buildFleetModel, fleetTargets, type FleetModel } from '../layout/fleet'
+import { buildForestModel, forestTargets, type ForestModel } from '../layout/forest'
 import type { RepoAnalysis } from '../../../shared/types'
 import CityScene from './CityScene'
-import FleetScene from './FleetScene'
+import ForestScene from './ForestScene'
 import Hud from './Hud'
 import ChangesPanel from '../panels/ChangesPanel'
 import BranchesPanel from '../panels/BranchesPanel'
@@ -26,7 +26,7 @@ import ReflogPanel from '../panels/ReflogPanel'
 // Per-analysis model caches: toggling the view mode back and forth must not
 // re-run the layout algorithms.
 const cityCache = new WeakMap<RepoAnalysis, CityModel>()
-const fleetCache = new WeakMap<RepoAnalysis, FleetModel>()
+const forestCache = new WeakMap<RepoAnalysis, ForestModel>()
 
 function getCityModel(analysis: RepoAnalysis): CityModel {
   let m = cityCache.get(analysis)
@@ -37,11 +37,11 @@ function getCityModel(analysis: RepoAnalysis): CityModel {
   return m
 }
 
-function getFleetModel(analysis: RepoAnalysis): FleetModel {
-  let m = fleetCache.get(analysis)
+function getForestModel(analysis: RepoAnalysis): ForestModel {
+  let m = forestCache.get(analysis)
   if (!m) {
-    m = buildFleetModel(analysis)
-    fleetCache.set(analysis, m)
+    m = buildForestModel(analysis)
+    forestCache.set(analysis, m)
   }
   return m
 }
@@ -49,7 +49,7 @@ function getFleetModel(analysis: RepoAnalysis): FleetModel {
 /**
  * Mode-agnostic scene shell: owns the Canvas, fog, playback ticker, camera
  * rig, postprocessing, HUD and panels. The view-mode-specific world (city or
- * fleet) mounts as a subtree.
+ * forest) mounts as a subtree.
  */
 export default function SceneView(): React.JSX.Element {
   const analysis = useStore((s) => s.analysis)!
@@ -86,15 +86,15 @@ export default function SceneView(): React.JSX.Element {
 
   // only the active mode's model is built (lazily, cached per analysis)
   const cityModel = viewMode === 'city' ? getCityModel(analysis) : null
-  const fleetModel = viewMode === 'fleet' ? getFleetModel(analysis) : null
+  const forestModel = viewMode === 'forest' ? getForestModel(analysis) : null
 
   const cityTargets = useMemo(
     () => (cityModel ? snapshotTargets(cityModel, snapshot, colorMode) : null),
     [cityModel, snapshot, colorMode]
   )
-  const fleetTgt = useMemo(
-    () => (fleetModel ? fleetTargets(fleetModel, snapshot, colorMode) : null),
-    [fleetModel, snapshot, colorMode]
+  const forestTgt = useMemo(
+    () => (forestModel ? forestTargets(forestModel, snapshot, colorMode) : null),
+    [forestModel, snapshot, colorMode]
   )
 
   const snapshotCount = analysis.snapshots.length
@@ -111,11 +111,11 @@ export default function SceneView(): React.JSX.Element {
     return () => clearInterval(id)
   }, [playing, snapshotCount])
 
-  const size = cityModel ? cityModel.citySize : fleetModel!.worldSize
-  const bg = viewMode === 'fleet' ? '#02030a' : theme.background
+  const size = cityModel ? cityModel.citySize : forestModel!.worldSize
+  const bg = theme.background
   const useAO = theme.ao && viewMode === 'city'
 
-  // fly-to target: building plot center in the city, ship position in the fleet
+  // fly-to target: building plot center in the city, tree position in the forest
   const resolveFocus = useMemo(
     () =>
       (path: string): Vector3 | null => {
@@ -125,15 +125,15 @@ export default function SceneView(): React.JSX.Element {
           const { rect } = cityModel.layout.plots[i]
           return new Vector3(rect.x + rect.w / 2, 5, rect.y + rect.h / 2)
         }
-        const m = fleetModel!
+        const m = forestModel!
         const i = m.indexOf.get(path)
         if (i === undefined) return null
-        return new Vector3(m.positions[i * 3], m.positions[i * 3 + 1], m.positions[i * 3 + 2])
+        return new Vector3(m.positions[i * 3], 4, m.positions[i * 3 + 2])
       },
-    [cityModel, fleetModel]
+    [cityModel, forestModel]
   )
 
-  const hudModel = cityModel ?? fleetModel!
+  const hudModel = cityModel ?? forestModel!
 
   if (contextLost) {
     return (
@@ -168,20 +168,14 @@ export default function SceneView(): React.JSX.Element {
           onPointerMissed={() => useStore.getState().setSelected(null)}
         >
           <color attach="background" args={[bg]} />
-          {viewMode === 'city' && (
-            <fog attach="fog" args={[bg, size * theme.fog.near, size * theme.fog.far]} />
-          )}
+          <fog attach="fog" args={[bg, size * theme.fog.near, size * theme.fog.far]} />
 
           {cityModel && cityTargets && (
             <CityScene model={cityModel} targets={cityTargets} snapshot={snapshot} />
           )}
-          {fleetModel && fleetTgt && <FleetScene model={fleetModel} targets={fleetTgt} />}
+          {forestModel && forestTgt && <ForestScene model={forestModel} targets={forestTgt} />}
 
-          <CameraRig
-            worldSize={size}
-            resolveFocus={resolveFocus}
-            maxPolarAngle={viewMode === 'fleet' ? Math.PI * 0.9 : Math.PI * 0.47}
-          />
+          <CameraRig worldSize={size} resolveFocus={resolveFocus} maxPolarAngle={Math.PI * 0.47} />
 
           {/* AO only exists in the city; its presence changes the composer's child
             set. Rebuilding that chain in place freezes the render loop, so key the
@@ -195,7 +189,7 @@ export default function SceneView(): React.JSX.Element {
             )}
             <Bloom
               luminanceThreshold={theme.bloom.threshold}
-              intensity={viewMode === 'fleet' ? theme.bloom.intensity * 1.3 : theme.bloom.intensity}
+              intensity={theme.bloom.intensity}
               mipmapBlur
             />
             <Vignette darkness={theme.vignette} />

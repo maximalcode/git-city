@@ -2,8 +2,10 @@ import type { FleetModel, FleetTargets } from '../layout/fleet'
 import { useStore } from '../store'
 import { getTheme } from './themes'
 import Effects from './Effects'
+import FleetBackdrop from './FleetBackdrop'
 import { FleetArrivals, FleetHighlight, FleetStatusOverlay } from './FleetOverlays'
 import Ships from './Ships'
+import Shuttles from './Shuttles'
 import SkyDome from './SkyDome'
 import Starfield from './Starfield'
 
@@ -27,6 +29,7 @@ export default function FleetScene({
       {/* deep space: the theme's sky colors darkened toward black */}
       <SkyDome top="#01020a" bottom={theme.skyTop} radius={size * 14} />
       <Starfield worldSize={size} />
+      <FleetBackdrop worldSize={size} />
 
       {/* dim ambient + one key light; no shadows (nothing to catch them) */}
       <hemisphereLight args={[theme.hemisphere.sky, '#000005', 0.3]} />
@@ -42,6 +45,7 @@ export default function FleetScene({
       />
 
       <Ships model={model} targets={targets} />
+      <Shuttles model={model} />
       <FleetHighlight model={model} targets={targets} />
       <FleetStatusOverlay model={model} targets={targets} />
       <FleetArrivals model={model} />

@@ -59,10 +59,10 @@ export function shipClassFor(weight: number): ShipClass {
  * Within-class size variation. The class already encodes the big steps
  * (fighter/freighter/capital hulls differ ~2.5× each), so the per-LOC scale
  * only breathes gently — otherwise a huge capital would overflow its
- * formation slot.
+ * formation slot. Baseline nudged up so the fleet reads as a real armada.
  */
 export function shipScaleFor(loc: number): number {
-  return Math.min(1.8, Math.max(0.55, 0.7 + 0.15 * Math.log10(loc + 1)))
+  return Math.min(2.2, Math.max(0.8, 0.95 + 0.18 * Math.log10(loc + 1)))
 }
 
 interface Squadron {
@@ -135,7 +135,9 @@ export function buildFleetModel(analysis: RepoAnalysis): FleetModel {
     const alongX = r.w >= r.h
     const k = sq.files.length
     const wings = Math.ceil(k / WING_SIZE)
-    const g = Math.min(4.5, Math.max(1.4, Math.min(r.w, r.h) / (2 * Math.sqrt(k) + 1)))
+    // spacing sized for the (now larger) hulls: tight enough to read as one
+    // formation, loose enough not to overlap
+    const g = Math.min(6, Math.max(2.6, Math.min(r.w, r.h) / (2 * Math.sqrt(k) + 1)))
 
     for (let i = 0; i < k; i++) {
       const wing = Math.floor(i / WING_SIZE)

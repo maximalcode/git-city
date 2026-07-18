@@ -114,6 +114,20 @@ export function engineAnchors(cls: ShipClass): [number, number, number][] {
   return []
 }
 
+/** Tiny courier shuttle (~1 long) for inter-squadron traffic. Nose faces +X. */
+let shuttleGeo: BufferGeometry | null = null
+export function shuttleGeometry(): BufferGeometry {
+  if (shuttleGeo) return shuttleGeo
+  const body = new BoxGeometry(0.7, 0.18, 0.28)
+  const nose = new ConeGeometry(0.12, 0.4, 6)
+  nose.rotateZ(-Math.PI / 2)
+  nose.translate(0.5, 0, 0)
+  const fin = new BoxGeometry(0.22, 0.04, 0.5)
+  fin.translate(-0.2, 0, 0)
+  shuttleGeo = merge([body, nose, fin])
+  return shuttleGeo
+}
+
 const geometryCache = new Map<ShipClass, BufferGeometry>()
 
 /** Cached per class; shared geometry — consumers must never dispose it. */

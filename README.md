@@ -39,7 +39,8 @@ and pulls warp in.
 **Git client**
 
 - Working-tree status overlaid on the city; stage/unstage/discard, commit
-  (+ amend)
+  (+ amend). Expand any changed file to **stage, unstage or discard
+  individual hunks** (`git add -p`, but visual)
 - Fetch / pull / push with progress and cancel — **force-push does not exist
   in this app, by design**
 - Branches (incl. remote-tracking), merge, rebase, cherry-pick, stashes, tags

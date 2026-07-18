@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react'
-import type { FileStatus, WorkingStatus } from '../../../shared/types'
-import { isLiveState, useStore } from '../store'
+import { useEffect, useMemo, useState } from 'react'
+import type { FileStatus, HunkInfo, WorkingStatus } from '../../../shared/types'
+import { cleanError, hasApi, isLiveState, useStore } from '../store'
 
 const STATUS_CHIP: Record<string, { label: string; cls: string }> = {
   modified: { label: 'M', cls: 'chip-mod' },
@@ -51,6 +51,15 @@ export default function ChangesPanel(): React.JSX.Element | null {
 
   const [message, setMessage] = useState('')
   const [amend, setAmend] = useState(false)
+  // which file rows are expanded to show per-hunk staging; keyed by "which:path"
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  const toggleExpand = (key: string): void =>
+    setExpanded((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
 
   const parts = useMemo(() => (status ? partition(status) : null), [status])
 
@@ -147,7 +156,14 @@ export default function ChangesPanel(): React.JSX.Element | null {
             )}
           </div>
           {parts?.staged.map((f) => (
-            <Row key={f.path} file={f} which="staged" onUnstage={() => void unstage([f.path])} />
+            <Row
+              key={f.path}
+              file={f}
+              which="staged"
+              onUnstage={() => void unstage([f.path])}
+              expanded={expanded.has(`staged:${f.path}`)}
+              onToggleExpand={() => toggleExpand(`staged:${f.path}`)}
+            />
           ))}
           {stagedCount === 0 && <div className="empty">Nothing staged</div>}
         </section>
@@ -168,6 +184,8 @@ export default function ChangesPanel(): React.JSX.Element | null {
               which="unstaged"
               onStage={() => void stage([f.path])}
               onDiscard={() => doDiscard(f.path)}
+              expanded={expanded.has(`unstaged:${f.path}`)}
+              onToggleExpand={() => toggleExpand(`unstaged:${f.path}`)}
             />
           ))}
           {parts && parts.unstaged.length === 0 && <div className="empty">No local changes</div>}
@@ -194,70 +212,193 @@ export default function ChangesPanel(): React.JSX.Element | null {
   )
 }
 
+/** A tracked, non-conflict text change can be expanded to stage by hunk. */
+function canExpand(file: FileStatus, which: 'staged' | 'unstaged' | 'conflict'): boolean {
+  if (which === 'conflict') return false
+  if (which === 'staged') return true // index side has staged hunks (incl. new files)
+  return (
+    file.worktree === 'modified' || file.worktree === 'typechange' || file.worktree === 'deleted'
+  )
+}
+
 function Row({
   file,
   which,
   onStage,
   onUnstage,
-  onDiscard
+  onDiscard,
+  expanded,
+  onToggleExpand
 }: {
   file: FileStatus
   which: 'staged' | 'unstaged' | 'conflict'
   onStage?: () => void
   onUnstage?: () => void
   onDiscard?: () => void
+  expanded?: boolean
+  onToggleExpand?: () => void
 }): React.JSX.Element {
   const setHovered = useStore((s) => s.setHovered)
   const setSelected = useStore((s) => s.setSelected)
   const code = which === 'staged' ? file.index : which === 'conflict' ? 'conflicted' : file.worktree
   const c = chip(code)
+  const expandable = canExpand(file, which) && !!onToggleExpand
   return (
-    <div
-      className="file-row"
-      onMouseEnter={() => setHovered(file.path)}
-      onMouseLeave={() => setHovered(null)}
-      onClick={() => setSelected(file.path)}
-    >
-      <span className={`status-chip ${c.cls}`}>{c.label}</span>
-      <span className="file-path" title={file.path}>
-        {file.path}
-      </span>
-      <span className="row-actions">
-        {onStage && (
-          <button
-            title="Stage"
-            onClick={(e) => {
-              e.stopPropagation()
-              onStage()
-            }}
-          >
-            +
-          </button>
-        )}
-        {onUnstage && (
-          <button
-            title="Unstage"
-            onClick={(e) => {
-              e.stopPropagation()
-              onUnstage()
-            }}
-          >
-            −
-          </button>
-        )}
-        {onDiscard && (
-          <button
-            title="Discard"
-            className="danger"
-            onClick={(e) => {
-              e.stopPropagation()
-              onDiscard()
-            }}
-          >
-            ↺
-          </button>
-        )}
-      </span>
+    <>
+      <div
+        className="file-row"
+        onMouseEnter={() => setHovered(file.path)}
+        onMouseLeave={() => setHovered(null)}
+        onClick={() => setSelected(file.path)}
+      >
+        <button
+          className={`row-expand ${expanded ? 'open' : ''}`}
+          title={expandable ? 'Stage by hunk' : ''}
+          disabled={!expandable}
+          aria-label="Toggle hunks"
+          onClick={(e) => {
+            e.stopPropagation()
+            onToggleExpand?.()
+          }}
+        >
+          {expandable ? '▸' : ''}
+        </button>
+        <span className={`status-chip ${c.cls}`}>{c.label}</span>
+        <span className="file-path" title={file.path}>
+          {file.path}
+        </span>
+        <span className="row-actions">
+          {onStage && (
+            <button
+              title="Stage"
+              onClick={(e) => {
+                e.stopPropagation()
+                onStage()
+              }}
+            >
+              +
+            </button>
+          )}
+          {onUnstage && (
+            <button
+              title="Unstage"
+              onClick={(e) => {
+                e.stopPropagation()
+                onUnstage()
+              }}
+            >
+              −
+            </button>
+          )}
+          {onDiscard && (
+            <button
+              title="Discard"
+              className="danger"
+              onClick={(e) => {
+                e.stopPropagation()
+                onDiscard()
+              }}
+            >
+              ↺
+            </button>
+          )}
+        </span>
+      </div>
+      {expanded && expandable && <HunkList path={file.path} staged={which === 'staged'} />}
+    </>
+  )
+}
+
+/** Per-hunk staging for one file. Refetches whenever the working status changes
+ *  (i.e. after any hunk op completes via runOp → refreshStatus). */
+function HunkList({ path, staged }: { path: string; staged: boolean }): React.JSX.Element {
+  const status = useStore((s) => s.workingStatus) // refetch trigger
+  const busy = useStore((s) => s.opInProgress !== null)
+  const applyHunk = useStore((s) => s.applyHunk)
+  const askConfirm = useStore((s) => s.askConfirm)
+
+  const [hunks, setHunks] = useState<HunkInfo[] | null>(null)
+  const [binary, setBinary] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const repo = useStore.getState().repoPath
+    if (!hasApi() || !repo) return
+    let cancelled = false
+    setError(null)
+    void window.gitCity
+      .fileHunks(repo, path, staged)
+      .then((r) => {
+        if (cancelled) return
+        setHunks(r.hunks)
+        setBinary(r.binary)
+      })
+      .catch((err) => !cancelled && setError(cleanError(err)))
+    return () => {
+      cancelled = true
+    }
+  }, [path, staged, status])
+
+  if (error) return <div className="hunk-note">{error}</div>
+  if (binary) return <div className="hunk-note">Binary file — stage the whole file.</div>
+  if (!hunks) return <div className="hunk-note">Loading hunks…</div>
+  if (hunks.length === 0) return <div className="hunk-note">No hunks.</div>
+
+  const discardHunk = (header: string): void =>
+    askConfirm({
+      title: 'Discard this hunk?',
+      body: `Throw away this one change to "${path}"? This cannot be undone.`,
+      confirmLabel: 'Discard',
+      danger: true,
+      onConfirm: () => void applyHunk(path, header, 'discard')
+    })
+
+  return (
+    <div className="hunk-list">
+      {hunks.map((h) => (
+        <div key={h.header} className="hunk-block">
+          <div className="hunk-bar">
+            <span className="hunk-counts">
+              <span className="diff-add">+{h.additions}</span>{' '}
+              <span className="diff-del">−{h.deletions}</span>
+            </span>
+            <span className="hunk-header" title={h.header}>
+              {h.header}
+            </span>
+            <span className="hunk-btns">
+              {staged ? (
+                <button disabled={busy} onClick={() => void applyHunk(path, h.header, 'unstage')}>
+                  − Unstage
+                </button>
+              ) : (
+                <>
+                  <button disabled={busy} onClick={() => void applyHunk(path, h.header, 'stage')}>
+                    + Stage
+                  </button>
+                  <button
+                    disabled={busy}
+                    className="danger"
+                    title="Discard hunk"
+                    onClick={() => discardHunk(h.header)}
+                  >
+                    ↺
+                  </button>
+                </>
+              )}
+            </span>
+          </div>
+          <div className="hunk-lines">
+            {h.lines.map((l, i) => (
+              <div key={i} className={`diff-line diff-${l.kind}`}>
+                <span className="diff-gutter">
+                  {l.kind === 'add' ? '+' : l.kind === 'del' ? '−' : ' '}
+                </span>
+                <span className="diff-text">{l.text || ' '}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
     </div>
   )
 }

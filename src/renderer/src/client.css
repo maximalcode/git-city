@@ -404,6 +404,75 @@
   line-height: 1.2;
 }
 
+/* ---------- per-hunk staging ---------- */
+.row-expand {
+  flex-shrink: 0;
+  width: 16px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text-dim);
+  font-size: 10px;
+  cursor: pointer;
+  transition: transform 0.12s ease;
+}
+.row-expand.open {
+  transform: rotate(90deg);
+}
+.row-expand:disabled {
+  cursor: default;
+  opacity: 0;
+}
+.hunk-list {
+  background: rgba(0, 0, 0, 0.18);
+  border-bottom: 1px solid var(--panel-border);
+}
+.hunk-note {
+  padding: 6px 16px 6px 34px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.hunk-block {
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
+}
+.hunk-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px 4px 30px;
+  background: rgba(110, 200, 255, 0.05);
+}
+.hunk-counts {
+  flex-shrink: 0;
+  font-family: Consolas, monospace;
+  font-size: 11px;
+}
+.hunk-header {
+  flex: 1;
+  font-family: Consolas, monospace;
+  font-size: 11px;
+  color: var(--accent-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.hunk-btns {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.hunk-btns button {
+  padding: 1px 8px;
+  font-size: 11px;
+}
+.hunk-lines {
+  font-family: Consolas, monospace;
+  font-size: 11.5px;
+  max-height: 240px;
+  overflow-y: auto;
+  padding-left: 18px;
+}
+
 /* commit box */
 .commit-box {
   border-top: 1px solid var(--panel-border);

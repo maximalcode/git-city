@@ -3,6 +3,7 @@ import type {
   BranchInfo,
   OpResult,
   ProgressInfo,
+  HunkMode,
   RebaseEntry,
   RepoAnalysis,
   RepoOpState,
@@ -212,6 +213,7 @@ interface GitCityState {
   stage(paths: string[]): Promise<void>
   unstage(paths: string[]): Promise<void>
   discard(paths: string[]): Promise<void>
+  applyHunk(path: string, header: string, mode: HunkMode): Promise<void>
   commit(message: string, amend: boolean): Promise<void>
   fetch(): Promise<void>
   pull(): Promise<void>
@@ -511,6 +513,15 @@ export const useStore = create<GitCityState>((set, get) => ({
   stage: (paths) => runOp(set, get, 'Staging…', (repo) => window.gitCity.stage(repo, paths)),
   unstage: (paths) => runOp(set, get, 'Unstaging…', (repo) => window.gitCity.unstage(repo, paths)),
   discard: (paths) => runOp(set, get, 'Discarding…', (repo) => window.gitCity.discard(repo, paths)),
+  applyHunk: (path, header, mode) => {
+    const label =
+      mode === 'stage'
+        ? 'Staging hunk…'
+        : mode === 'unstage'
+          ? 'Unstaging hunk…'
+          : 'Discarding hunk…'
+    return runOp(set, get, label, (repo) => window.gitCity.applyHunk(repo, path, header, mode))
+  },
   commit: (message, amend) =>
     runOp(
       set,

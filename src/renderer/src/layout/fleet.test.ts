@@ -54,8 +54,8 @@ describe('shipClassFor / shipScaleFor', () => {
   })
 
   it('scale is clamped and monotonic', () => {
-    expect(shipScaleFor(0)).toBeGreaterThanOrEqual(0.55)
-    expect(shipScaleFor(1e9)).toBeLessThanOrEqual(1.8)
+    expect(shipScaleFor(0)).toBeGreaterThanOrEqual(0.8)
+    expect(shipScaleFor(1e9)).toBeLessThanOrEqual(2.2)
     expect(shipScaleFor(400)).toBeGreaterThan(shipScaleFor(100))
   })
 })

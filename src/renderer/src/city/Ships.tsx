@@ -126,13 +126,17 @@ function ClassLayer({
 
       const phase = (i * 1.37) % (Math.PI * 2)
       const x = model.positions[i * 3]
-      const y = model.positions[i * 3 + 1] + Math.sin(t * 0.6 + phase) * 0.45
+      const y = model.positions[i * 3 + 1] + Math.sin(t * 0.5 + phase) * 0.7
       const z = model.positions[i * 3 + 2]
-      const yaw = model.yaw[i] + Math.sin(t * 0.3 + phase) * 0.05
+      const yaw = model.yaw[i] + Math.sin(t * 0.3 + phase) * 0.06
+      // bank into the yaw sway (roll about the forward axis) + a little nose bob,
+      // so the formation feels like it's flying rather than parked
+      const roll = Math.cos(t * 0.3 + phase) * 0.14
+      const pitch = Math.cos(t * 0.5 + phase) * 0.05
       const sc = Math.max(ns, 0.001)
 
       dummy.position.set(x, y, z)
-      dummy.rotation.set(0, yaw, 0)
+      dummy.rotation.set(roll, yaw, pitch)
       dummy.scale.setScalar(sc)
       dummy.updateMatrix()
       hull.setMatrixAt(s, dummy.matrix)

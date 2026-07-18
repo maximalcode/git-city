@@ -203,6 +203,31 @@ input[type='text']:focus {
   position: relative;
   height: 100%;
 }
+.scene-error {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+}
+.scene-error-card {
+  text-align: center;
+  max-width: 340px;
+  padding: 28px 32px;
+  border: 1px solid var(--panel-border);
+  border-radius: 14px;
+  background: var(--panel);
+}
+.scene-error-card h2 {
+  margin: 0 0 8px;
+  font-size: 18px;
+}
+.scene-error-card p {
+  margin: 0 0 16px;
+  color: var(--text-dim);
+  font-size: 13px;
+}
 .city-root canvas {
   display: block;
 }

@@ -3,6 +3,7 @@ import { Canvas } from '@react-three/fiber'
 import { Bloom, EffectComposer, N8AO, Vignette } from '@react-three/postprocessing'
 import { Vector3 } from 'three'
 import CameraRig from './CameraRig'
+import SceneBoundary from '../lib/SceneBoundary'
 import { useStore } from '../store'
 import { playStepMs } from '../lib/playback'
 import { getTheme } from './themes'
@@ -90,6 +91,7 @@ export default function SceneView(): React.JSX.Element {
 
   const size = cityModel ? cityModel.citySize : fleetModel!.worldSize
   const bg = viewMode === 'fleet' ? '#02030a' : theme.background
+  const useAO = theme.ao && viewMode === 'city'
 
   // fly-to target: building plot center in the city, ship position in the fleet
   const resolveFocus = useMemo(
@@ -113,47 +115,53 @@ export default function SceneView(): React.JSX.Element {
 
   return (
     <div className="city-root">
-      <Canvas
-        shadows={viewMode === 'city'}
-        dpr={[1, 1.75]}
-        camera={{
-          position: [size * 0.9, size * 0.75, size * 0.9],
-          fov: 40,
-          near: 0.5,
-          far: size * 30
-        }}
-        onPointerMissed={() => useStore.getState().setSelected(null)}
-      >
-        <color attach="background" args={[bg]} />
-        {viewMode === 'city' && (
-          <fog attach="fog" args={[bg, size * theme.fog.near, size * theme.fog.far]} />
-        )}
-
-        {cityModel && cityTargets && (
-          <CityScene model={cityModel} targets={cityTargets} snapshot={snapshot} />
-        )}
-        {fleetModel && fleetTgt && <FleetScene model={fleetModel} targets={fleetTgt} />}
-
-        <CameraRig
-          worldSize={size}
-          resolveFocus={resolveFocus}
-          maxPolarAngle={viewMode === 'fleet' ? Math.PI * 0.9 : Math.PI * 0.47}
-        />
-
-        <EffectComposer enableNormalPass={theme.ao}>
-          {theme.ao && viewMode === 'city' ? (
-            <N8AO aoRadius={size * 0.06} intensity={2.4} distanceFalloff={1} halfRes />
-          ) : (
-            <></>
+      <SceneBoundary>
+        <Canvas
+          shadows
+          dpr={[1, 1.75]}
+          camera={{
+            position: [size * 0.9, size * 0.75, size * 0.9],
+            fov: 40,
+            near: 0.5,
+            far: size * 30
+          }}
+          onPointerMissed={() => useStore.getState().setSelected(null)}
+        >
+          <color attach="background" args={[bg]} />
+          {viewMode === 'city' && (
+            <fog attach="fog" args={[bg, size * theme.fog.near, size * theme.fog.far]} />
           )}
-          <Bloom
-            luminanceThreshold={theme.bloom.threshold}
-            intensity={viewMode === 'fleet' ? theme.bloom.intensity * 1.3 : theme.bloom.intensity}
-            mipmapBlur
+
+          {cityModel && cityTargets && (
+            <CityScene model={cityModel} targets={cityTargets} snapshot={snapshot} />
+          )}
+          {fleetModel && fleetTgt && <FleetScene model={fleetModel} targets={fleetTgt} />}
+
+          <CameraRig
+            worldSize={size}
+            resolveFocus={resolveFocus}
+            maxPolarAngle={viewMode === 'fleet' ? Math.PI * 0.9 : Math.PI * 0.47}
           />
-          <Vignette darkness={theme.vignette} />
-        </EffectComposer>
-      </Canvas>
+
+          {/* AO only exists in the city; its presence changes the composer's child
+            set. Rebuilding that chain in place freezes the render loop, so key the
+            composer on the exact combination that alters its children — the change
+            becomes a clean remount instead of an in-place mutation. */}
+          <EffectComposer key={`fx-${useAO ? 'ao' : 'noao'}`} enableNormalPass={useAO}>
+            {useAO ? (
+              <N8AO aoRadius={size * 0.06} intensity={2.4} distanceFalloff={1} halfRes />
+            ) : (
+              <></>
+            )}
+            <Bloom
+              luminanceThreshold={theme.bloom.threshold}
+              intensity={viewMode === 'fleet' ? theme.bloom.intensity * 1.3 : theme.bloom.intensity}
+              mipmapBlur
+            />
+            <Vignette darkness={theme.vignette} />
+          </EffectComposer>
+        </Canvas>
+      </SceneBoundary>
 
       <Hud snapshot={snapshot} model={hudModel} />
       <ChangesPanel />

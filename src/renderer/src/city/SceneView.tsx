@@ -20,6 +20,7 @@ import DiffPanel from '../panels/DiffPanel'
 import FileHistoryPanel from '../panels/FileHistoryPanel'
 import CommitGraphPanel from '../panels/CommitGraphPanel'
 import RebasePanel from '../panels/RebasePanel'
+import ReflogPanel from '../panels/ReflogPanel'
 
 // Per-analysis model caches: toggling the view mode back and forth must not
 // re-run the layout algorithms.
@@ -162,6 +163,7 @@ export default function SceneView(): React.JSX.Element {
       <FileHistoryPanel />
       <CommitGraphPanel />
       <RebasePanel />
+      <ReflogPanel />
       <MergeView />
     </div>
   )

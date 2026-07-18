@@ -1,0 +1,71 @@
+name: Release (Windows)
+
+# Builds the Windows installer.
+#   - Push a tag  v*  ->  builds AND publishes a GitHub Release with the .exe attached.
+#   - "Run workflow" button (workflow_dispatch)  ->  builds only, uploads the .exe as a
+#     run artifact so you can grab it without cutting a release (a dry run).
+#
+# To cut a real release:  bump "version" in package.json, commit, then:
+#     git tag v1.0.0 && git push origin v1.0.0
+# The job refuses to run if the tag (v1.0.0) and package.json version (1.0.0) disagree.
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+# The gh-release step needs write access to Contents to create the release.
+permissions:
+  contents: write
+
+jobs:
+  build-win:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Guard: a  v1.0.0  tag must match  "version": "1.0.0"  in package.json,
+      # otherwise the installer would be named after the wrong version.
+      - name: Verify tag matches package.json version
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          pkg="$(node -p "require('./package.json').version")"
+          if [ "$tag" != "$pkg" ]; then
+            echo "::error::Tag v$tag does not match package.json version $pkg. Bump package.json and re-tag."
+            exit 1
+          fi
+          echo "Tag and package.json agree on version $pkg."
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build Windows installer
+        run: npm run dist:win
+
+      # Always keep the installer as a downloadable run artifact (90-day retention),
+      # so manual/dispatch builds are usable without a release.
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: git-city-windows-installer
+          path: dist/*-setup.exe
+          if-no-files-found: error
+
+      # Only on a version tag: publish a GitHub Release with the .exe attached and
+      # auto-generated notes from the commits since the previous tag.
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/*-setup.exe --title "$GITHUB_REF_NAME" --generate-notes

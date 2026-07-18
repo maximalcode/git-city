@@ -2,6 +2,7 @@ import { ipcMain, shell } from 'electron'
 import type { WebContents } from 'electron'
 import { resolve, sep } from 'path'
 import type {
+  HunkMode,
   OpResult,
   ProgressInfo,
   RebaseEntry,
@@ -18,6 +19,7 @@ import {
 } from './git/advanced'
 import { analyzeIncremental } from './git/analyze'
 import { getFileDiff } from './git/diff'
+import { applyHunk, getFileHunks } from './git/hunks'
 import { commitGraph } from './git/graph'
 import { blameFile, fileHistory } from './git/history'
 import { getReflog, recoverToBranch, resetTo } from './git/reflog'
@@ -114,6 +116,7 @@ export function registerOpsIpc(): void {
   readOnly('diff', (repo, path: string, rev?: string) =>
     getFileDiff(repo, path, rev ? { rev } : {})
   )
+  readOnly('file-hunks', (repo, path: string, staged: boolean) => getFileHunks(repo, path, staged))
   readOnly('file-history', (repo, path: string) => fileHistory(repo, path))
   readOnly('blame', (repo, path: string, rev?: string) => blameFile(repo, path, rev))
   readOnly('commit-graph', (repo, limit?: number) => commitGraph(repo, limit ?? 500))
@@ -136,6 +139,9 @@ export function registerOpsIpc(): void {
   mutating('stage', (repo, paths: string[]) => stageFiles(repo, paths))
   mutating('unstage', (repo, paths: string[]) => unstageFiles(repo, paths))
   mutating('discard', (repo, paths: string[]) => discardFiles(repo, paths))
+  mutating('apply-hunk', (repo, path: string, header: string, mode: HunkMode) =>
+    applyHunk(repo, path, header, mode)
+  )
   mutating('commit', (repo, message: string, amend: boolean) => commit(repo, message, amend))
 
   // --- sync (needs the sender for progress events) ---

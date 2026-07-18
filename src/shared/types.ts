@@ -192,6 +192,23 @@ export interface DiffFile {
   deletions: number
 }
 
+/** One hunk offered for partial staging. `header` (the @@ line) is the apply key. */
+export interface HunkInfo {
+  index: number
+  header: string
+  additions: number
+  deletions: number
+  lines: DiffLine[]
+}
+export interface FileHunks {
+  path: string
+  /** true = hunks of the STAGED diff (index vs HEAD); false = unstaged (worktree vs index) */
+  staged: boolean
+  binary: boolean
+  hunks: HunkInfo[]
+}
+export type HunkMode = 'stage' | 'unstage' | 'discard'
+
 export interface FileCommit {
   hash: string
   shortHash: string
@@ -302,6 +319,10 @@ export interface GitCityApi {
   mergeContinue(repoPath: string): Promise<OpResult>
   /** Unified diff for a file: working changes (no rev) or a commit's change (rev). */
   getFileDiff(repoPath: string, path: string, rev?: string): Promise<DiffFile>
+  /** Hunks of a file's staged or unstaged diff, for partial staging. */
+  fileHunks(repoPath: string, path: string, staged: boolean): Promise<FileHunks>
+  /** Stage / unstage / discard a single hunk, keyed by its @@ header line. */
+  applyHunk(repoPath: string, path: string, hunkHeader: string, mode: HunkMode): Promise<OpResult>
   /** Commit history for a file (follows renames). */
   fileHistory(repoPath: string, path: string): Promise<FileCommit[]>
   /** Per-line blame for a file. */

@@ -1,20 +1,13 @@
 import { useEffect, useMemo } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { Bloom, EffectComposer, N8AO, Vignette } from '@react-three/postprocessing'
-import CameraControls from './CameraControls'
+import { Vector3 } from 'three'
+import CameraRig from './CameraRig'
 import { useStore } from '../store'
 import { playStepMs } from '../lib/playback'
 import { getTheme } from './themes'
 import { buildCityModel, snapshotTargets } from './cityData'
-import Buildings from './Buildings'
-import Districts from './Districts'
-import Roads from './Roads'
-import Highlight from './Highlight'
-import StatusOverlay from './StatusOverlay'
-import ConstructionSites from './ConstructionSites'
-import Effects from './Effects'
-import SkyDome from './SkyDome'
-import Traffic from './Traffic'
+import CityScene from './CityScene'
 import Hud from './Hud'
 import ChangesPanel from '../panels/ChangesPanel'
 import BranchesPanel from '../panels/BranchesPanel'
@@ -25,7 +18,12 @@ import FileHistoryPanel from '../panels/FileHistoryPanel'
 import CommitGraphPanel from '../panels/CommitGraphPanel'
 import RebasePanel from '../panels/RebasePanel'
 
-export default function CityView(): React.JSX.Element {
+/**
+ * Mode-agnostic scene shell: owns the Canvas, fog, playback ticker, camera
+ * rig, postprocessing, HUD and panels. The view-mode-specific world (city
+ * today, fleet next) mounts as a subtree.
+ */
+export default function SceneView(): React.JSX.Element {
   const analysis = useStore((s) => s.analysis)!
   const snapshotIndex = useStore((s) => s.snapshotIndex)
   const colorMode = useStore((s) => s.colorMode)
@@ -57,6 +55,18 @@ export default function CityView(): React.JSX.Element {
   const size = model.citySize
   const bg = theme.background
 
+  // fly-to target for the camera: center of the selected building's plot
+  const resolveFocus = useMemo(
+    () =>
+      (path: string): Vector3 | null => {
+        const i = model.indexOf.get(path)
+        if (i === undefined) return null
+        const { rect } = model.layout.plots[i]
+        return new Vector3(rect.x + rect.w / 2, 5, rect.y + rect.h / 2)
+      },
+    [model]
+  )
+
   return (
     <div className="city-root">
       <Canvas
@@ -73,48 +83,9 @@ export default function CityView(): React.JSX.Element {
         <color attach="background" args={[bg]} />
         <fog attach="fog" args={[bg, size * theme.fog.near, size * theme.fog.far]} />
 
-        {theme.sky === 'gradient' && (
-          <SkyDome top={theme.skyTop} bottom={theme.skyBottom} radius={size * 14} />
-        )}
+        <CityScene model={model} targets={targets} snapshot={snapshot} />
 
-        <hemisphereLight
-          args={[theme.hemisphere.sky, theme.hemisphere.ground, theme.hemisphere.intensity]}
-        />
-        <directionalLight
-          position={[size * 0.7, size * 1.1, size * 0.4]}
-          intensity={theme.dirMain.intensity}
-          color={theme.dirMain.color}
-          castShadow
-          shadow-mapSize={[2048, 2048]}
-          shadow-camera-left={-size}
-          shadow-camera-right={size}
-          shadow-camera-top={size}
-          shadow-camera-bottom={-size}
-          shadow-camera-far={size * 4}
-          shadow-bias={-0.0004}
-        />
-        <directionalLight
-          position={[-size, size * 0.5, -size * 0.6]}
-          intensity={theme.dirFill.intensity}
-          color={theme.dirFill.color}
-        />
-
-        {/* ground */}
-        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.06, 0]} receiveShadow>
-          <planeGeometry args={[size * 12, size * 12]} />
-          <meshStandardMaterial color={theme.ground} roughness={1} />
-        </mesh>
-
-        <Districts model={model} />
-        <Roads model={model} />
-        <Buildings model={model} targets={targets} />
-        <Highlight model={model} targets={targets} />
-        <StatusOverlay model={model} targets={targets} />
-        <ConstructionSites model={model} />
-        <Traffic model={model} snapshot={snapshot} />
-        <Effects citySize={size} />
-
-        <CameraControls maxDistance={size * 4} model={model} />
+        <CameraRig worldSize={size} resolveFocus={resolveFocus} />
 
         <EffectComposer enableNormalPass={theme.ao}>
           {theme.ao ? (

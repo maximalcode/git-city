@@ -6,7 +6,7 @@ const MAX_RESULTS = 8
 
 /**
  * Fuzzy-ish path search over the city's buildings. Picking a result selects it,
- * which the camera fly-to in CameraControls picks up automatically.
+ * which the camera fly-to in CameraRig picks up automatically.
  * Arrow keys move through the results, Enter picks the highlighted one.
  */
 export default function SearchBox({ model }: { model: CityModel }): React.JSX.Element | null {

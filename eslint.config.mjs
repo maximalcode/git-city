@@ -3,7 +3,7 @@ import reactHooks from 'eslint-plugin-react-hooks'
 import prettier from 'eslint-config-prettier'
 
 export default tseslint.config(
-  { ignores: ['out/**', 'dist/**', 'build/**', 'node_modules/**'] },
+  { ignores: ['out/**', 'dist/**', 'build/**', 'node_modules/**', 'e2e/**'] },
   ...tseslint.configs.recommended,
   {
     files: ['src/renderer/**/*.{ts,tsx}'],

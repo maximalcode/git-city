@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { Bloom, EffectComposer, N8AO, Vignette } from '@react-three/postprocessing'
 import { Vector3 } from 'three'
@@ -60,6 +60,28 @@ export default function SceneView(): React.JSX.Element {
   const playing = useStore((s) => s.playing)
   const viewMode = useStore((s) => s.viewMode)
 
+  // A lost/hung WebGL context (driver reset, GPU pressure after many scene
+  // rebuilds) freezes the canvas silently — a React error boundary can't catch
+  // it. Handle it explicitly: log why, then offer a full remount. `canvasKey`
+  // forces a fresh GL context on recovery.
+  const [contextLost, setContextLost] = useState(false)
+  const [canvasKey, setCanvasKey] = useState(0)
+  const onCanvasCreated = useCallback(({ gl }: { gl: { domElement: HTMLCanvasElement } }) => {
+    gl.domElement.addEventListener(
+      'webglcontextlost',
+      (e) => {
+        e.preventDefault() // allow restoration instead of a permanent loss
+        console.error('[git-city] WebGL context lost — offering scene reload')
+        setContextLost(true)
+      },
+      false
+    )
+  }, [])
+  const reloadScene = (): void => {
+    setContextLost(false)
+    setCanvasKey((k) => k + 1)
+  }
+
   const snapshot = analysis.snapshots[Math.min(snapshotIndex, analysis.snapshots.length - 1)]
 
   // only the active mode's model is built (lazily, cached per analysis)
@@ -113,10 +135,27 @@ export default function SceneView(): React.JSX.Element {
 
   const hudModel = cityModel ?? fleetModel!
 
+  if (contextLost) {
+    return (
+      <div className="city-root">
+        <div className="scene-error">
+          <div className="scene-error-card">
+            <h2>Graphics reset</h2>
+            <p>The GPU context dropped. Your repository and changes are untouched.</p>
+            <button className="primary" onClick={reloadScene}>
+              Reload view
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="city-root">
       <SceneBoundary>
         <Canvas
+          key={canvasKey}
           shadows
           dpr={[1, 1.75]}
           camera={{
@@ -125,6 +164,7 @@ export default function SceneView(): React.JSX.Element {
             near: 0.5,
             far: size * 30
           }}
+          onCreated={onCanvasCreated}
           onPointerMissed={() => useStore.getState().setSelected(null)}
         >
           <color attach="background" args={[bg]} />

@@ -5,15 +5,10 @@ import type { Snapshot } from '../../../shared/types'
 import { useStore } from '../store'
 import { getTheme, type Theme } from './themes'
 import type { CityModel } from './cityData'
+import { roadY } from './roadGeometry'
 import { geometryFor, type AgentKind } from './trafficShapes'
 
 const dummy = new Object3D()
-
-interface Nodes {
-  pos: [number, number][]
-  cumulative: number[]
-  total: number
-}
 
 interface LayerSpec {
   kind: AgentKind
@@ -21,9 +16,12 @@ interface LayerSpec {
   material: 'lit' | 'glow'
   palette: string[]
   color: string
-  hover: number // hover height (0 = ground)
+  hover: number // hover height above the road (0 = on the asphalt)
+  /** cruise speed in world units per second */
   speed: number
   spin: boolean
+  /** narrowest street this agent kind fits on (0 = any) */
+  minWidth: number
 }
 
 const CAR_COLORS = [
@@ -36,12 +34,11 @@ const CAR_COLORS = [
   '#e84393',
   '#00cec9'
 ]
-const PERSON_COLORS = ['#d6a06a', '#c98b5e', '#e8c39e', '#8d5524', '#5b7fb4', '#b25f6e']
 const BIKE_COLORS = ['#dfe6e9', '#74b9ff', '#ffeaa7', '#fab1a0']
 
-function layersForTheme(theme: Theme, nNodes: number): LayerSpec[] {
-  if (theme.particles === 'none' || nNodes < 2) return []
-  const base = Math.min(80, Math.max(8, Math.floor(nNodes * 1.1)))
+function layersForTheme(theme: Theme, nEdges: number): LayerSpec[] {
+  if (theme.particles === 'none' || nEdges < 1) return []
+  const base = Math.min(80, Math.max(8, Math.floor(nEdges * 0.4)))
   if (theme.id === 'neon') {
     return [
       {
@@ -51,50 +48,43 @@ function layersForTheme(theme: Theme, nNodes: number): LayerSpec[] {
         palette: [],
         color: theme.dirFill.color,
         hover: 4,
-        speed: 0.7,
-        spin: true
+        speed: 4.5,
+        spin: true,
+        minWidth: 0
       }
     ]
   }
   return [
     {
       kind: 'car',
-      count: Math.floor(base * 0.55),
+      count: Math.floor(base * 0.7),
       material: 'lit',
       palette: CAR_COLORS,
       color: '#fff',
       hover: 0,
-      speed: 0.5,
-      spin: false
-    },
-    {
-      kind: 'person',
-      count: Math.floor(base * 0.3),
-      material: 'lit',
-      palette: PERSON_COLORS,
-      color: '#fff',
-      hover: 0,
-      speed: 0.24,
-      spin: false
+      speed: 3.2,
+      spin: false,
+      minWidth: 1.4
     },
     {
       kind: 'bike',
-      count: Math.floor(base * 0.15),
+      count: Math.floor(base * 0.3),
       material: 'lit',
       palette: BIKE_COLORS,
       color: '#fff',
       hover: 0,
-      speed: 0.34,
-      spin: false
+      speed: 1.6,
+      spin: false,
+      minWidth: 0.7
     }
   ]
 }
 
 /**
- * Activity-driven traffic: little cars, people and bikes (or futuristic
- * hover-craft in Neon) travelling short local trips between buildings, spawned
- * with probability proportional to each file's commit count — the busiest code
- * gets the busiest streets. One InstancedMesh per agent kind.
+ * Street traffic: cars and bikes (hovercraft in Neon) driving along the road
+ * graph — lane-offset to the right of travel, steering through junctions, and
+ * periodically respawning onto streets weighted by the nearest building's
+ * commit count, so the busiest code gets the busiest streets.
  */
 export default function Traffic({
   model,
@@ -104,103 +94,154 @@ export default function Traffic({
   snapshot: Snapshot
 }): React.JSX.Element | null {
   const theme = getTheme(useStore((s) => s.themeId))
+  const graph = model.roadGraph
 
-  const nodes = useMemo<Nodes>(() => {
-    const pos: [number, number][] = []
-    const cumulative: number[] = []
-    let total = 0
-    const byPath = new Map(snapshot.files.map((f) => [f.path, f]))
-    for (let i = 0; i < model.paths.length; i++) {
-      const f = byPath.get(model.paths[i])
-      if (!f) continue
-      const plot = model.layout.plots[i]
-      total += 1 + f.commits
-      pos.push([plot.rect.x + plot.rect.w / 2, plot.rect.y + plot.rect.h / 2])
-      cumulative.push(total)
+  // nearest plot per edge midpoint — static per model, feeds commit weighting
+  const nearestPlot = useMemo(() => {
+    const out = new Int32Array(graph.edges.length)
+    const plots = model.layout.plots
+    for (let ei = 0; ei < graph.edges.length; ei++) {
+      const e = graph.edges[ei]
+      const mx = (graph.nodes[e.a].x + graph.nodes[e.b].x) / 2
+      const mz = (graph.nodes[e.a].z + graph.nodes[e.b].z) / 2
+      let best = 0
+      let bestD = Infinity
+      for (let pi = 0; pi < plots.length; pi++) {
+        const r = plots[pi].rect
+        const dx = r.x + r.w / 2 - mx
+        const dz = r.y + r.h / 2 - mz
+        const d = dx * dx + dz * dz
+        if (d < bestD) {
+          bestD = d
+          best = pi
+        }
+      }
+      out[ei] = best
     }
-    return { pos, cumulative, total }
-  }, [model, snapshot])
+    return out
+  }, [model, graph])
 
-  const layers = useMemo(() => layersForTheme(theme, nodes.pos.length), [theme, nodes.pos.length])
-  if (nodes.pos.length < 2) return null
+  const layers = useMemo(() => layersForTheme(theme, graph.edges.length), [theme, graph])
+  if (graph.edges.length === 0 || layers.length === 0) return null
 
   return (
     <>
       {layers.map((spec) => (
-        <AgentLayer key={spec.kind} spec={spec} nodes={nodes} />
+        <AgentLayer
+          key={spec.kind}
+          spec={spec}
+          model={model}
+          snapshot={snapshot}
+          nearestPlot={nearestPlot}
+        />
       ))}
     </>
   )
 }
 
 interface Agent {
-  from: number
-  to: number
-  t: number
+  edge: number
+  /** distance from node `a` along the edge, in world units */
+  s: number
+  dir: 1 | -1
   speed: number
+  angle: number
   phase: number
+  /** seconds until this agent respawns on a freshly-weighted street */
+  ttl: number
 }
 
-function AgentLayer({ spec, nodes }: { spec: LayerSpec; nodes: Nodes }): React.JSX.Element | null {
+function AgentLayer({
+  spec,
+  model,
+  snapshot,
+  nearestPlot
+}: {
+  spec: LayerSpec
+  model: CityModel
+  snapshot: Snapshot
+  nearestPlot: Int32Array
+}): React.JSX.Element | null {
   const geometry = useMemo(() => geometryFor(spec.kind), [spec.kind])
+  const graph = model.roadGraph
   const seed = useRef(1)
+  const agentScale = Math.min(1, model.citySize / 140)
 
-  const pick = (): number => {
+  const rand = (): number => {
     seed.current = ((seed.current * 1.618) % 1000) + 0.123
-    const r = (((Math.sin(seed.current) * 43758.5453) % 1) + 1) % 1
-    const target = r * nodes.total
+    return (((Math.sin(seed.current) * 43758.5453) % 1) + 1) % 1
+  }
+
+  // streets this agent kind fits on
+  const edgeIdx = useMemo(
+    () => graph.edges.map((_, i) => i).filter((i) => graph.edges[i].width >= spec.minWidth),
+    [graph, spec.minWidth]
+  )
+
+  // commit-weighted spawn distribution over those streets (per snapshot)
+  const spawnRef = useRef<{ cumulative: number[]; total: number }>({ cumulative: [], total: 0 })
+  spawnRef.current = useMemo(() => {
+    const byPath = new Map(snapshot.files.map((f) => [f.path, f]))
+    const cumulative: number[] = []
+    let total = 0
+    for (const ei of edgeIdx) {
+      const f = byPath.get(model.paths[nearestPlot[ei]])
+      total += f ? 1 + f.commits : 0.2
+      cumulative.push(total)
+    }
+    return { cumulative, total }
+  }, [snapshot, edgeIdx, model, nearestPlot])
+
+  const pickEdge = (): number => {
+    const { cumulative, total } = spawnRef.current
+    const target = rand() * total
     let lo = 0
-    let hi = nodes.cumulative.length - 1
+    let hi = cumulative.length - 1
     while (lo < hi) {
       const mid = (lo + hi) >> 1
-      if (nodes.cumulative[mid] < target) lo = mid + 1
+      if (cumulative[mid] < target) lo = mid + 1
       else hi = mid
     }
-    return lo
+    return edgeIdx[lo]
   }
 
-  const dist2 = (a: number, b: number): number => {
-    const dx = nodes.pos[a][0] - nodes.pos[b][0]
-    const dz = nodes.pos[a][1] - nodes.pos[b][1]
-    return dx * dx + dz * dz
+  const edgeAngle = (edge: number, dir: 1 | -1): number => {
+    const e = graph.edges[edge]
+    const dx = (graph.nodes[e.b].x - graph.nodes[e.a].x) * dir
+    const dz = (graph.nodes[e.b].z - graph.nodes[e.a].z) * dir
+    return Math.atan2(dz, dx)
   }
 
-  const respawn = (agent: Agent): void => {
-    agent.from = pick()
-    // destination = nearest of a few weighted candidates → short, local, street-like trips
-    let best = -1
-    let bestD = Infinity
-    for (let k = 0; k < 4; k++) {
-      const c = pick()
-      if (c === agent.from) continue
-      const d = dist2(agent.from, c)
-      if (d < bestD) {
-        bestD = d
-        best = c
-      }
-    }
-    agent.to = best >= 0 ? best : (agent.from + 1) % nodes.pos.length
-    agent.t = 0
-    agent.speed = spec.speed * (0.7 + ((Math.sin(seed.current * 7.7) + 1) / 2) * 0.6)
+  const respawn = (a: Agent): void => {
+    a.edge = pickEdge()
+    a.dir = rand() < 0.5 ? 1 : -1
+    a.s = rand() * graph.edges[a.edge].length
+    a.speed = spec.speed * (0.7 + rand() * 0.6)
+    a.angle = edgeAngle(a.edge, a.dir)
+    a.ttl = 6 + rand() * 14
   }
 
   const pool = useMemo(() => {
     const arr: Agent[] = []
+    if (edgeIdx.length === 0) return arr
     for (let i = 0; i < spec.count; i++) {
       const a: Agent = {
-        from: 0,
-        to: 1,
-        t: 0,
+        edge: 0,
+        s: 0,
+        dir: 1,
         speed: spec.speed,
-        phase: (i * 1.37) % (Math.PI * 2)
+        angle: 0,
+        phase: (i * 1.37) % (Math.PI * 2),
+        ttl: 10
       }
       respawn(a)
-      a.t = i / Math.max(1, spec.count)
       arr.push(a)
     }
     return arr
+    // spawn distribution updates via spawnRef; the pool itself must survive
+    // snapshot changes or every agent would teleport on each playback step
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [spec, nodes])
+  }, [spec, edgeIdx])
 
   const meshRef = useRef<InstancedMesh>(null!)
 
@@ -215,32 +256,62 @@ function AgentLayer({ spec, nodes }: { spec: LayerSpec; nodes: Nodes }): React.J
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
   }, [pool, spec])
 
+  // At a junction, keep going: prefer any edge other than the one we came in
+  // on (dead ends turn back). Returns false if the node has no usable edges.
+  const advance = (a: Agent): boolean => {
+    const e = graph.edges[a.edge]
+    const node = a.dir === 1 ? e.b : e.a
+    const options = graph.adjacency[node].filter(
+      (ei) => ei !== a.edge && graph.edges[ei].width >= spec.minWidth
+    )
+    const next =
+      options.length > 0 ? options[Math.floor(rand() * options.length) % options.length] : a.edge
+    a.edge = next
+    a.dir = graph.edges[next].a === node ? 1 : -1
+    a.s = a.dir === 1 ? 0 : graph.edges[next].length
+    return true
+  }
+
   useFrame((state, dt) => {
     const mesh = meshRef.current
     if (!mesh || pool.length === 0) return
     const step = Math.min(dt, 0.05)
     const t = state.clock.elapsedTime
+    const steer = 1 - Math.exp(-10 * step)
     for (let i = 0; i < pool.length; i++) {
       const a = pool[i]
-      a.t += step * a.speed
-      if (a.t >= 1) respawn(a)
-      const from = nodes.pos[a.from]
-      const to = nodes.pos[a.to]
-      if (!from || !to) continue
-      const x = from[0] + (to[0] - from[0]) * a.t
-      const z = from[1] + (to[1] - from[1]) * a.t
-      const angle = Math.atan2(to[1] - from[1], to[0] - from[0])
+      a.ttl -= step
+      if (a.ttl <= 0) respawn(a)
+      const e = graph.edges[a.edge]
+      a.s += a.dir * a.speed * step
+      if (a.s < 0 || a.s > e.length) advance(a)
+      const cur = graph.edges[a.edge]
+      const na = graph.nodes[cur.a]
+      const nb = graph.nodes[cur.b]
+      const k = cur.length > 0 ? a.s / cur.length : 0
+      let x = na.x + (nb.x - na.x) * k
+      let z = na.z + (nb.z - na.z) * k
+      // right-hand lane offset so opposing traffic never overlaps
+      const target = edgeAngle(a.edge, a.dir)
+      const laneOff = cur.width * 0.22 * agentScale
+      x += Math.sin(target) * laneOff
+      z += -Math.cos(target) * laneOff
+      // steer smoothly toward the street direction (junction turns)
+      let delta = target - a.angle
+      delta = ((delta + Math.PI) % (Math.PI * 2)) - Math.PI
+      if (delta < -Math.PI) delta += Math.PI * 2
+      a.angle += delta * steer
       const bob = spec.hover > 0 ? Math.sin(t * 2 + a.phase) * 0.4 : 0
-      dummy.position.set(x, spec.hover + bob, z)
-      dummy.rotation.set(0, spec.spin ? t * 1.5 + a.phase : -angle, 0)
-      dummy.scale.setScalar(1)
+      dummy.position.set(x, roadY(cur.depth) + spec.hover + bob, z)
+      dummy.rotation.set(0, spec.spin ? t * 1.5 + a.phase : -a.angle, 0)
+      dummy.scale.setScalar(agentScale)
       dummy.updateMatrix()
       mesh.setMatrixAt(i, dummy.matrix)
     }
     mesh.instanceMatrix.needsUpdate = true
   })
 
-  if (spec.count === 0) return null
+  if (spec.count === 0 || edgeIdx.length === 0) return null
 
   return (
     <instancedMesh
@@ -253,7 +324,7 @@ function AgentLayer({ spec, nodes }: { spec: LayerSpec; nodes: Nodes }): React.J
       {spec.material === 'glow' ? (
         <meshBasicMaterial color={spec.color} toneMapped={false} />
       ) : (
-        <meshStandardMaterial roughness={0.5} metalness={0.1} />
+        <meshStandardMaterial roughness={0.5} metalness={0.1} vertexColors />
       )}
     </instancedMesh>
   )

@@ -1,18 +1,37 @@
 import {
   BoxGeometry,
+  BufferAttribute,
   ConeGeometry,
   CylinderGeometry,
   OctahedronGeometry,
+  SphereGeometry,
   type BufferGeometry
 } from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 
 /**
- * Tiny low-poly "agents" for city traffic, built by merging primitive
- * geometries — no external models, no drei. Each is modelled around the origin
- * sitting on the ground (y=0 at its base) and facing +X (direction of travel).
+ * Tiny agents for city traffic, built by merging primitive geometries — no
+ * external models, no drei. Each is modelled around the origin sitting on the
+ * ground (y=0 at its base) and facing +X (direction of travel).
+ *
+ * Painted parts carry a constant vertex color that MULTIPLIES the per-instance
+ * palette color (materials use vertexColors): white parts take the paint job,
+ * dark parts (glass, tires) stay dark whatever the instance color is.
  */
-export type AgentKind = 'car' | 'person' | 'bike' | 'futuristic'
+export type AgentKind = 'car' | 'bike' | 'futuristic'
+
+/** Write a constant `color` attribute over the whole geometry. */
+function paint(geo: BufferGeometry, r: number, g = r, b = r): BufferGeometry {
+  const count = geo.getAttribute('position').count
+  const colors = new Float32Array(count * 3)
+  for (let i = 0; i < count; i++) {
+    colors[i * 3] = r
+    colors[i * 3 + 1] = g
+    colors[i * 3 + 2] = b
+  }
+  geo.setAttribute('color', new BufferAttribute(colors, 3))
+  return geo
+}
 
 /**
  * Merge primitives after stripping indices. three's primitives disagree on
@@ -29,37 +48,43 @@ function merge(parts: BufferGeometry[]): BufferGeometry {
   return merged
 }
 
-/** Car: body + cabin, ~2.6 long. */
+/** Car: chassis + dark greenhouse + roof cap + four wheels, ~2.4 long. */
 export function carGeometry(): BufferGeometry {
-  const body = new BoxGeometry(2.6, 0.5, 1.1)
-  body.translate(0, 0.3, 0)
-  const cabin = new BoxGeometry(1.2, 0.45, 0.95)
-  cabin.translate(-0.15, 0.75, 0)
-  return merge([body, cabin])
+  const chassis = paint(new BoxGeometry(2.4, 0.34, 1.0), 1)
+  chassis.translate(0, 0.42, 0)
+  const glass = paint(new BoxGeometry(1.29, 0.3, 0.96), 0.1)
+  glass.translate(-0.12, 0.72, 0)
+  const roof = paint(new BoxGeometry(1.15, 0.1, 0.86), 1)
+  roof.translate(-0.12, 0.92, 0)
+  const parts = [chassis, glass, roof]
+  for (const sx of [-0.78, 0.78]) {
+    for (const sz of [-0.55, 0.55]) {
+      const wheel = paint(new CylinderGeometry(0.26, 0.26, 0.16, 12), 0.12)
+      wheel.rotateX(Math.PI / 2)
+      wheel.translate(sx, 0.26, sz)
+      parts.push(wheel)
+    }
+  }
+  return merge(parts)
 }
 
-/** Person: torso + head, ~1.4 tall, thin. */
-export function personGeometry(): BufferGeometry {
-  const body = new BoxGeometry(0.34, 0.85, 0.34)
-  body.translate(0, 0.5, 0)
-  const head = new BoxGeometry(0.38, 0.38, 0.38)
-  head.translate(0, 1.12, 0)
-  return merge([body, head])
-}
-
-/** Bicycle: two wheels + a frame bar + a rider stub. */
+/** Bicycle: two dark wheels, painted frame, neutral rider (torso + head). */
 export function bikeGeometry(): BufferGeometry {
-  const wheelFront = new CylinderGeometry(0.45, 0.45, 0.12, 10)
-  wheelFront.rotateX(Math.PI / 2) // stand upright, rolling along X
-  wheelFront.translate(0.7, 0.45, 0)
-  const wheelBack = new CylinderGeometry(0.45, 0.45, 0.12, 10)
-  wheelBack.rotateX(Math.PI / 2)
-  wheelBack.translate(-0.7, 0.45, 0)
-  const frame = new BoxGeometry(1.5, 0.12, 0.12)
-  frame.translate(0, 0.7, 0)
-  const rider = new BoxGeometry(0.32, 0.7, 0.32)
-  rider.translate(-0.1, 1.05, 0)
-  return merge([wheelFront, wheelBack, frame, rider])
+  const parts: BufferGeometry[] = []
+  for (const sx of [-0.55, 0.55]) {
+    const wheel = paint(new CylinderGeometry(0.32, 0.32, 0.1, 10), 0.12)
+    wheel.rotateX(Math.PI / 2)
+    wheel.translate(sx, 0.32, 0)
+    parts.push(wheel)
+  }
+  const frame = paint(new BoxGeometry(1.3, 0.1, 0.1), 1)
+  frame.translate(0, 0.62, 0)
+  const torso = paint(new CylinderGeometry(0.16, 0.2, 0.5, 8), 0.55)
+  torso.translate(-0.1, 0.95, 0)
+  const head = paint(new SphereGeometry(0.16, 8, 6), 0.55)
+  head.translate(-0.1, 1.34, 0)
+  parts.push(frame, torso, head)
+  return merge(parts)
 }
 
 /** Futuristic: a floating diamond with a small fin — spins as it hovers. */
@@ -90,8 +115,6 @@ function buildGeometry(kind: AgentKind): BufferGeometry {
   switch (kind) {
     case 'car':
       return carGeometry()
-    case 'person':
-      return personGeometry()
     case 'bike':
       return bikeGeometry()
     case 'futuristic':

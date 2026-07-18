@@ -38,6 +38,9 @@ export default function Buildings({ model, targets }: Props): React.JSX.Element 
     win.enabled.value = theme.windows.enabled ? 1 : 0
     win.color.value.set(theme.windows.color)
     win.intensity.value = theme.windows.intensity
+    win.shopEnabled.value = theme.shopfront.enabled ? 1 : 0
+    win.shopColor.value.set(theme.shopfront.color)
+    win.shopIntensity.value = theme.shopfront.intensity
   }, [material, win, theme])
 
   const n = model.paths.length

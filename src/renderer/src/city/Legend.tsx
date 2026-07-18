@@ -1,15 +1,14 @@
 import { useMemo } from 'react'
 import type { Snapshot } from '../../../shared/types'
 import { useStore } from '../store'
-import { buildColorer, COLOR_MODES } from './colorModes'
-import type { CityModel } from './cityData'
+import { buildColorer, COLOR_MODES, type ColorContext } from './colorModes'
 
 /** Explains what the current color mode's colors mean. */
 export default function Legend({
   model,
   snapshot
 }: {
-  model: CityModel
+  model: ColorContext
   snapshot: Snapshot
 }): React.JSX.Element | null {
   const colorMode = useStore((s) => s.colorMode)

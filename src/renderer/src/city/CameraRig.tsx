@@ -3,27 +3,33 @@ import { useFrame, useThree } from '@react-three/fiber'
 import { Vector3 } from 'three'
 import { MapControls } from 'three/examples/jsm/controls/MapControls.js'
 import { useStore } from '../store'
-import type { CityModel } from './cityData'
 
 const UP = new Vector3(0, 1, 0)
 const offsetScratch = new Vector3() // reused every frame during the intro orbit
 
 /**
- * Thin wrapper around three's own MapControls (pan/zoom/orbit above the city).
+ * Thin wrapper around three's own MapControls (pan/zoom/orbit above the scene).
  * Used instead of @react-three/drei's version so the app has no dependency on
  * troika-three-text — its embedded base64 WASM blob is a notorious antivirus
  * false-positive trigger once bundled.
  *
+ * View-mode agnostic: the host scene supplies `resolveFocus` to map a selected
+ * file path to a world position (building plot, ship, …) for the fly-to.
+ *
  * Adds two cinematic touches, both hand-rolled (no tween lib):
- *  - a slow intro orbit when a city first loads, cancelled on any interaction
- *  - a smooth fly-to that frames a building when it becomes selected
+ *  - a slow intro orbit when a scene first loads, cancelled on any interaction
+ *  - a smooth fly-to that frames the selected object
  */
-export default function CameraControls({
-  maxDistance,
-  model
+export default function CameraRig({
+  worldSize,
+  resolveFocus,
+  maxPolarAngle = Math.PI * 0.47,
+  focusDistance
 }: {
-  maxDistance: number
-  model: CityModel
+  worldSize: number
+  resolveFocus: (path: string) => Vector3 | null
+  maxPolarAngle?: number
+  focusDistance?: number
 }): null {
   const camera = useThree((s) => s.camera)
   const gl = useThree((s) => s.gl)
@@ -37,9 +43,9 @@ export default function CameraControls({
   useEffect(() => {
     controls.enableDamping = true
     controls.dampingFactor = 0.08
-    controls.maxPolarAngle = Math.PI * 0.47
+    controls.maxPolarAngle = maxPolarAngle
     controls.minDistance = 8
-    controls.maxDistance = maxDistance
+    controls.maxDistance = worldSize * 4
     controls.target.set(0, 0, 0)
     controls.update()
     const stopAuto = (): void => {
@@ -51,21 +57,19 @@ export default function CameraControls({
       controls.removeEventListener('start', stopAuto)
       controls.dispose()
     }
-  }, [controls, maxDistance])
+  }, [controls, worldSize, maxPolarAngle])
 
-  // fly-to when the selection changes to a building that has a plot
+  // fly-to when the selection changes to something the scene can locate
   useEffect(() => {
     if (!selected) return
-    const i = model.indexOf.get(selected)
-    if (i === undefined) return
-    const { rect } = model.layout.plots[i]
-    const center = new Vector3(rect.x + rect.w / 2, 5, rect.y + rect.h / 2)
+    const center = resolveFocus(selected)
+    if (!center) return
     // keep the current view direction, just re-frame at a closer distance
     const dir = new Vector3().subVectors(camera.position, controls.target).normalize()
-    const dist = Math.max(22, model.citySize * 0.28)
+    const dist = focusDistance ?? Math.max(22, worldSize * 0.28)
     intro.current = false
     tween.current = { target: center, pos: new Vector3().copy(center).addScaledVector(dir, dist) }
-  }, [selected, model, camera, controls])
+  }, [selected, resolveFocus, worldSize, focusDistance, camera, controls])
 
   useFrame((_, dt) => {
     if (intro.current) {

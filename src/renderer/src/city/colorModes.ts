@@ -1,7 +1,12 @@
 import { Color } from 'three'
 import type { Snapshot, FileState } from '../../../shared/types'
 import { languageOf } from '../lib/languages'
-import type { CityModel } from './cityData'
+
+/** The slice of a scene model the colorers need — CityModel and FleetModel both satisfy it. */
+export interface ColorContext {
+  /** per-object language color, indexed like the model's paths */
+  langColors: Color[]
+}
 
 /** Ways to color the city. Each mode uses a deliberately distinct palette. */
 export type ColorMode = 'language' | 'activity' | 'author' | 'recency' | 'size' | 'filetype'
@@ -166,7 +171,7 @@ function topBy(counts: Map<string, number>, n: number): string[] {
 }
 
 /** Build a per-mode colorer + legend for one snapshot. */
-export function buildColorer(model: CityModel, snapshot: Snapshot, mode: ColorMode): Colorer {
+export function buildColorer(model: ColorContext, snapshot: Snapshot, mode: ColorMode): Colorer {
   const files = snapshot.files
 
   if (mode === 'language') {

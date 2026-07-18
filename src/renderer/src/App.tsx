@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { useStore } from './store'
 import Welcome from './screens/Welcome'
 import Loading from './screens/Loading'
-import CityView from './city/CityView'
+import SceneView from './city/SceneView'
 import ConfirmDialog from './panels/ConfirmDialog'
 import OpErrorToast from './panels/OpErrorToast'
 
@@ -16,7 +16,7 @@ export default function App(): React.JSX.Element {
     <>
       {screen === 'welcome' && <Welcome />}
       {screen === 'loading' && <Loading />}
-      {screen === 'city' && <CityView />}
+      {screen === 'city' && <SceneView />}
       {/* root-level overlays available from any screen */}
       <ConfirmDialog />
       <OpErrorToast />

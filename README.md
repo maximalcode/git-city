@@ -6,19 +6,34 @@ scrubs through history while the city grows, and a full git client lives on
 top: stage, commit, fetch, pull, push, branch, merge, rebase, stash,
 cherry-pick and tag without leaving the city.
 
+Prefer space? Press `V` and the same repository becomes a **spaceship fleet**:
+every file a ship in its folder's squadron, git pushes exit through a portal
+and pulls warp in.
+
 ![icon](build/icon.png)
 
 ## Features
 
 **Visualization**
 
-- 3D city built from your repo: districts per folder, buildings per file,
-  activity-weighted street traffic (cars, people, bikes — hover-craft in Neon)
-- Timeline playback: scrub or play through the entire commit history
+- **Two view modes** (`V` to switch, persisted): the 3D **City** and the
+  spaceship **Fleet**
+- City: districts per folder, buildings per file, real streets with lane
+  markings derived from the layout, commit-weighted traffic driving on them
+  (cars and bikes — hover-craft in Neon), ground-floor shopfront glow on tall
+  buildings in night themes
+- Fleet: every file is a fighter/freighter/capital ship (by size) flying in
+  its folder's V-formation squadron; folder depth = flight altitude; engine
+  glow, starfield, warp-in/out as files appear and vanish through history;
+  git ops animated (push = portal jump, pull = warp-in, commit = regroup
+  pulse)
+- Timeline playback: scrub or play the entire history (a full replay fits in
+  ~10 seconds)
 - 5 themes (Realistic Day/Night, Neon, Golden Hour, Midnight Ink) with
   procedural lit windows, sky gradients and ambient occlusion
 - 6 color modes — language, activity, author, recency, size, file type — each
-  with an always-visible legend explaining the encoding
+  with an always-visible legend explaining the encoding, identical in both
+  view modes
 - Camera fly-to on selection, cinematic intro orbit
 
 **Git client**
@@ -42,6 +57,7 @@ cherry-pick and tag without leaving the city.
 | `B`      | Branches panel                 |
 | `S`      | Stashes panel                  |
 | `G`      | Commit graph                   |
+| `V`      | Toggle City / Fleet view       |
 | `/`      | Find a file (arrows + Enter)   |
 | `Space`  | Play/pause the timeline        |
 | `Escape` | Close panels / clear selection |
@@ -75,7 +91,9 @@ npm run format     # Prettier
 `npm run dev` requires git on your PATH (the app shells out to it).
 
 There is also a browser-only preview of the renderer for quick visual work
-(no Electron, no git — inject mock data or look at the welcome screen):
+(no Electron, no git). Open `http://localhost:5199/?mock` for a deterministic
+synthetic repo (250 files, 30 snapshots) with fake working-tree status — both
+view modes fully explorable:
 
 ```bash
 npx vite -c vite.preview.config.ts
@@ -104,12 +122,16 @@ signing cert / Apple Developer ID + notarization).
   abort. Errors surface as a uniform `OpResult`; read-only IPC channels never
   leak raw git stderr to the renderer.
 - `src/preload/` — typed `window.gitCity` bridge.
-- `src/renderer/` — React + react-three-fiber UI. `layout/treemap.ts` is the
-  squarified treemap (pure, unit-tested), `city/` renders instanced buildings,
-  district plates, traffic, effects and the HUD; `panels/` holds the git
+- `src/renderer/` — React + react-three-fiber UI. `layout/` holds the pure,
+  unit-tested scene math: the squarified treemap, the street graph derived
+  from it, and the fleet formation layout. `city/` renders both scenes
+  (instanced buildings, district plates, roads, traffic, ships, starfield,
+  effects) behind a mode-agnostic `SceneView` shell; `panels/` holds the git
   client UI; `store.ts` (zustand) is the single state funnel.
 - `src/shared/types.ts` — types shared across all three.
 
 Note: the app intentionally avoids `@react-three/drei` — we only needed
-MapControls (see `city/CameraControls.tsx`), and drei's text stack embeds a
-base64 WASM blob that antivirus heuristics love to false-positive on.
+MapControls (see `city/CameraRig.tsx`), and drei's text stack embeds a
+base64 WASM blob that antivirus heuristics love to false-positive on. All
+vehicle and ship geometry is likewise built in-code from merged three.js
+primitives, no external models.

@@ -32,7 +32,8 @@ function model(paths: string[]): CityModel {
   return {
     layout: {
       plots: paths.map((p) => ({ path: p, rect: { x: 0, y: 0, w: 1, h: 1 } })),
-      districts: []
+      districts: [],
+      roads: []
     },
     paths,
     indexOf: new Map(paths.map((p, i) => [p, i])),

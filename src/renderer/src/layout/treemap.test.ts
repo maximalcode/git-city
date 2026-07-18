@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { cityLayout, squarify, type Rect } from './treemap'
+import { cityLayout, squarify, type Rect, type RoadSegment } from './treemap'
 
 const rectArea = (r: Rect): number => r.w * r.h
 
@@ -89,5 +89,58 @@ describe('cityLayout', () => {
     const deep = cityLayout([{ path: 'a/b/c/d/e/f/g.ts', weight: 10 }], 50)
     expect(deep.plots).toHaveLength(1)
     expect(deep.districts.length).toBe(6)
+  })
+})
+
+describe('cityLayout roads', () => {
+  const manyFiles = Array.from({ length: 60 }, (_, i) => ({
+    path: `${['src', 'src/core', 'src/ui', 'test', 'docs'][i % 5]}/f${i}.ts`,
+    weight: 5 + ((i * 37) % 400)
+  }))
+
+  const roadRect = (r: RoadSegment): Rect =>
+    r.axis === 'z'
+      ? { x: r.x - r.width / 2, y: r.z, w: r.width, h: r.length }
+      : { x: r.x, y: r.z - r.width / 2, w: r.length, h: r.width }
+
+  it('emits roads for any multi-file layout', () => {
+    const { roads } = cityLayout(manyFiles, 140)
+    expect(roads.length).toBeGreaterThan(10)
+    for (const r of roads) {
+      expect(r.length).toBeGreaterThan(0)
+      expect(r.width).toBeGreaterThan(0)
+      expect(r.depth).toBeGreaterThanOrEqual(0)
+    }
+  })
+
+  it('never overlaps a building plot (load-bearing invariant)', () => {
+    const { roads, plots } = cityLayout(manyFiles, 140)
+    for (const road of roads) {
+      const rr = roadRect(road)
+      for (const p of plots) {
+        expect(overlaps(rr, p.rect)).toBe(false)
+      }
+    }
+  })
+
+  it('keeps roads within the city bounds', () => {
+    const { roads } = cityLayout(manyFiles, 140)
+    for (const road of roads) {
+      const rr = roadRect(road)
+      expect(rr.x).toBeGreaterThanOrEqual(-70 - 1e-6)
+      expect(rr.y).toBeGreaterThanOrEqual(-70 - 1e-6)
+      expect(rr.x + rr.w).toBeLessThanOrEqual(70 + 1e-6)
+      expect(rr.y + rr.h).toBeLessThanOrEqual(70 + 1e-6)
+    }
+  })
+
+  it('is deterministic', () => {
+    const a = cityLayout(manyFiles, 140)
+    const b = cityLayout(manyFiles, 140)
+    expect(a.roads).toEqual(b.roads)
+  })
+
+  it('emits no roads for a single-file repo', () => {
+    expect(cityLayout([{ path: 'only.txt', weight: 1 }], 50).roads).toEqual([])
   })
 })

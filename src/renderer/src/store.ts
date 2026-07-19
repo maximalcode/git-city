@@ -13,6 +13,7 @@ import type {
   StashEntry,
   SubmoduleInfo,
   TagInfo,
+  UpdateInfo,
   WorkingStatus,
   WorktreeInfo
 } from '../../shared/types'
@@ -258,6 +259,8 @@ interface GitCityState {
   currentPr: PullRequestInfo | null
   prPanelOpen: boolean
   prLoading: boolean
+  /** a newer release found on GitHub, or null; dismissed for the session once closed */
+  update: UpdateInfo | null
   rebaseOpen: boolean
   reflogOpen: boolean
   panel: Panel
@@ -337,6 +340,8 @@ interface GitCityState {
   checkoutPr(number: number): Promise<void>
   createPr(base: string, title: string, body: string): Promise<void>
   openExternal(url: string): void
+  checkForUpdate(): Promise<void>
+  dismissUpdate(): void
   setRebaseOpen(open: boolean): void
   setReflogOpen(open: boolean): void
   createTag(name: string, ref?: string): Promise<void>
@@ -430,6 +435,7 @@ export const useStore = create<GitCityState>((set, get) => ({
   diffSplit: loadDiffSplit(),
   reduceMotion: loadReduceMotion(),
   settingsOpen: false,
+  update: null,
   onboarded: loadOnboarded(),
   helpOpen: false,
   commitDetailHash: null,
@@ -453,6 +459,8 @@ export const useStore = create<GitCityState>((set, get) => ({
       .checkGit()
       .then((v) => set({ gitVersion: v }))
       .catch(() => set({ gitVersion: null }))
+    // one-shot update check at startup (fails soft when offline)
+    void get().checkForUpdate()
   },
 
   openLocal: async () => {
@@ -707,6 +715,16 @@ export const useStore = create<GitCityState>((set, get) => ({
   openExternal: (url) => {
     if (hasApi()) void window.gitCity.openExternal(url)
   },
+  checkForUpdate: async () => {
+    if (!hasApi()) return
+    try {
+      const update = await window.gitCity.checkForUpdate()
+      if (update) set({ update })
+    } catch {
+      /* offline / rate-limited — silently skip */
+    }
+  },
+  dismissUpdate: () => set({ update: null }),
 
   setRebaseOpen: (rebaseOpen) => set({ rebaseOpen }),
   setReflogOpen: (reflogOpen) => set({ reflogOpen }),

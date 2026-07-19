@@ -348,6 +348,19 @@ export interface PullRequestInfo {
   ci: 'passing' | 'failing' | 'pending' | 'none'
 }
 
+/** A newer release found on GitHub, surfaced as an in-app update banner. */
+export interface UpdateInfo {
+  /** version without a leading "v", e.g. "0.6.0" */
+  version: string
+  /** release title */
+  name: string
+  /** release notes (markdown), truncated */
+  notes: string
+  /** the release's GitHub page (opened externally to download) */
+  url: string
+  publishedAt: string | null
+}
+
 /** Repo commit-signing configuration (read-only; keys are never handled here). */
 export interface SigningConfig {
   signByDefault: boolean
@@ -451,6 +464,10 @@ export interface GitCityApi {
   createPr(repoPath: string, base: string, title: string, body: string): Promise<OpResult>
   /** Open an external https URL in the default browser. */
   openExternal(url: string): Promise<void>
+
+  // --- app updates ---
+  /** Check GitHub Releases for a newer version; null if up to date or offline. */
+  checkForUpdate(): Promise<UpdateInfo | null>
 
   // --- submodules ---
   submodules(repoPath: string): Promise<SubmoduleInfo[]>

@@ -6,6 +6,7 @@ import EmptyRepoView from './screens/EmptyRepoView'
 import SceneView from './city/SceneView'
 import ConfirmDialog from './panels/ConfirmDialog'
 import OpErrorToast from './panels/OpErrorToast'
+import UpdateBanner from './panels/UpdateBanner'
 
 export default function App(): React.JSX.Element {
   const screen = useStore((s) => s.screen)
@@ -23,6 +24,7 @@ export default function App(): React.JSX.Element {
       {/* root-level overlays available from any screen */}
       <ConfirmDialog />
       <OpErrorToast />
+      <UpdateBanner />
     </>
   )
 }

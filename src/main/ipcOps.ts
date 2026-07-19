@@ -1,4 +1,4 @@
-import { ipcMain, shell } from 'electron'
+import { app, ipcMain, shell } from 'electron'
 import type { WebContents } from 'electron'
 import { resolve, sep } from 'path'
 import type {
@@ -33,6 +33,7 @@ import { getSigningConfig } from './git/signing'
 import { checkoutPr, createPr, currentBranchPr, ghStatus, listPullRequests } from './git/github'
 import { listSubmodules, updateSubmodules } from './git/submodules'
 import { addWorktree, listWorktrees, removeWorktree } from './git/worktrees'
+import { checkForUpdate } from './updates'
 import { readConflictFile, resolveConflictFile, resolveWholeFile } from './git/conflicts'
 import { mergeAbort, mergeBranch, mergeContinue } from './git/merge'
 import { withRepoLock } from './git/queue'
@@ -128,6 +129,8 @@ export function registerOpsIpc(): void {
     // only ever open https links (URLs come from gh's own JSON output)
     if (/^https:\/\//i.test(url)) void shell.openExternal(url)
   })
+  // app-scoped (no repo): ask GitHub Releases whether a newer version exists
+  ipcMain.handle('git-city:check-update', () => checkForUpdate(app.getVersion()))
   // PR create is network-only (no working-tree mutation); its errors already
   // come back as OpResult, so a plain handle is enough
   ipcMain.handle(

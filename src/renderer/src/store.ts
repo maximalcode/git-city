@@ -261,6 +261,9 @@ interface GitCityState {
   prLoading: boolean
   /** a newer release found on GitHub, or null; dismissed for the session once closed */
   update: UpdateInfo | null
+  /** PR being visually reviewed in the scene (its changed files glow), or null */
+  review: { number: number; title: string; paths: string[] } | null
+  reviewLoading: boolean
   /** time-lapse recording in progress */
   exporting: boolean
   /** last export error message (e.g. unsupported), shown briefly */
@@ -343,6 +346,8 @@ interface GitCityState {
   refreshGitHub(): Promise<void>
   checkoutPr(number: number): Promise<void>
   createPr(base: string, title: string, body: string): Promise<void>
+  reviewPrInCity(number: number, title: string): Promise<void>
+  clearReview(): void
   openExternal(url: string): void
   checkForUpdate(): Promise<void>
   dismissUpdate(): void
@@ -442,6 +447,8 @@ export const useStore = create<GitCityState>((set, get) => ({
   reduceMotion: loadReduceMotion(),
   settingsOpen: false,
   update: null,
+  review: null,
+  reviewLoading: false,
   exporting: false,
   exportError: null,
   onboarded: loadOnboarded(),
@@ -720,6 +727,20 @@ export const useStore = create<GitCityState>((set, get) => ({
     )
     if (!get().opError) await get().refreshGitHub()
   },
+  reviewPrInCity: async (number, title) => {
+    const { repoPath } = get()
+    if (!hasApi() || !repoPath) return
+    set({ reviewLoading: true, prPanelOpen: false })
+    try {
+      const files = await window.gitCity.pullRequestFiles(repoPath, number)
+      set({ review: { number, title, paths: files.map((f) => f.path) } })
+    } catch {
+      set({ review: null })
+    } finally {
+      set({ reviewLoading: false })
+    }
+  },
+  clearReview: () => set({ review: null }),
   openExternal: (url) => {
     if (hasApi()) void window.gitCity.openExternal(url)
   },
@@ -1039,6 +1060,8 @@ async function loadRepo(
       snapshotIndex: Math.max(0, analysis.snapshots.length - 1),
       // a commit-less repo lands on the Changes panel — the only useful next step
       panel: analysis.snapshots.length === 0 ? 'changes' : 'none',
+      review: null,
+      reviewLoading: false,
       screen: 'city'
     })
     if (hasApi()) {

@@ -28,6 +28,7 @@ export default function PullRequestsPanel(): React.JSX.Element | null {
   const checkoutPr = useStore((s) => s.checkoutPr)
   const createPr = useStore((s) => s.createPr)
   const openExternal = useStore((s) => s.openExternal)
+  const reviewPrInCity = useStore((s) => s.reviewPrInCity)
 
   const branch = status?.branch ?? null
   const [title, setTitle] = useState('')
@@ -93,6 +94,7 @@ export default function PullRequestsPanel(): React.JSX.Element | null {
                   current
                   onOpen={openExternal}
                   onCheckout={checkoutPr}
+                  onReview={reviewPrInCity}
                   busy={busy}
                 />
               </section>
@@ -151,6 +153,7 @@ export default function PullRequestsPanel(): React.JSX.Element | null {
                     current={false}
                     onOpen={openExternal}
                     onCheckout={checkoutPr}
+                    onReview={reviewPrInCity}
                     busy={busy}
                   />
                 ))}
@@ -167,12 +170,14 @@ function PrRow({
   current,
   onOpen,
   onCheckout,
+  onReview,
   busy
 }: {
   pr: PullRequestInfo
   current: boolean
   onOpen: (url: string) => void
   onCheckout: (n: number) => void
+  onReview: (n: number, title: string) => void
   busy: boolean
 }): React.JSX.Element {
   return (
@@ -192,6 +197,12 @@ function PrRow({
         <span className="pr-author">{pr.author}</span>
       </div>
       <div className="pr-actions">
+        <button
+          onClick={() => onReview(pr.number, pr.title)}
+          title="Light up this PR's files in the city"
+        >
+          Review in city
+        </button>
         {!current && (
           <button disabled={busy} onClick={() => onCheckout(pr.number)}>
             Checkout

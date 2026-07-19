@@ -117,6 +117,7 @@ export default function Hud({ snapshot, model }: Props): React.JSX.Element {
         st.setSearchOpen(false)
         st.setPrPanelOpen(false)
         st.setSettingsOpen(false)
+        st.clearReview()
         st.setPanel('none')
         st.setDiffOpen(false)
         st.setFileView('none')

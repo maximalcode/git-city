@@ -361,6 +361,13 @@ export interface UpdateInfo {
   publishedAt: string | null
 }
 
+/** One file changed by a pull request (for lighting it up in the scene). */
+export interface PrFileChange {
+  path: string
+  additions: number
+  deletions: number
+}
+
 /** Repo commit-signing configuration (read-only; keys are never handled here). */
 export interface SigningConfig {
   signByDefault: boolean
@@ -462,6 +469,8 @@ export interface GitCityApi {
   currentBranchPr(repoPath: string): Promise<PullRequestInfo | null>
   checkoutPr(repoPath: string, number: number): Promise<OpResult>
   createPr(repoPath: string, base: string, title: string, body: string): Promise<OpResult>
+  /** The files a PR changes, for highlighting them in the scene. */
+  pullRequestFiles(repoPath: string, number: number): Promise<PrFileChange[]>
   /** Open an external https URL in the default browser. */
   openExternal(url: string): Promise<void>
 

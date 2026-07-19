@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useCallback, useMemo } from 'react'
 import type { Snapshot } from '../../../shared/types'
 import { useStore } from '../store'
 import { getTheme } from './themes'
@@ -22,31 +22,38 @@ export default function CityScene({
   model,
   targets,
   snapshot,
-  hotspots = []
+  hotspots = [],
+  reviewPaths = []
 }: {
   model: CityModel
   targets: Targets
   snapshot: Snapshot
   hotspots?: string[]
+  reviewPaths?: string[]
 }): React.JSX.Element {
   const theme = getTheme(useStore((s) => s.themeId))
   const timeOfDay = useStore((s) => s.timeOfDay)
   const size = model.citySize
   const sun = sunState(timeOfDay, size)
 
-  // beacon anchors at each hotspot's rooftop
-  const beacons = useMemo<[number, number, number][]>(() => {
-    const out: [number, number, number][] = []
-    for (const p of hotspots) {
-      const i = model.indexOf.get(p)
-      if (i === undefined) continue
-      const h = targets.heights[i]
-      if (h <= 0) continue
-      const { rect } = model.layout.plots[i]
-      out.push([rect.x + rect.w / 2, h, rect.y + rect.h / 2])
-    }
-    return out
-  }, [hotspots, model, targets])
+  // beacon anchors at a set of files' rooftops (shared by hotspots + PR review)
+  const anchorsFor = useCallback(
+    (paths: string[]): [number, number, number][] => {
+      const out: [number, number, number][] = []
+      for (const p of paths) {
+        const i = model.indexOf.get(p)
+        if (i === undefined) continue
+        const h = targets.heights[i]
+        if (h <= 0) continue
+        const { rect } = model.layout.plots[i]
+        out.push([rect.x + rect.w / 2, h, rect.y + rect.h / 2])
+      }
+      return out
+    },
+    [model, targets]
+  )
+  const beacons = useMemo(() => anchorsFor(hotspots), [anchorsFor, hotspots])
+  const reviewBeacons = useMemo(() => anchorsFor(reviewPaths), [anchorsFor, reviewPaths])
 
   return (
     <group>
@@ -95,6 +102,7 @@ export default function CityScene({
       <ConstructionSites model={model} />
       <Traffic model={model} snapshot={snapshot} />
       <Hotspots anchors={beacons} />
+      <Hotspots anchors={reviewBeacons} color="#6ec8ff" />
       <Effects citySize={size} />
     </group>
   )

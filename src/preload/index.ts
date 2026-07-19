@@ -72,6 +72,7 @@ const api: GitCityApi = {
   createPr: (repoPath, base, title, body) =>
     ipcRenderer.invoke('git-city:pr-create', repoPath, base, title, body),
   openExternal: (url) => ipcRenderer.invoke('git-city:open-external', url),
+  pullRequestFiles: (repoPath, number) => ipcRenderer.invoke('git-city:pr-files', repoPath, number),
   checkForUpdate: () => ipcRenderer.invoke('git-city:check-update'),
   submodules: (repoPath) => ipcRenderer.invoke('git-city:submodules', repoPath),
   updateSubmodules: (repoPath, path) =>

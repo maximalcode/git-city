@@ -25,6 +25,7 @@ import RebasePanel from '../panels/RebasePanel'
 import ReflogPanel from '../panels/ReflogPanel'
 import PullRequestsPanel from '../panels/PullRequestsPanel'
 import SettingsPanel from '../panels/SettingsPanel'
+import ReviewBanner from '../panels/ReviewBanner'
 import TimelapseExporter from './TimelapseExporter'
 import CommandPalette from './CommandPalette'
 import Onboarding from './Onboarding'
@@ -35,6 +36,8 @@ import CommitDetailPanel from '../panels/CommitDetailPanel'
 // re-run the layout algorithms.
 const cityCache = new WeakMap<RepoAnalysis, CityModel>()
 const forestCache = new WeakMap<RepoAnalysis, ForestModel>()
+// stable empty array so "no PR under review" never churns scene props
+const EMPTY_PATHS: string[] = []
 
 function getCityModel(analysis: RepoAnalysis): CityModel {
   let m = cityCache.get(analysis)
@@ -100,6 +103,8 @@ export default function SceneView(): React.JSX.Element {
     () => (showHotspots ? computeHotspots(snapshot) : []),
     [showHotspots, snapshot]
   )
+
+  const reviewPaths = useStore((s) => s.review?.paths) ?? EMPTY_PATHS
 
   // only the active mode's model is built (lazily, cached per analysis)
   const cityModel = viewMode === 'city' ? getCityModel(analysis) : null
@@ -193,10 +198,16 @@ export default function SceneView(): React.JSX.Element {
               targets={cityTargets}
               snapshot={snapshot}
               hotspots={hotspotPaths}
+              reviewPaths={reviewPaths}
             />
           )}
           {forestModel && forestTgt && (
-            <ForestScene model={forestModel} targets={forestTgt} hotspots={hotspotPaths} />
+            <ForestScene
+              model={forestModel}
+              targets={forestTgt}
+              hotspots={hotspotPaths}
+              reviewPaths={reviewPaths}
+            />
           )}
 
           <CameraRig worldSize={size} resolveFocus={resolveFocus} maxPolarAngle={Math.PI * 0.47} />
@@ -236,6 +247,7 @@ export default function SceneView(): React.JSX.Element {
       <ReflogPanel />
       <PullRequestsPanel />
       <SettingsPanel />
+      <ReviewBanner />
       <TimelapseExporter canvasRef={canvasElRef} />
       <MergeView />
     </div>

@@ -80,6 +80,10 @@ the line count as you scrub through history.
   with rolled-up CI status, see the current branch's PR, check one out, open it
   in the browser, or create a PR for the current branch. Falls back to a clear
   hint when `gh` is missing or logged out
+- **Review a PR in the city**: pick any PR and its changed files light up with
+  blue beacons across the city/forest — see a pull request's blast radius at a
+  glance, then step the camera through each touched file. A banner names the PR
+  and counts the files; Escape (or Exit) ends the review
 - **Fresh repos welcome**: open a repository with no commits yet (a brand-new
   `git init`) and make the first commit from inside Git City — the city grows
   the moment you do. Detached HEAD is labelled clearly and a missing `git`

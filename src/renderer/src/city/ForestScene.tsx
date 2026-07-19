@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef } from 'react'
+import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import { Color, InstancedMesh, Object3D } from 'three'
 import type { ForestModel, ForestTargets } from '../layout/forest'
 import { useStore } from '../store'
@@ -29,11 +29,13 @@ const dummy = new Object3D()
 export default function ForestScene({
   model,
   targets,
-  hotspots = []
+  hotspots = [],
+  reviewPaths = []
 }: {
   model: ForestModel
   targets: ForestTargets
   hotspots?: string[]
+  reviewPaths?: string[]
 }): React.JSX.Element {
   const theme = getTheme(useStore((s) => s.themeId))
   const timeOfDay = useStore((s) => s.timeOfDay)
@@ -41,18 +43,23 @@ export default function ForestScene({
   const grass = GRASS[theme.id] ?? '#2f5227'
   const sun = sunState(timeOfDay, size)
 
-  // beacon anchors floating over each hotspot tree's canopy
-  const beacons = useMemo<[number, number, number][]>(() => {
-    const out: [number, number, number][] = []
-    for (const p of hotspots) {
-      const i = model.indexOf.get(p)
-      if (i === undefined) continue
-      const s = targets.scales[i]
-      if (s <= 0) continue
-      out.push([model.positions[i * 3], 3.4 * s + 1, model.positions[i * 3 + 2]])
-    }
-    return out
-  }, [hotspots, model, targets])
+  // beacon anchors floating over a set of trees' canopies (hotspots + PR review)
+  const anchorsFor = useCallback(
+    (paths: string[]): [number, number, number][] => {
+      const out: [number, number, number][] = []
+      for (const p of paths) {
+        const i = model.indexOf.get(p)
+        if (i === undefined) continue
+        const s = targets.scales[i]
+        if (s <= 0) continue
+        out.push([model.positions[i * 3], 3.4 * s + 1, model.positions[i * 3 + 2]])
+      }
+      return out
+    },
+    [model, targets]
+  )
+  const beacons = useMemo(() => anchorsFor(hotspots), [anchorsFor, hotspots])
+  const reviewBeacons = useMemo(() => anchorsFor(reviewPaths), [anchorsFor, reviewPaths])
 
   return (
     <group>
@@ -91,6 +98,7 @@ export default function ForestScene({
       <GrovePatches model={model} grass={grass} />
       <Trees model={model} targets={targets} />
       <Hotspots anchors={beacons} />
+      <Hotspots anchors={reviewBeacons} color="#6ec8ff" />
       <Effects citySize={size} />
     </group>
   )

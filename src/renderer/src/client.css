@@ -2469,3 +2469,65 @@
   border-color: rgba(255, 107, 107, 0.4);
   color: var(--danger);
 }
+
+/* ---------- v17: PR review in the city ---------- */
+.review-banner {
+  position: fixed;
+  top: 56px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 55;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px 7px 13px;
+  max-width: 70vw;
+  background: var(--panel);
+  border: 1px solid rgba(110, 200, 255, 0.4);
+  border-radius: 10px;
+  backdrop-filter: blur(14px);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+  font-size: 13px;
+  color: var(--text);
+}
+.review-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent-2);
+  box-shadow: 0 0 8px var(--accent-2);
+  flex: none;
+}
+.review-text strong {
+  color: var(--accent-2);
+}
+.review-title {
+  color: var(--text-dim);
+  max-width: 32ch;
+  display: inline-block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+.review-count {
+  color: var(--text-dim);
+  font-family: Consolas, monospace;
+  white-space: nowrap;
+}
+.review-step {
+  display: inline-flex;
+  gap: 2px;
+}
+.review-step button,
+.review-exit {
+  padding: 3px 9px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--panel-border);
+  color: var(--text);
+  cursor: pointer;
+}
+.review-exit {
+  color: var(--accent-2);
+}

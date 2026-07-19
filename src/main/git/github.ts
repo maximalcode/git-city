@@ -1,5 +1,5 @@
 import { spawn } from 'child_process'
-import type { GitHubAuth, OpResult, PullRequestInfo } from '../../shared/types'
+import type { GitHubAuth, OpResult, PrFileChange, PullRequestInfo } from '../../shared/types'
 
 /**
  * GitHub integration via the `gh` CLI — zero extra auth setup: gh already holds
@@ -151,6 +151,38 @@ export async function currentBranchPr(repoPath: string): Promise<PullRequestInfo
   } catch {
     return null
   }
+}
+
+interface RawPrFile {
+  path?: string
+  additions?: number
+  deletions?: number
+}
+
+/** Pure: map `gh pr view --json files` output to changed-file records. */
+export function parsePrFiles(stdout: string): PrFileChange[] {
+  try {
+    const parsed = JSON.parse(stdout) as { files?: RawPrFile[] }
+    const files = Array.isArray(parsed.files) ? parsed.files : []
+    return files
+      .filter(
+        (f): f is RawPrFile & { path: string } => typeof f.path === 'string' && f.path.length > 0
+      )
+      .map((f) => ({
+        path: f.path,
+        additions: typeof f.additions === 'number' ? f.additions : 0,
+        deletions: typeof f.deletions === 'number' ? f.deletions : 0
+      }))
+  } catch {
+    return []
+  }
+}
+
+/** The files a PR changes, for lighting them up in the city/forest. */
+export async function pullRequestFiles(repoPath: string, number: number): Promise<PrFileChange[]> {
+  const res = await runGh(repoPath, ['pr', 'view', String(number), '--json', 'files'])
+  if (res.code !== 0) return []
+  return parsePrFiles(res.stdout)
 }
 
 function fail(res: GhResult, fallback: string): OpResult {

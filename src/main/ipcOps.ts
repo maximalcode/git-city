@@ -30,7 +30,14 @@ import { getRebaseTodo, runInteractiveRebase } from './git/rebaseInteractive'
 import { createBranch, deleteBranch, listBranches, switchBranch } from './git/branches'
 import { commit, getLastCommitMessage } from './git/commit'
 import { getSigningConfig } from './git/signing'
-import { checkoutPr, createPr, currentBranchPr, ghStatus, listPullRequests } from './git/github'
+import {
+  checkoutPr,
+  createPr,
+  currentBranchPr,
+  ghStatus,
+  listPullRequests,
+  pullRequestFiles
+} from './git/github'
 import { listSubmodules, updateSubmodules } from './git/submodules'
 import { addWorktree, listWorktrees, removeWorktree } from './git/worktrees'
 import { checkForUpdate } from './updates'
@@ -125,6 +132,7 @@ export function registerOpsIpc(): void {
   readOnly('gh-status', (repo) => ghStatus(repo))
   readOnly('pr-list', (repo) => listPullRequests(repo))
   readOnly('pr-current', (repo) => currentBranchPr(repo))
+  readOnly('pr-files', (repo, number: number) => pullRequestFiles(repo, number))
   ipcMain.handle('git-city:open-external', (_e, url: string) => {
     // only ever open https links (URLs come from gh's own JSON output)
     if (/^https:\/\//i.test(url)) void shell.openExternal(url)

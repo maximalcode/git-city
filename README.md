@@ -93,6 +93,10 @@ the line count as you scrub through history.
   version exists and, if so, shows an unobtrusive banner linking to the
   download. No token, no background download, no telemetry — you stay in
   control of installing (there is also a manual check in Settings)
+- **Time-lapse export**: the record button (top bar) replays the whole history
+  while capturing the canvas to a **WebM video** you can share — your repo
+  growing from first commit to now, in ~10 seconds. Uses the browser's own
+  MediaRecorder, so no new dependency
 
 **Keyboard shortcuts**
 

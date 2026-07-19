@@ -261,6 +261,10 @@ interface GitCityState {
   prLoading: boolean
   /** a newer release found on GitHub, or null; dismissed for the session once closed */
   update: UpdateInfo | null
+  /** time-lapse recording in progress */
+  exporting: boolean
+  /** last export error message (e.g. unsupported), shown briefly */
+  exportError: string | null
   rebaseOpen: boolean
   reflogOpen: boolean
   panel: Panel
@@ -342,6 +346,8 @@ interface GitCityState {
   openExternal(url: string): void
   checkForUpdate(): Promise<void>
   dismissUpdate(): void
+  startExport(): void
+  endExport(error?: string | null): void
   setRebaseOpen(open: boolean): void
   setReflogOpen(open: boolean): void
   createTag(name: string, ref?: string): Promise<void>
@@ -436,6 +442,8 @@ export const useStore = create<GitCityState>((set, get) => ({
   reduceMotion: loadReduceMotion(),
   settingsOpen: false,
   update: null,
+  exporting: false,
+  exportError: null,
   onboarded: loadOnboarded(),
   helpOpen: false,
   commitDetailHash: null,
@@ -725,6 +733,10 @@ export const useStore = create<GitCityState>((set, get) => ({
     }
   },
   dismissUpdate: () => set({ update: null }),
+  startExport: () => {
+    if (!get().exporting) set({ exporting: true, exportError: null })
+  },
+  endExport: (error = null) => set({ exporting: false, exportError: error }),
 
   setRebaseOpen: (rebaseOpen) => set({ rebaseOpen }),
   setReflogOpen: (reflogOpen) => set({ reflogOpen }),

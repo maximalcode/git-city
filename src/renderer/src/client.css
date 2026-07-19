@@ -130,8 +130,8 @@
 /* ---------- legend ---------- */
 .legend {
   position: absolute;
-  left: 16px;
-  bottom: 92px;
+  right: 16px;
+  bottom: 96px;
   min-width: 150px;
   max-width: 230px;
   padding: 10px 12px;
@@ -241,7 +241,7 @@
 .side-panel {
   position: absolute;
   top: 60px;
-  left: 16px;
+  left: 72px;
   bottom: 96px;
   width: 340px;
   background: var(--panel);
@@ -1398,4 +1398,172 @@
   padding: 2px 10px;
   font-size: 11.5px;
   white-space: nowrap;
+}
+
+/* ---------- left tool rail (v7 HUD) ---------- */
+.side-rail {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 60px;
+  z-index: 22;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 12px 0;
+  background: linear-gradient(180deg, rgba(11, 14, 20, 0.94), rgba(11, 14, 20, 0.72));
+  border-right: 1px solid var(--panel-border);
+}
+.rail-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.rail-divider {
+  width: 30px;
+  height: 1px;
+  background: var(--panel-border);
+  margin: 7px 0;
+}
+.rail-btn {
+  position: relative;
+  width: 46px;
+  height: 44px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  border: 1px solid transparent;
+  border-radius: 11px;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease,
+    border-color 0.15s ease;
+}
+.rail-btn .rail-label {
+  font-size: 9.5px;
+  letter-spacing: 0.01em;
+}
+.rail-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+}
+.rail-btn.active {
+  background: rgba(255, 179, 71, 0.14);
+  border-color: rgba(255, 179, 71, 0.34);
+  color: var(--accent);
+}
+.rail-badge {
+  position: absolute;
+  top: 2px;
+  right: 6px;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 3px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #241503;
+  font-size: 10px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ---------- top bar: three zones, clear of the rail ---------- */
+.hud-top {
+  left: 60px;
+  gap: 12px;
+}
+.hud-top > .hud-zone {
+  pointer-events: none;
+}
+.hud-zone {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.hud-center {
+  flex: 1;
+  justify-content: center;
+}
+.hud-zone button,
+.hud-zone .sync-segment,
+.hud-zone .picker,
+.hud-zone .op-spinner,
+.hud-zone .op-badge,
+.hud-zone .ab-badge {
+  pointer-events: auto;
+}
+.branch-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.branch-chip svg {
+  color: var(--text-dim);
+}
+.branch-chip.active,
+.branch-chip.active svg {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+}
+
+/* segmented Fetch · Pull · Push, Push accented as the primary action */
+.sync-segment {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--panel-border);
+  border-radius: 9px;
+  overflow: hidden;
+}
+.sync-segment button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  border-right: 1px solid var(--panel-border);
+  border-radius: 0;
+  padding: 6px 12px;
+  font-size: 12.5px;
+  background: rgba(255, 255, 255, 0.03);
+}
+.sync-segment button svg {
+  color: var(--text-dim);
+}
+.sync-segment button:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.09);
+}
+.sync-segment button.primary {
+  background: var(--accent);
+  color: #1a1205;
+  font-weight: 600;
+  border-right: 0;
+}
+.sync-segment button.primary svg {
+  color: #1a1205;
+}
+.sync-segment button.primary:hover:not(:disabled) {
+  background: #ffc46a;
+}
+
+/* timeline clears the rail on the left */
+.hud-bottom {
+  padding-left: 76px;
 }

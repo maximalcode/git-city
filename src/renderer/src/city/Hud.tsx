@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Snapshot } from '../../../shared/types'
 import { languageOf } from '../lib/languages'
 import { useHotkeys } from '../lib/useHotkeys'
@@ -48,9 +48,47 @@ export default function Hud({ snapshot, model }: Props): React.JSX.Element {
   const push = useStore((s) => s.push)
   const cancelOp = useStore((s) => s.cancelOp)
   const refreshAnalysis = useStore((s) => s.refreshAnalysis)
+  const timeOfDay = useStore((s) => s.timeOfDay)
+  const setTimeOfDay = useStore((s) => s.setTimeOfDay)
+  const setHelpOpen = useStore((s) => s.setHelpOpen)
   const modalOpen = useStore((s) => s.confirm !== null || s.mergeView !== null)
 
   const byPath = useMemo(() => new Map(snapshot.files.map((f) => [f.path, f])), [snapshot])
+
+  // Ctrl/Cmd-K toggles the command palette. Handled outside useHotkeys because
+  // that hook deliberately ignores modifier combos.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        const st = useStore.getState()
+        st.setPaletteOpen(!st.paletteOpen)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
+  // hover tooltip follows the cursor; positioned imperatively so pointer moves
+  // don't re-render the HUD
+  const tooltipRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const onMove = (e: PointerEvent): void => {
+      const el = tooltipRef.current
+      if (!el) return
+      const pad = 14
+      const w = el.offsetWidth
+      const h = el.offsetHeight
+      let x = e.clientX + 18
+      let y = e.clientY + 18
+      if (x + w + pad > window.innerWidth) x = e.clientX - w - 18
+      if (y + h + pad > window.innerHeight) y = e.clientY - h - 18
+      el.style.left = `${Math.max(pad, x)}px`
+      el.style.top = `${Math.max(pad, y)}px`
+    }
+    window.addEventListener('pointermove', onMove)
+    return () => window.removeEventListener('pointermove', onMove)
+  }, [])
 
   const hotkeys = useMemo(
     () => ({
@@ -70,6 +108,8 @@ export default function Hud({ snapshot, model }: Props): React.JSX.Element {
       },
       escape: () => {
         const st = useStore.getState()
+        st.setPaletteOpen(false)
+        st.setHelpOpen(false)
         st.setSearchOpen(false)
         st.setPanel('none')
         st.setDiffOpen(false)
@@ -174,6 +214,15 @@ export default function Hud({ snapshot, model }: Props): React.JSX.Element {
           <ViewPicker viewMode={viewMode} setViewMode={setViewMode} />
           <ColorModePicker colorMode={colorMode} setColorMode={setColorMode} />
           <ThemePicker themeId={themeId} setTheme={setTheme} />
+          <TimeOfDayControl timeOfDay={timeOfDay} setTimeOfDay={setTimeOfDay} />
+          <button
+            className="icon-btn"
+            onClick={() => setHelpOpen(true)}
+            title="What am I looking at? (encoding guide)"
+            aria-label="Show the encoding guide"
+          >
+            <Icon name="help" size={16} />
+          </button>
           <button
             className="icon-btn"
             onClick={backToWelcome}
@@ -185,13 +234,30 @@ export default function Hud({ snapshot, model }: Props): React.JSX.Element {
         </div>
       </div>
 
+      {playing && (
+        <div className="playhead">
+          <span className="playhead-hash">{snapshot.hash.slice(0, 7)}</span>
+          <span className="playhead-msg" title={snapshot.message}>
+            {snapshot.message}
+          </span>
+          <span className="playhead-meta">
+            {snapshot.author} · {formatDate(snapshot.date)} · commit {snapshot.index + 1}/
+            {analysis.info.commitCount.toLocaleString()}
+          </span>
+        </div>
+      )}
+
       {hoveredFile && hovered !== selected && (
-        <div className="tooltip" style={{ left: 72, bottom: 96 }}>
+        <div className="tooltip" ref={tooltipRef} style={{ left: -9999, top: -9999 }}>
           <div className="path">{hoveredFile.path}</div>
           <div className="meta">
             {languageOf(hoveredFile.path).name} · {hoveredFile.loc.toLocaleString()} lines ·{' '}
             {hoveredFile.commits} commit{hoveredFile.commits === 1 ? '' : 's'}
           </div>
+          <div className="meta">
+            {hoveredFile.lastAuthor} · {formatDate(hoveredFile.lastTouched)}
+          </div>
+          <div className="tooltip-hint">double-click to diff</div>
         </div>
       )}
 
@@ -286,6 +352,70 @@ export default function Hud({ snapshot, model }: Props): React.JSX.Element {
         </div>
       </div>
     </>
+  )
+}
+
+function timeLabel(t: number): string {
+  if (t < 0.12 || t >= 0.9) return 'Night'
+  if (t < 0.33) return 'Dawn'
+  if (t < 0.6) return 'Midday'
+  if (t < 0.8) return 'Dusk'
+  return 'Evening'
+}
+
+/** Sun button that opens a little popover with a time-of-day slider. */
+function TimeOfDayControl({
+  timeOfDay,
+  setTimeOfDay
+}: {
+  timeOfDay: number
+  setTimeOfDay: (t: number) => void
+}): React.JSX.Element {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const onDown = (e: MouseEvent): void => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    window.addEventListener('mousedown', onDown)
+    return () => window.removeEventListener('mousedown', onDown)
+  }, [open])
+
+  return (
+    <div className="tod" ref={ref}>
+      <button
+        className={`icon-btn${open ? ' active' : ''}`}
+        onClick={() => setOpen((o) => !o)}
+        title="Time of day"
+        aria-label="Time of day"
+      >
+        <Icon name="sun" size={16} />
+      </button>
+      {open && (
+        <div className="tod-popover">
+          <div className="tod-head">
+            <Icon name="sun" size={14} />
+            <span>{timeLabel(timeOfDay)}</span>
+          </div>
+          <input
+            type="range"
+            min={0}
+            max={1}
+            step={0.01}
+            value={timeOfDay}
+            onChange={(e) => setTimeOfDay(Number(e.target.value))}
+            aria-label="Time of day"
+          />
+          <div className="tod-ends">
+            <span>Night</span>
+            <span>Noon</span>
+            <span>Night</span>
+          </div>
+        </div>
+      )}
+    </div>
   )
 }
 

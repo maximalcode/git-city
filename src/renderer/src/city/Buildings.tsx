@@ -21,6 +21,7 @@ export default function Buildings({ model, targets }: Props): React.JSX.Element 
   const meshRef = useRef<InstancedMesh>(null!)
   const setHovered = useStore((s) => s.setHovered)
   const setSelected = useStore((s) => s.setSelected)
+  const setDiffOpen = useStore((s) => s.setDiffOpen)
   const theme = getTheme(useStore((s) => s.themeId))
   const { material, win } = useMemo(() => createBuildingMaterial(), [])
 
@@ -119,6 +120,15 @@ export default function Buildings({ model, targets }: Props): React.JSX.Element 
     setSelected(model.paths[id])
   }
 
+  // double-click jumps straight into the file's diff (single click still selects)
+  const onDoubleClick = (e: ThreeEvent<MouseEvent>): void => {
+    e.stopPropagation()
+    const id = e.instanceId
+    if (id === undefined || anim.heights[id] < MIN_VISIBLE) return
+    setSelected(model.paths[id])
+    setDiffOpen(true)
+  }
+
   return (
     <instancedMesh
       key={n} // remount when building count changes (new repo)
@@ -130,6 +140,7 @@ export default function Buildings({ model, targets }: Props): React.JSX.Element 
       onPointerMove={onMove}
       onPointerOut={() => setHovered(null)}
       onClick={onClick}
+      onDoubleClick={onDoubleClick}
       material={material}
     >
       <boxGeometry />

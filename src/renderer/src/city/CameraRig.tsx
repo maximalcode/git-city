@@ -3,6 +3,7 @@ import { useFrame, useThree } from '@react-three/fiber'
 import { Vector3 } from 'three'
 import { MapControls } from 'three/examples/jsm/controls/MapControls.js'
 import { useStore } from '../store'
+import { cameraHeading } from '../lib/cameraHeading'
 
 const UP = new Vector3(0, 1, 0)
 const offsetScratch = new Vector3() // reused every frame during the intro orbit
@@ -113,6 +114,12 @@ export default function CameraRig({
       }
     }
     controls.update()
+
+    // publish the view target + horizontal look direction for the minimap/compass
+    cameraHeading.tx = controls.target.x
+    cameraHeading.tz = controls.target.z
+    cameraHeading.dx = controls.target.x - camera.position.x
+    cameraHeading.dz = controls.target.z - camera.position.z
   })
 
   return null

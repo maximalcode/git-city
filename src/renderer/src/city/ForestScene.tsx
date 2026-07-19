@@ -3,9 +3,11 @@ import { Color, InstancedMesh, Object3D } from 'three'
 import type { ForestModel, ForestTargets } from '../layout/forest'
 import { useStore } from '../store'
 import { getTheme } from './themes'
+import { sunState } from '../lib/daylight'
 import Effects from './Effects'
 import SkyDome from './SkyDome'
 import Trees from './Trees'
+import Hotspots from './Hotspots'
 
 /** Grass tone per theme (trees stand on green ground whatever the sky does). */
 const GRASS: Record<string, string> = {
@@ -26,14 +28,31 @@ const dummy = new Object3D()
  */
 export default function ForestScene({
   model,
-  targets
+  targets,
+  hotspots = []
 }: {
   model: ForestModel
   targets: ForestTargets
+  hotspots?: string[]
 }): React.JSX.Element {
   const theme = getTheme(useStore((s) => s.themeId))
+  const timeOfDay = useStore((s) => s.timeOfDay)
   const size = model.worldSize
   const grass = GRASS[theme.id] ?? '#2f5227'
+  const sun = sunState(timeOfDay, size)
+
+  // beacon anchors floating over each hotspot tree's canopy
+  const beacons = useMemo<[number, number, number][]>(() => {
+    const out: [number, number, number][] = []
+    for (const p of hotspots) {
+      const i = model.indexOf.get(p)
+      if (i === undefined) continue
+      const s = targets.scales[i]
+      if (s <= 0) continue
+      out.push([model.positions[i * 3], 3.4 * s + 1, model.positions[i * 3 + 2]])
+    }
+    return out
+  }, [hotspots, model, targets])
 
   return (
     <group>
@@ -42,11 +61,11 @@ export default function ForestScene({
       )}
 
       <hemisphereLight
-        args={[theme.hemisphere.sky, grass, theme.hemisphere.intensity + 0.1]}
+        args={[theme.hemisphere.sky, grass, (theme.hemisphere.intensity + 0.1) * sun.ambientFactor]}
       />
       <directionalLight
-        position={[size * 0.7, size * 1.1, size * 0.4]}
-        intensity={theme.dirMain.intensity}
+        position={sun.position}
+        intensity={theme.dirMain.intensity * sun.keyFactor}
         color={theme.dirMain.color}
         castShadow
         shadow-mapSize={[2048, 2048]}
@@ -71,6 +90,7 @@ export default function ForestScene({
 
       <GrovePatches model={model} grass={grass} />
       <Trees model={model} targets={targets} />
+      <Hotspots anchors={beacons} />
       <Effects citySize={size} />
     </group>
   )
@@ -84,10 +104,7 @@ function GrovePatches({
   model: ForestModel
   grass: string
 }): React.JSX.Element | null {
-  const patches = useMemo(
-    () => model.layout.districts.filter((d) => d.depth <= 2),
-    [model]
-  )
+  const patches = useMemo(() => model.layout.districts.filter((d) => d.depth <= 2), [model])
   const ref = useRef<InstancedMesh>(null!)
 
   useLayoutEffect(() => {

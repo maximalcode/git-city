@@ -51,6 +51,56 @@ function saveViewMode(mode: ViewMode): void {
   }
 }
 
+const TOD_KEY = 'gitcity.tod'
+function loadTimeOfDay(): number {
+  try {
+    const raw = localStorage.getItem(TOD_KEY)
+    const n = raw == null ? NaN : Number(raw)
+    return Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : 0.5
+  } catch {
+    return 0.5
+  }
+}
+function saveTimeOfDay(t: number): void {
+  try {
+    localStorage.setItem(TOD_KEY, String(t))
+  } catch {
+    /* ignore */
+  }
+}
+
+const HOTSPOTS_KEY = 'gitcity.hotspots'
+function loadShowHotspots(): boolean {
+  try {
+    return localStorage.getItem(HOTSPOTS_KEY) !== 'off'
+  } catch {
+    return true
+  }
+}
+function saveShowHotspots(on: boolean): void {
+  try {
+    localStorage.setItem(HOTSPOTS_KEY, on ? 'on' : 'off')
+  } catch {
+    /* ignore */
+  }
+}
+
+const ONBOARD_KEY = 'gitcity.onboarded'
+function loadOnboarded(): boolean {
+  try {
+    return localStorage.getItem(ONBOARD_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+function saveOnboarded(): void {
+  try {
+    localStorage.setItem(ONBOARD_KEY, '1')
+  } catch {
+    /* ignore */
+  }
+}
+
 const RECENT_KEY = 'gitcity.recent'
 const RECENT_MAX = 8
 function loadRecent(): string[] {
@@ -120,7 +170,9 @@ const REPO_STATE_RESET: Partial<GitCityState> = {
   diffOpen: false,
   diffRev: null,
   fileView: 'none',
-  graphOpen: false
+  graphOpen: false,
+  paletteOpen: false,
+  helpOpen: false
 }
 
 /** Cheap fingerprint so identical statuses (editor atomic-save churn) don't re-render.
@@ -170,6 +222,16 @@ interface GitCityState {
   diffRev: string | null
   fileView: 'none' | 'history' | 'blame'
   graphOpen: boolean
+  /** command palette (Ctrl/Cmd-K) overlay */
+  paletteOpen: boolean
+  /** time-of-day for the sun, 0..1 (0/1 = midnight, 0.5 = noon); global pref */
+  timeOfDay: number
+  /** pulse the repo's current hotspots (most-churned recent files); global pref */
+  showHotspots: boolean
+  /** whether the first-run "what am I seeing?" overlay has been dismissed */
+  onboarded: boolean
+  /** transient: the encoding guide re-opened from the "?" button */
+  helpOpen: boolean
 
   init(): void
   openLocal(): Promise<void>
@@ -187,6 +249,11 @@ interface GitCityState {
   setDiffOpen(open: boolean, rev?: string): void
   setFileView(view: 'none' | 'history' | 'blame'): void
   setGraphOpen(open: boolean): void
+  setPaletteOpen(open: boolean): void
+  setTimeOfDay(t: number): void
+  toggleHotspots(): void
+  dismissOnboarding(): void
+  setHelpOpen(open: boolean): void
   backToWelcome(): void
 
   // live actions
@@ -275,6 +342,11 @@ export const useStore = create<GitCityState>((set, get) => ({
   diffRev: null,
   fileView: 'none',
   graphOpen: false,
+  paletteOpen: false,
+  timeOfDay: loadTimeOfDay(),
+  showHotspots: loadShowHotspots(),
+  onboarded: loadOnboarded(),
+  helpOpen: false,
 
   init: () => {
     // absent when the renderer runs in a plain browser (vite preview) instead of Electron
@@ -360,6 +432,22 @@ export const useStore = create<GitCityState>((set, get) => ({
   setFileView: (fileView) =>
     set({ fileView, diffOpen: fileView !== 'none' ? false : get().diffOpen }),
   setGraphOpen: (graphOpen) => set({ graphOpen }),
+  setPaletteOpen: (paletteOpen) => set({ paletteOpen }),
+  setTimeOfDay: (t) => {
+    const timeOfDay = Math.min(1, Math.max(0, t))
+    saveTimeOfDay(timeOfDay)
+    set({ timeOfDay })
+  },
+  toggleHotspots: () => {
+    const showHotspots = !get().showHotspots
+    saveShowHotspots(showHotspots)
+    set({ showHotspots })
+  },
+  dismissOnboarding: () => {
+    saveOnboarded()
+    set({ onboarded: true, helpOpen: false })
+  },
+  setHelpOpen: (helpOpen) => set({ helpOpen }),
   backToWelcome: () => {
     if (hasApi()) void window.gitCity.watchStop()
     lastFingerprint = ''

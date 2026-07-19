@@ -1,8 +1,11 @@
+import { useMemo } from 'react'
 import type { Snapshot } from '../../../shared/types'
 import { useStore } from '../store'
 import { getTheme } from './themes'
+import { sunState } from '../lib/daylight'
 import type { CityModel, Targets } from './cityData'
 import Buildings from './Buildings'
+import Hotspots from './Hotspots'
 import Districts from './Districts'
 import Roads from './Roads'
 import StreetLife from './StreetLife'
@@ -18,14 +21,32 @@ import Traffic from './Traffic'
 export default function CityScene({
   model,
   targets,
-  snapshot
+  snapshot,
+  hotspots = []
 }: {
   model: CityModel
   targets: Targets
   snapshot: Snapshot
+  hotspots?: string[]
 }): React.JSX.Element {
   const theme = getTheme(useStore((s) => s.themeId))
+  const timeOfDay = useStore((s) => s.timeOfDay)
   const size = model.citySize
+  const sun = sunState(timeOfDay, size)
+
+  // beacon anchors at each hotspot's rooftop
+  const beacons = useMemo<[number, number, number][]>(() => {
+    const out: [number, number, number][] = []
+    for (const p of hotspots) {
+      const i = model.indexOf.get(p)
+      if (i === undefined) continue
+      const h = targets.heights[i]
+      if (h <= 0) continue
+      const { rect } = model.layout.plots[i]
+      out.push([rect.x + rect.w / 2, h, rect.y + rect.h / 2])
+    }
+    return out
+  }, [hotspots, model, targets])
 
   return (
     <group>
@@ -34,11 +55,15 @@ export default function CityScene({
       )}
 
       <hemisphereLight
-        args={[theme.hemisphere.sky, theme.hemisphere.ground, theme.hemisphere.intensity]}
+        args={[
+          theme.hemisphere.sky,
+          theme.hemisphere.ground,
+          theme.hemisphere.intensity * sun.ambientFactor
+        ]}
       />
       <directionalLight
-        position={[size * 0.7, size * 1.1, size * 0.4]}
-        intensity={theme.dirMain.intensity}
+        position={sun.position}
+        intensity={theme.dirMain.intensity * sun.keyFactor}
         color={theme.dirMain.color}
         castShadow
         shadow-mapSize={[2048, 2048]}
@@ -69,6 +94,7 @@ export default function CityScene({
       <StatusOverlay model={model} targets={targets} />
       <ConstructionSites model={model} />
       <Traffic model={model} snapshot={snapshot} />
+      <Hotspots anchors={beacons} />
       <Effects citySize={size} />
     </group>
   )

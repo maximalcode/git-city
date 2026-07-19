@@ -6,6 +6,7 @@ import CameraRig from './CameraRig'
 import SceneBoundary from '../lib/SceneBoundary'
 import { useStore } from '../store'
 import { playStepMs } from '../lib/playback'
+import { hotspots as computeHotspots } from '../lib/hotspots'
 import { getTheme } from './themes'
 import { buildCityModel, snapshotTargets, type CityModel } from './cityData'
 import { buildForestModel, forestTargets, type ForestModel } from '../layout/forest'
@@ -22,6 +23,9 @@ import FileHistoryPanel from '../panels/FileHistoryPanel'
 import CommitGraphPanel from '../panels/CommitGraphPanel'
 import RebasePanel from '../panels/RebasePanel'
 import ReflogPanel from '../panels/ReflogPanel'
+import CommandPalette from './CommandPalette'
+import Onboarding from './Onboarding'
+import Minimap from './Minimap'
 
 // Per-analysis model caches: toggling the view mode back and forth must not
 // re-run the layout algorithms.
@@ -59,6 +63,7 @@ export default function SceneView(): React.JSX.Element {
   const theme = getTheme(themeId)
   const playing = useStore((s) => s.playing)
   const viewMode = useStore((s) => s.viewMode)
+  const showHotspots = useStore((s) => s.showHotspots)
 
   // A lost/hung WebGL context (driver reset, GPU pressure after many scene
   // rebuilds) freezes the canvas silently — a React error boundary can't catch
@@ -83,6 +88,11 @@ export default function SceneView(): React.JSX.Element {
   }
 
   const snapshot = analysis.snapshots[Math.min(snapshotIndex, analysis.snapshots.length - 1)]
+
+  const hotspotPaths = useMemo(
+    () => (showHotspots ? computeHotspots(snapshot) : []),
+    [showHotspots, snapshot]
+  )
 
   // only the active mode's model is built (lazily, cached per analysis)
   const cityModel = viewMode === 'city' ? getCityModel(analysis) : null
@@ -171,9 +181,16 @@ export default function SceneView(): React.JSX.Element {
           <fog attach="fog" args={[bg, size * theme.fog.near, size * theme.fog.far]} />
 
           {cityModel && cityTargets && (
-            <CityScene model={cityModel} targets={cityTargets} snapshot={snapshot} />
+            <CityScene
+              model={cityModel}
+              targets={cityTargets}
+              snapshot={snapshot}
+              hotspots={hotspotPaths}
+            />
           )}
-          {forestModel && forestTgt && <ForestScene model={forestModel} targets={forestTgt} />}
+          {forestModel && forestTgt && (
+            <ForestScene model={forestModel} targets={forestTgt} hotspots={hotspotPaths} />
+          )}
 
           <CameraRig worldSize={size} resolveFocus={resolveFocus} maxPolarAngle={Math.PI * 0.47} />
 
@@ -198,6 +215,9 @@ export default function SceneView(): React.JSX.Element {
       </SceneBoundary>
 
       <Hud snapshot={snapshot} model={hudModel} />
+      <Minimap model={cityModel ?? forestModel!} viewMode={viewMode} />
+      <CommandPalette model={hudModel} />
+      <Onboarding />
       <ChangesPanel />
       <BranchesPanel />
       <StashPanel />

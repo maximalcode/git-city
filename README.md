@@ -34,6 +34,20 @@ the line count as you scrub through history.
   with an always-visible legend explaining the encoding, identical in both
   view modes
 - Camera fly-to on selection, cinematic intro orbit
+- **Command palette** (`Ctrl`/`Cmd`+`K`): fuzzy-search every action and jump to
+  any file (camera flies there), switch branch, pop a stash, change view / theme
+  / colour — all from one box
+- **Orientation minimap** with a compass marker tracking the camera, so big
+  repos never lose you (north up)
+- **Time-of-day** control decoupled from the theme — drag the sun from night
+  through noon to dusk; the key light and shadows move with it
+- **Activity hotspots**: the files churning most this week pulse with a glowing
+  beacon over their rooftop / canopy
+- **First-run guide** explaining the height / colour / shape encoding, re-openable
+  any time from the `?` button
+- Hover any file for a cursor-following tooltip (language, size, commits, last
+  author + date); **double-click** it to jump straight into its diff
+- A **now-playing** commit banner during history playback (message, author, date)
 
 **Git client**
 
@@ -55,8 +69,9 @@ the line count as you scrub through history.
 
 **Keyboard shortcuts**
 
-| Key      | Action                         |
-| -------- | ------------------------------ |
+| Key           | Action                         |
+| ------------- | ------------------------------ |
+| `Ctrl`/`Cmd`+`K` | Command palette             |
 | `C`      | Changes panel                  |
 | `B`      | Branches panel                 |
 | `S`      | Stashes panel                  |

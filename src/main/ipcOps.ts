@@ -2,6 +2,7 @@ import { ipcMain, shell } from 'electron'
 import type { WebContents } from 'electron'
 import { resolve, sep } from 'path'
 import type {
+  CommitSearchScope,
   HunkMode,
   OpResult,
   ProgressInfo,
@@ -22,6 +23,7 @@ import { getFileDiff } from './git/diff'
 import { applyHunk, getFileHunks } from './git/hunks'
 import { commitGraph } from './git/graph'
 import { blameFile, fileHistory } from './git/history'
+import { commitDetail, grepWorkingTree, searchCommits } from './git/search'
 import { getReflog, recoverToBranch, resetTo } from './git/reflog'
 import { createTag, deleteTag, listTags } from './git/tags'
 import { getRebaseTodo, runInteractiveRebase } from './git/rebaseInteractive'
@@ -120,6 +122,11 @@ export function registerOpsIpc(): void {
   readOnly('file-history', (repo, path: string) => fileHistory(repo, path))
   readOnly('blame', (repo, path: string, rev?: string) => blameFile(repo, path, rev))
   readOnly('commit-graph', (repo, limit?: number) => commitGraph(repo, limit ?? 500))
+  readOnly('search-commits', (repo, query: string, scope: CommitSearchScope) =>
+    searchCommits(repo, query, scope)
+  )
+  readOnly('grep-tree', (repo, query: string) => grepWorkingTree(repo, query))
+  readOnly('commit-detail', (repo, hash: string) => commitDetail(repo, hash))
   readOnly('reflog', (repo, limit?: number) => getReflog(repo, limit ?? 100))
   readOnly('tags', (repo) => listTags(repo))
   readOnly('rebase-todo', (repo, count: number) => getRebaseTodo(repo, count))

@@ -26,6 +26,7 @@ import ReflogPanel from '../panels/ReflogPanel'
 import CommandPalette from './CommandPalette'
 import Onboarding from './Onboarding'
 import Minimap from './Minimap'
+import CommitDetailPanel from '../panels/CommitDetailPanel'
 
 // Per-analysis model caches: toggling the view mode back and forth must not
 // re-run the layout algorithms.
@@ -217,6 +218,7 @@ export default function SceneView(): React.JSX.Element {
       <Hud snapshot={snapshot} model={hudModel} />
       <Minimap model={cityModel ?? forestModel!} viewMode={viewMode} />
       <CommandPalette model={hudModel} />
+      <CommitDetailPanel />
       <Onboarding />
       <ChangesPanel />
       <BranchesPanel />

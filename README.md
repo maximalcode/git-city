@@ -36,7 +36,11 @@ the line count as you scrub through history.
 - Camera fly-to on selection, cinematic intro orbit
 - **Command palette** (`Ctrl`/`Cmd`+`K`): fuzzy-search every action and jump to
   any file (camera flies there), switch branch, pop a stash, change view / theme
-  / colour — all from one box
+  / colour — all from one box. Two search modes by leading sigil: **`@`** searches
+  **commits** (message / author / hash, across all refs) and **`:`** searches
+  **code** in tracked files (`git grep`). A commit hit opens a detail panel
+  (signature state, changed files → diff, cherry-pick, fly-to) that works for
+  _any_ commit, not just the sampled ones
 - **Orientation minimap** with a compass marker tracking the camera, so big
   repos never lose you (north up)
 - **Time-of-day** control decoupled from the theme — drag the sun from night
@@ -69,18 +73,18 @@ the line count as you scrub through history.
 
 **Keyboard shortcuts**
 
-| Key           | Action                         |
-| ------------- | ------------------------------ |
-| `Ctrl`/`Cmd`+`K` | Command palette             |
-| `C`      | Changes panel                  |
-| `B`      | Branches panel                 |
-| `S`      | Stashes panel                  |
-| `G`      | Commit graph                   |
-| `U`      | Time machine (reflog undo)     |
-| `V`      | Toggle City / Forest view      |
-| `/`      | Find a file (arrows + Enter)   |
-| `Space`  | Play/pause the timeline        |
-| `Escape` | Close panels / clear selection |
+| Key              | Action                         |
+| ---------------- | ------------------------------ |
+| `Ctrl`/`Cmd`+`K` | Command palette                |
+| `C`              | Changes panel                  |
+| `B`              | Branches panel                 |
+| `S`              | Stashes panel                  |
+| `G`              | Commit graph                   |
+| `U`              | Time machine (reflog undo)     |
+| `V`              | Toggle City / Forest view      |
+| `/`              | Find a file (arrows + Enter)   |
+| `Space`          | Play/pause the timeline        |
+| `Escape`         | Close panels / clear selection |
 
 ## How it works
 
@@ -102,7 +106,7 @@ keeps the UI live and mutes itself during operations.
 ```bash
 npm install
 npm run dev        # launch the Electron app with hot reload
-npm test           # vitest: git backend, parsers, layout, themes (~130 tests)
+npm test           # vitest: git backend, parsers, layout, themes (~240 tests)
 npm run typecheck
 npm run lint       # ESLint (typescript-eslint + react-hooks)
 npm run format     # Prettier

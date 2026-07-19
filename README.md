@@ -67,7 +67,9 @@ the line count as you scrub through history.
   uncommitted work and is itself undoable), plus a panel of every past HEAD
   position — rewind the branch to any of them, or recover a "lost" commit as a
   new branch. Local refs only; never force-pushes.
-- Per-file diff viewer, file history (follows renames) and blame
+- Per-file diff viewer — **unified or side-by-side** (toggle, persisted) with
+  **word-level intra-line highlighting** — plus file history (follows renames)
+  and blame
 - Commit graph with branch topology, ref chips, checkout/cherry-pick actions
 - Recent repos, drag-drop a folder to open, file search with fly-to
 

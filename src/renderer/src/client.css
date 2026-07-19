@@ -2009,3 +2009,63 @@
 .cd-file-bin {
   color: var(--text-dim);
 }
+
+/* ---------- v10: diff word-level + side-by-side ---------- */
+.diff-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.diff-layout-toggle {
+  font-size: 11.5px;
+  padding: 3px 10px;
+  border: 1px solid var(--panel-border);
+  border-radius: 7px;
+  color: var(--text-dim);
+  background: rgba(255, 255, 255, 0.03);
+}
+.diff-layout-toggle:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* intra-line word highlight: stronger tint than the line background */
+.wd {
+  border-radius: 3px;
+  padding: 0 1px;
+}
+.diff-line.diff-add .wd {
+  background: rgba(125, 216, 125, 0.34);
+}
+.diff-line.diff-del .wd {
+  background: rgba(255, 107, 107, 0.34);
+}
+
+/* side-by-side layout */
+.diff-panel.split {
+  width: 760px;
+  max-width: 72vw;
+}
+.diff-split-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+.diff-split-row > .diff-line:first-child {
+  border-right: 1px solid var(--panel-border);
+}
+.diff-split-row .diff-line {
+  min-width: 0;
+}
+.diff-line.diff-empty {
+  background: repeating-linear-gradient(
+    45deg,
+    rgba(255, 255, 255, 0.02),
+    rgba(255, 255, 255, 0.02) 6px,
+    transparent 6px,
+    transparent 12px
+  );
+}
+.diff-line.diff-empty .diff-gutter {
+  color: transparent;
+}

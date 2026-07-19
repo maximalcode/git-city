@@ -1,12 +1,15 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import type { DiffHunk, DiffLine } from '../../../shared/types'
 import type { DiffFile } from '../../../shared/types'
 import { cleanError, hasApi, isLiveState, useStore } from '../store'
+import { pairedWordSpans, toSideBySide, type SbsCell, type WordSpan } from '../lib/wordDiff'
 
 /**
  * Shows the diff for the selected building's file. Context-aware: when viewing
  * the latest state it shows uncommitted changes (falling back to the file's
  * last change); when scrubbed back in the timeline it shows the change that
- * commit introduced.
+ * commit introduced. Renders unified or side-by-side (persisted), both with
+ * word-level intra-line highlighting.
  */
 export default function DiffPanel(): React.JSX.Element | null {
   const diffOpen = useStore((s) => s.diffOpen)
@@ -17,6 +20,8 @@ export default function DiffPanel(): React.JSX.Element | null {
   const live = useStore(isLiveState)
   const diffRev = useStore((s) => s.diffRev)
   const setDiffOpen = useStore((s) => s.setDiffOpen)
+  const split = useStore((s) => s.diffSplit)
+  const toggleSplit = useStore((s) => s.toggleDiffSplit)
 
   const [diff, setDiff] = useState<DiffFile | null>(null)
   const [loading, setLoading] = useState(false)
@@ -55,8 +60,10 @@ export default function DiffPanel(): React.JSX.Element | null {
 
   if (!diffOpen || !selected) return null
 
+  const showToggle = !!diff && !diff.binary && diff.hunks.length > 0
+
   return (
-    <div className="diff-panel">
+    <div className={`diff-panel${split ? ' split' : ''}`}>
       <div className="panel-head">
         <div className="diff-head-text">
           <span className="diff-path">{selected}</span>
@@ -73,9 +80,20 @@ export default function DiffPanel(): React.JSX.Element | null {
             </span>
           )}
         </div>
-        <button className="close" aria-label="Close" onClick={() => setDiffOpen(false)}>
-          ✕
-        </button>
+        <div className="diff-head-actions">
+          {showToggle && (
+            <button
+              className="diff-layout-toggle"
+              onClick={toggleSplit}
+              title={split ? 'Switch to unified view' : 'Switch to side-by-side view'}
+            >
+              {split ? 'Unified' : 'Split'}
+            </button>
+          )}
+          <button className="close" aria-label="Close" onClick={() => setDiffOpen(false)}>
+            ✕
+          </button>
+        </div>
       </div>
 
       <div className="diff-body">
@@ -94,19 +112,77 @@ export default function DiffPanel(): React.JSX.Element | null {
         )}
         {!loading &&
           diff &&
-          diff.hunks.map((h, hi) => (
-            <div key={hi} className="diff-hunk">
-              <div className="diff-hunk-header">{h.header}</div>
-              {h.lines.map((l, li) => (
-                <div key={li} className={`diff-line diff-${l.kind}`}>
-                  <span className="diff-gutter">
-                    {l.kind === 'add' ? '+' : l.kind === 'del' ? '−' : ' '}
-                  </span>
-                  <span className="diff-text">{l.text || ' '}</span>
-                </div>
-              ))}
-            </div>
-          ))}
+          !diff.binary &&
+          diff.hunks.map((h, hi) =>
+            split ? <SplitHunk key={hi} hunk={h} /> : <UnifiedHunk key={hi} hunk={h} />
+          )}
+      </div>
+    </div>
+  )
+}
+
+/** Render a possibly word-diffed line body: highlighted spans, or plain text. */
+function LineBody({ text, spans }: { text: string; spans: WordSpan[] | null }): React.JSX.Element {
+  if (!spans) return <span className="diff-text">{text || ' '}</span>
+  return (
+    <span className="diff-text">
+      {spans.map((s, i) =>
+        s.changed ? (
+          <span key={i} className="wd">
+            {s.text}
+          </span>
+        ) : (
+          <span key={i}>{s.text}</span>
+        )
+      )}
+    </span>
+  )
+}
+
+function UnifiedHunk({ hunk }: { hunk: DiffHunk }): React.JSX.Element {
+  const spans = useMemo(() => pairedWordSpans(hunk.lines), [hunk])
+  return (
+    <div className="diff-hunk">
+      <div className="diff-hunk-header">{hunk.header}</div>
+      {hunk.lines.map((l: DiffLine, li) => (
+        <div key={li} className={`diff-line diff-${l.kind}`}>
+          <span className="diff-gutter">
+            {l.kind === 'add' ? '+' : l.kind === 'del' ? '−' : ' '}
+          </span>
+          <LineBody text={l.text} spans={spans[li]} />
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function SplitCell({ cell }: { cell: SbsCell }): React.JSX.Element {
+  return (
+    <div className={`diff-line diff-${cell.kind}`}>
+      <span className="diff-gutter">
+        {cell.kind === 'add' ? '+' : cell.kind === 'del' ? '−' : ' '}
+      </span>
+      {cell.kind === 'empty' ? (
+        <span className="diff-text" />
+      ) : (
+        <LineBody text={cell.text} spans={cell.spans} />
+      )}
+    </div>
+  )
+}
+
+function SplitHunk({ hunk }: { hunk: DiffHunk }): React.JSX.Element {
+  const rows = useMemo(() => toSideBySide(hunk.lines), [hunk])
+  return (
+    <div className="diff-hunk">
+      <div className="diff-hunk-header">{hunk.header}</div>
+      <div className="diff-split-grid">
+        {rows.map((r, ri) => (
+          <div key={ri} className="diff-split-row">
+            <SplitCell cell={r.left} />
+            <SplitCell cell={r.right} />
+          </div>
+        ))}
       </div>
     </div>
   )

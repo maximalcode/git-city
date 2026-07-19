@@ -85,6 +85,22 @@ function saveShowHotspots(on: boolean): void {
   }
 }
 
+const DIFFSPLIT_KEY = 'gitcity.diffsplit'
+function loadDiffSplit(): boolean {
+  try {
+    return localStorage.getItem(DIFFSPLIT_KEY) === 'on'
+  } catch {
+    return false
+  }
+}
+function saveDiffSplit(on: boolean): void {
+  try {
+    localStorage.setItem(DIFFSPLIT_KEY, on ? 'on' : 'off')
+  } catch {
+    /* ignore */
+  }
+}
+
 const ONBOARD_KEY = 'gitcity.onboarded'
 function loadOnboarded(): boolean {
   try {
@@ -229,6 +245,8 @@ interface GitCityState {
   timeOfDay: number
   /** pulse the repo's current hotspots (most-churned recent files); global pref */
   showHotspots: boolean
+  /** diff viewer layout: split (side-by-side) vs unified; global pref */
+  diffSplit: boolean
   /** whether the first-run "what am I seeing?" overlay has been dismissed */
   onboarded: boolean
   /** transient: the encoding guide re-opened from the "?" button */
@@ -255,6 +273,7 @@ interface GitCityState {
   setPaletteOpen(open: boolean): void
   setTimeOfDay(t: number): void
   toggleHotspots(): void
+  toggleDiffSplit(): void
   dismissOnboarding(): void
   setHelpOpen(open: boolean): void
   openCommit(hash: string): void
@@ -350,6 +369,7 @@ export const useStore = create<GitCityState>((set, get) => ({
   paletteOpen: false,
   timeOfDay: loadTimeOfDay(),
   showHotspots: loadShowHotspots(),
+  diffSplit: loadDiffSplit(),
   onboarded: loadOnboarded(),
   helpOpen: false,
   commitDetailHash: null,
@@ -448,6 +468,11 @@ export const useStore = create<GitCityState>((set, get) => ({
     const showHotspots = !get().showHotspots
     saveShowHotspots(showHotspots)
     set({ showHotspots })
+  },
+  toggleDiffSplit: () => {
+    const diffSplit = !get().diffSplit
+    saveDiffSplit(diffSplit)
+    set({ diffSplit })
   },
   dismissOnboarding: () => {
     saveOnboarded()

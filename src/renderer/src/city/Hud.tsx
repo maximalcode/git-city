@@ -10,7 +10,7 @@ import { COLOR_MODES, type ColorContext } from './colorModes'
 import Legend from './Legend'
 import SearchBox from './SearchBox'
 
-/** The slice of a scene model the HUD needs — CityModel and FleetModel both satisfy it. */
+/** The slice of a scene model the HUD needs — CityModel and ForestModel both satisfy it. */
 export type HudModel = ColorContext & { paths: string[] }
 
 interface Props {
@@ -63,7 +63,7 @@ export default function Hud({ snapshot, model }: Props): React.JSX.Element {
       u: () => useStore.getState().setReflogOpen(!useStore.getState().reflogOpen),
       v: () => {
         const st = useStore.getState()
-        st.setViewMode(st.viewMode === 'city' ? 'fleet' : 'city')
+        st.setViewMode(st.viewMode === 'city' ? 'forest' : 'city')
       },
       '/': () => useStore.getState().setSearchOpen(true),
       space: () => {
@@ -312,7 +312,7 @@ export default function Hud({ snapshot, model }: Props): React.JSX.Element {
 
 const VIEW_MODES: { id: ViewMode; glyph: string; name: string; hint: string }[] = [
   { id: 'city', glyph: '🏙', name: 'City', hint: 'Files as buildings in districts' },
-  { id: 'fleet', glyph: '🚀', name: 'Fleet', hint: 'Files as ships in squadron formations' }
+  { id: 'forest', glyph: '🌲', name: 'Forest', hint: 'Files as trees in folder groves' }
 ]
 
 function ViewPicker({

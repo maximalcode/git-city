@@ -6,9 +6,9 @@ scrubs through history while the city grows, and a full git client lives on
 top: stage, commit, fetch, pull, push, branch, merge, rebase, stash,
 cherry-pick and tag without leaving the city.
 
-Prefer space? Press `V` and the same repository becomes a **spaceship fleet**:
-every file a ship in its folder's squadron, git pushes exit through a portal
-and pulls warp in.
+Prefer something calmer? Press `V` and the same repository becomes a **forest**:
+every file a tree in its folder's grove, canopies growing and shrinking with
+the line count as you scrub through history.
 
 ![icon](build/icon.png)
 
@@ -17,16 +17,15 @@ and pulls warp in.
 **Visualization**
 
 - **Two view modes** (`V` to switch, persisted): the 3D **City** and the
-  spaceship **Fleet**
-- City: districts per folder, buildings per file, real streets with lane
-  markings derived from the layout, commit-weighted traffic driving on them
-  (cars and bikes — hover-craft in Neon), ground-floor shopfront glow on tall
-  buildings in night themes
-- Fleet: every file is a fighter/freighter/capital ship (by size) flying in
-  its folder's V-formation squadron; folder depth = flight altitude; engine
-  glow, starfield, warp-in/out as files appear and vanish through history;
-  git ops animated (push = portal jump, pull = warp-in, commit = regroup
-  pulse)
+  **Forest**
+- City: districts per folder, buildings per file, real streets with raised
+  sidewalks, curbs and zebra crossings; commit-weighted traffic driving on
+  them (cars and bikes — hover-craft in Neon); lamp posts and street trees
+  lining the roads with a belt of greenery around the city; ground-floor
+  shopfront glow on tall buildings in night themes
+- Forest: every file is a tree (bush / tree / ancient by size) standing in its
+  folder's grove; canopies grow in and breathe with the live line count and
+  colour by the active colour mode; a gentle wind sway keeps it alive
 - Timeline playback: scrub or play the entire history (a full replay fits in
   ~10 seconds)
 - 5 themes (Realistic Day/Night, Neon, Golden Hour, Midnight Ink) with
@@ -63,7 +62,7 @@ and pulls warp in.
 | `S`      | Stashes panel                  |
 | `G`      | Commit graph                   |
 | `U`      | Time machine (reflog undo)     |
-| `V`      | Toggle City / Fleet view       |
+| `V`      | Toggle City / Forest view      |
 | `/`      | Find a file (arrows + Enter)   |
 | `Space`  | Play/pause the timeline        |
 | `Escape` | Close panels / clear selection |
@@ -130,14 +129,14 @@ signing cert / Apple Developer ID + notarization).
 - `src/preload/` — typed `window.gitCity` bridge.
 - `src/renderer/` — React + react-three-fiber UI. `layout/` holds the pure,
   unit-tested scene math: the squarified treemap, the street graph derived
-  from it, and the fleet formation layout. `city/` renders both scenes
-  (instanced buildings, district plates, roads, traffic, ships, starfield,
-  effects) behind a mode-agnostic `SceneView` shell; `panels/` holds the git
-  client UI; `store.ts` (zustand) is the single state funnel.
+  from it, and the forest layout. `city/` renders both scenes (instanced
+  buildings, district plates, streets with sidewalks, traffic, street furniture,
+  trees, effects) behind a mode-agnostic `SceneView` shell; `panels/` holds the
+  git client UI; `store.ts` (zustand) is the single state funnel.
 - `src/shared/types.ts` — types shared across all three.
 
 Note: the app intentionally avoids `@react-three/drei` — we only needed
 MapControls (see `city/CameraRig.tsx`), and drei's text stack embeds a
 base64 WASM blob that antivirus heuristics love to false-positive on. All
-vehicle and ship geometry is likewise built in-code from merged three.js
+vehicle and tree geometry is likewise built in-code from merged three.js
 primitives, no external models.

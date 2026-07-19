@@ -40,14 +40,16 @@ export default function CameraRig({
   const intro = useRef(true)
   const tween = useRef<{ target: Vector3; pos: Vector3 } | null>(null)
 
+  // Create once. dispose() detaches the DOM listeners, so it must run ONLY on
+  // unmount — never when worldSize changes (a view-mode switch changes it,
+  // since city citySize != forest worldSize). If it ran on every switch the
+  // memoized controls would be disposed and never reconnected, leaving the
+  // camera dead. Size/angle limits live in the separate effect below.
   useEffect(() => {
     controls.enableDamping = true
     controls.dampingFactor = 0.08
-    controls.maxPolarAngle = maxPolarAngle
     controls.minDistance = 8
-    controls.maxDistance = worldSize * 4
     controls.target.set(0, 0, 0)
-    controls.update()
     const stopAuto = (): void => {
       intro.current = false
       tween.current = null
@@ -56,8 +58,30 @@ export default function CameraRig({
     return () => {
       controls.removeEventListener('start', stopAuto)
       controls.dispose()
+      // DEV probe: a view-mode switch must NOT reach here (see e2e). If this
+      // increments on a switch, the controls were torn down and the camera dies.
+      if (import.meta.env.DEV) {
+        const w = window as unknown as { __gitCityRigDisposes?: number }
+        w.__gitCityRigDisposes = (w.__gitCityRigDisposes ?? 0) + 1
+      }
     }
+  }, [controls])
+
+  // Update limits that depend on the active world size / mode without tearing
+  // the controls down.
+  useEffect(() => {
+    controls.maxPolarAngle = maxPolarAngle
+    controls.maxDistance = worldSize * 4
+    controls.update()
   }, [controls, worldSize, maxPolarAngle])
+
+  // DEV only: expose the camera so the preview/e2e can assert it still responds
+  // to input after a view-mode switch (the regression this rig guards against).
+  useEffect(() => {
+    if (import.meta.env.DEV) {
+      ;(window as unknown as { __gitCityCam?: unknown }).__gitCityCam = camera
+    }
+  }, [camera])
 
   // fly-to when the selection changes to something the scene can locate
   useEffect(() => {

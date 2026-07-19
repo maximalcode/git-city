@@ -33,12 +33,12 @@ function saveTheme(id: string): void {
   }
 }
 
-export type ViewMode = 'city' | 'fleet'
+export type ViewMode = 'city' | 'forest'
 const VIEW_KEY = 'gitcity.view'
 function loadViewMode(): ViewMode {
   try {
     const v = localStorage.getItem(VIEW_KEY)
-    return v === 'fleet' ? 'fleet' : 'city'
+    return v === 'forest' ? 'forest' : 'city'
   } catch {
     return 'city'
   }

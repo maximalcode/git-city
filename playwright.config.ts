@@ -10,7 +10,10 @@ import { defineConfig, devices } from '@playwright/test'
 export default defineConfig({
   testDir: './e2e',
   testMatch: '**/*.e2e.ts',
-  timeout: 60_000,
+  // headless software-GPU rendering + many mode switches is slow; give the
+  // single end-to-end test generous room so an assertion fails on its merits
+  // rather than on a global timeout
+  timeout: 150_000,
   fullyParallel: false,
   retries: 0,
   reporter: 'list',

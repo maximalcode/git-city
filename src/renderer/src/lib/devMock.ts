@@ -1,6 +1,6 @@
 /**
  * Browser-preview mock: lets the renderer run without Electron or git so the
- * city/fleet can be verified visually (vite preview on :5199). Activated only
+ * city/forest can be verified visually (vite preview on :5199). Activated only
  * in DEV builds, only when the preload API is absent, and only with `?mock` in
  * the URL — the plain preview still boots to the welcome screen.
  *

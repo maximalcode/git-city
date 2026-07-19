@@ -22,21 +22,20 @@ describe('buildRoadGeometry', () => {
   const graph = buildRoadGraph(cityLayout(files, 140).roads)
   const geo = buildRoadGeometry(graph)
 
-  it('produces a valid non-indexed triangle soup with uv + normal', () => {
-    const pos = geo.getAttribute('position')
+  it('produces a valid asphalt triangle soup with uv + up normals', () => {
+    const pos = geo.asphalt.getAttribute('position')
     expect(pos.count % 6).toBe(0) // 6 vertices per quad
     expect(pos.count).toBeGreaterThan(0)
-    expect(geo.getAttribute('uv').count).toBe(pos.count)
-    expect(geo.getAttribute('normal').count).toBe(pos.count)
-    // all normals point straight up
-    const nrm = geo.getAttribute('normal')
+    expect(geo.asphalt.getAttribute('uv').count).toBe(pos.count)
+    expect(geo.asphalt.getAttribute('normal').count).toBe(pos.count)
+    const nrm = geo.asphalt.getAttribute('normal')
     for (let i = 0; i < nrm.count; i++) {
       expect(nrm.getY(i)).toBe(1)
     }
   })
 
-  it('keeps every vertex y within the plate band', () => {
-    const pos = geo.getAttribute('position')
+  it('keeps every asphalt vertex y within the plate band', () => {
+    const pos = geo.asphalt.getAttribute('position')
     const maxDepth = Math.max(...graph.edges.map((e) => e.depth))
     for (let i = 0; i < pos.count; i++) {
       expect(pos.getY(i)).toBeGreaterThanOrEqual(roadY(0) - 1e-6)
@@ -44,8 +43,8 @@ describe('buildRoadGeometry', () => {
     }
   })
 
-  it('spans v from 0 to 1 across street quads', () => {
-    const uv = geo.getAttribute('uv')
+  it('spans v from 0 to 1 across asphalt quads', () => {
+    const uv = geo.asphalt.getAttribute('uv')
     let sawV0 = false
     let sawV1 = false
     for (let i = 0; i < uv.count; i++) {
@@ -56,8 +55,32 @@ describe('buildRoadGeometry', () => {
     expect(sawV1).toBe(true)
   })
 
+  it('builds raised sidewalks with a curb face (grayscale vertex colours)', () => {
+    const sw = geo.sidewalk
+    const pos = sw.getAttribute('position')
+    const col = sw.getAttribute('color')
+    expect(pos.count).toBeGreaterThan(0)
+    expect(col.count).toBe(pos.count)
+    // curb tops sit above the asphalt band; some vertices are raised
+    let maxY = 0
+    for (let i = 0; i < pos.count; i++) maxY = Math.max(maxY, pos.getY(i))
+    expect(maxY).toBeGreaterThan(roadY(0) + 0.1)
+    // both the lit top (1.0) and the shaded curb face (0.62) are present
+    let sawTop = false
+    let sawFace = false
+    for (let i = 0; i < col.count; i++) {
+      const r = col.getX(i)
+      if (r === 1) sawTop = true
+      if (Math.abs(r - 0.62) < 1e-6) sawFace = true
+    }
+    expect(sawTop).toBe(true)
+    expect(sawFace).toBe(true)
+  })
+
   it('handles an empty graph', () => {
     const empty = buildRoadGeometry(buildRoadGraph([]))
-    expect(empty.getAttribute('position').count).toBe(0)
+    expect(empty.asphalt.getAttribute('position').count).toBe(0)
+    expect(empty.sidewalk.getAttribute('position').count).toBe(0)
+    expect(empty.crosswalk.getAttribute('position').count).toBe(0)
   })
 })

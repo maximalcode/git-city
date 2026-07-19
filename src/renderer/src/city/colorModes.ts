@@ -2,7 +2,7 @@ import { Color } from 'three'
 import type { Snapshot, FileState } from '../../../shared/types'
 import { languageOf } from '../lib/languages'
 
-/** The slice of a scene model the colorers need — CityModel and FleetModel both satisfy it. */
+/** The slice of a scene model the colorers need — CityModel and ForestModel both satisfy it. */
 export interface ColorContext {
   /** per-object language color, indexed like the model's paths */
   langColors: Color[]

@@ -15,6 +15,8 @@ export default function SideRail(): JSX.Element {
   const reflogOpen = useStore((s) => s.reflogOpen)
   const setReflogOpen = useStore((s) => s.setReflogOpen)
   const setSearchOpen = useStore((s) => s.setSearchOpen)
+  const prPanelOpen = useStore((s) => s.prPanelOpen)
+  const setPrPanelOpen = useStore((s) => s.setPrPanelOpen)
   const workingStatus = useStore((s) => s.workingStatus)
 
   const changeCount = workingStatus?.files.length ?? 0
@@ -64,6 +66,13 @@ export default function SideRail(): JSX.Element {
           hotkey="U"
           active={reflogOpen}
           onClick={() => setReflogOpen(!reflogOpen)}
+        />
+        <RailButton
+          icon="pr"
+          label="PRs"
+          hotkey="P"
+          active={prPanelOpen}
+          onClick={() => setPrPanelOpen(!prPanelOpen)}
         />
       </div>
 

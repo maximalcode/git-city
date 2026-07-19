@@ -97,7 +97,8 @@ export default function CommandPalette({
       ['branches', 'Open Branches', 'branch', () => s.setPanel('branches')],
       ['stashes', 'Open Stashes', 'stash', () => s.setPanel('stashes')],
       ['graph', 'Toggle Commit Graph', 'graph', () => s.setGraphOpen(!s.graphOpen)],
-      ['history', 'Toggle History (undo log)', 'timeMachine', () => s.setReflogOpen(!s.reflogOpen)]
+      ['history', 'Toggle History (undo log)', 'timeMachine', () => s.setReflogOpen(!s.reflogOpen)],
+      ['prs', 'Pull Requests', 'pr', () => s.setPrPanelOpen(!s.prPanelOpen)]
     ]
     for (const [id, label, icon, fn] of panelCmds) {
       list.push({ id: `panel-${id}`, group: 'Tools', icon, label, run: act(fn) })

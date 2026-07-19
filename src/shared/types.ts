@@ -322,6 +322,32 @@ export interface ReflogEntry {
 
 export type ResetMode = 'soft' | 'mixed' | 'keep' | 'hard'
 
+/** GitHub CLI availability + auth state for this repo. */
+export interface GitHubAuth {
+  /** gh binary present on PATH */
+  available: boolean
+  /** gh is logged in */
+  authed: boolean
+  /** this repo is a GitHub repo gh recognizes */
+  isGitHub: boolean
+  login: string | null
+  /** why unavailable, for the UI (null when fully usable) */
+  reason: string | null
+}
+
+export interface PullRequestInfo {
+  number: number
+  title: string
+  headRef: string
+  baseRef: string
+  state: string
+  isDraft: boolean
+  url: string
+  author: string
+  /** rolled-up CI state */
+  ci: 'passing' | 'failing' | 'pending' | 'none'
+}
+
 /** Repo commit-signing configuration (read-only; keys are never handled here). */
 export interface SigningConfig {
   signByDefault: boolean
@@ -416,6 +442,15 @@ export interface GitCityApi {
   grepWorkingTree(repoPath: string, query: string): Promise<GrepResult>
   /** Full detail (header, signature, changed files) for one commit. */
   commitDetail(repoPath: string, hash: string): Promise<CommitDetail>
+
+  // --- GitHub (via gh CLI) ---
+  ghStatus(repoPath: string): Promise<GitHubAuth>
+  listPullRequests(repoPath: string): Promise<PullRequestInfo[]>
+  currentBranchPr(repoPath: string): Promise<PullRequestInfo | null>
+  checkoutPr(repoPath: string, number: number): Promise<OpResult>
+  createPr(repoPath: string, base: string, title: string, body: string): Promise<OpResult>
+  /** Open an external https URL in the default browser. */
+  openExternal(url: string): Promise<void>
 
   // --- submodules ---
   submodules(repoPath: string): Promise<SubmoduleInfo[]>

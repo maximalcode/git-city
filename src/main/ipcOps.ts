@@ -30,6 +30,7 @@ import { getRebaseTodo, runInteractiveRebase } from './git/rebaseInteractive'
 import { createBranch, deleteBranch, listBranches, switchBranch } from './git/branches'
 import { commit, getLastCommitMessage } from './git/commit'
 import { getSigningConfig } from './git/signing'
+import { checkoutPr, createPr, currentBranchPr, ghStatus, listPullRequests } from './git/github'
 import { listSubmodules, updateSubmodules } from './git/submodules'
 import { addWorktree, listWorktrees, removeWorktree } from './git/worktrees'
 import { readConflictFile, resolveConflictFile, resolveWholeFile } from './git/conflicts'
@@ -120,6 +121,20 @@ export function registerOpsIpc(): void {
   readOnly('signing-config', (repo) => getSigningConfig(repo))
   readOnly('submodules', (repo) => listSubmodules(repo))
   readOnly('worktrees', (repo) => listWorktrees(repo))
+  readOnly('gh-status', (repo) => ghStatus(repo))
+  readOnly('pr-list', (repo) => listPullRequests(repo))
+  readOnly('pr-current', (repo) => currentBranchPr(repo))
+  ipcMain.handle('git-city:open-external', (_e, url: string) => {
+    // only ever open https links (URLs come from gh's own JSON output)
+    if (/^https:\/\//i.test(url)) void shell.openExternal(url)
+  })
+  // PR create is network-only (no working-tree mutation); its errors already
+  // come back as OpResult, so a plain handle is enough
+  ipcMain.handle(
+    'git-city:pr-create',
+    (_e, repo: string, base: string, title: string, body: string) =>
+      createPr(repo, base, title, body)
+  )
   readOnly('conflict-read', (repo, path: string) => readConflictFile(repo, path))
   readOnly('diff', (repo, path: string, rev?: string) =>
     getFileDiff(repo, path, rev ? { rev } : {})
@@ -158,6 +173,7 @@ export function registerOpsIpc(): void {
   mutating('commit', (repo, message: string, amend: boolean, sign?: boolean) =>
     commit(repo, message, amend, sign)
   )
+  mutating('pr-checkout', (repo, number: number) => checkoutPr(repo, number))
   mutating('submodule-update', (repo, path?: string) => updateSubmodules(repo, path))
   mutating('worktree-add', (repo, path: string, ref: string) => addWorktree(repo, path, ref))
   mutating('worktree-remove', (repo, path: string, force: boolean) =>

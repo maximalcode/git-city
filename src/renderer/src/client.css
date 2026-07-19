@@ -2531,3 +2531,74 @@
 .review-exit {
   color: var(--accent-2);
 }
+
+/* ---------- v18: image diff ---------- */
+.img-diff {
+  display: flex;
+  gap: 14px;
+  padding: 14px;
+  flex-wrap: wrap;
+}
+.img-side {
+  flex: 1 1 40%;
+  min-width: 140px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.img-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+}
+.img-label.del {
+  color: var(--danger);
+}
+.img-label.add {
+  color: var(--ok);
+}
+.img-side img {
+  max-width: 100%;
+  max-height: 320px;
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  background: repeating-conic-gradient(rgba(255, 255, 255, 0.06) 0% 25%, transparent 0% 50%) 50% /
+    18px 18px;
+}
+.img-absent {
+  padding: 24px 16px;
+  border: 1px dashed var(--panel-border);
+  border-radius: 6px;
+  color: var(--text-dim);
+  font-style: italic;
+}
+.img-bytes {
+  font-family: Consolas, monospace;
+  font-size: 12px;
+  color: var(--text-dim);
+  display: flex;
+  gap: 8px;
+}
+.img-delta.up {
+  color: var(--danger);
+}
+.img-delta.down {
+  color: var(--ok);
+}
+
+/* ---------- v18: line-level staging ---------- */
+.hunk-lines .diff-line.selectable {
+  cursor: pointer;
+}
+.hunk-lines .diff-line.selectable:hover {
+  filter: brightness(1.25);
+}
+.hunk-lines .diff-line.picked {
+  outline: 1px solid var(--accent-2);
+  outline-offset: -1px;
+}
+.hunk-lines .diff-line.picked .diff-gutter {
+  color: var(--accent-2);
+}

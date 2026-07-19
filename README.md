@@ -57,7 +57,10 @@ the line count as you scrub through history.
 
 - Working-tree status overlaid on the city; stage/unstage/discard, commit
   (+ amend). Expand any changed file to **stage, unstage or discard
-  individual hunks** (`git add -p`, but visual)
+  individual hunks** (`git add -p`, but visual) — or click individual changed
+  lines to **stage / unstage / discard just those lines**
+- Per-file diff also renders **image diffs** (png/jpg/gif/webp/svg…): the old
+  and new picture side by side with a byte-size delta
 - Fetch / pull / push with progress and cancel — **force-push does not exist
   in this app, by design**
 - Branches (incl. remote-tracking), merge, rebase, cherry-pick, stashes, tags

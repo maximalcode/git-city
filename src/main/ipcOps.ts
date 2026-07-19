@@ -20,7 +20,8 @@ import {
 } from './git/advanced'
 import { analyzeIncremental } from './git/analyze'
 import { getFileDiff } from './git/diff'
-import { applyHunk, getFileHunks } from './git/hunks'
+import { imageDiff } from './git/images'
+import { applyHunk, applyLines, getFileHunks } from './git/hunks'
 import { commitGraph } from './git/graph'
 import { blameFile, fileHistory } from './git/history'
 import { commitDetail, grepWorkingTree, searchCommits } from './git/search'
@@ -150,6 +151,7 @@ export function registerOpsIpc(): void {
   readOnly('diff', (repo, path: string, rev?: string) =>
     getFileDiff(repo, path, rev ? { rev } : {})
   )
+  readOnly('image-diff', (repo, path: string, rev?: string) => imageDiff(repo, path, rev))
   readOnly('file-hunks', (repo, path: string, staged: boolean) => getFileHunks(repo, path, staged))
   readOnly('file-history', (repo, path: string) => fileHistory(repo, path))
   readOnly('blame', (repo, path: string, rev?: string) => blameFile(repo, path, rev))
@@ -180,6 +182,11 @@ export function registerOpsIpc(): void {
   mutating('discard', (repo, paths: string[]) => discardFiles(repo, paths))
   mutating('apply-hunk', (repo, path: string, header: string, mode: HunkMode) =>
     applyHunk(repo, path, header, mode)
+  )
+  mutating(
+    'apply-lines',
+    (repo, path: string, header: string, lineIndices: number[], mode: HunkMode) =>
+      applyLines(repo, path, header, lineIndices, mode)
   )
   mutating('commit', (repo, message: string, amend: boolean, sign?: boolean) =>
     commit(repo, message, amend, sign)

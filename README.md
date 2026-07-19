@@ -89,6 +89,10 @@ the line count as you scrub through history.
   view, time of day, a **reduce-motion** toggle (skips the intro orbit),
   activity hotspots, the default diff layout, plus re-show the first-run guide,
   clear recent repositories and reset all preferences
+- **Update check**: on launch Git City asks GitHub Releases whether a newer
+  version exists and, if so, shows an unobtrusive banner linking to the
+  download. No token, no background download, no telemetry — you stay in
+  control of installing (there is also a manual check in Settings)
 
 **Keyboard shortcuts**
 

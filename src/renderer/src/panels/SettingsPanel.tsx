@@ -29,6 +29,8 @@ export default function SettingsPanel(): React.JSX.Element | null {
   const setHelpOpen = useStore((s) => s.setHelpOpen)
   const resetPreferences = useStore((s) => s.resetPreferences)
   const askConfirm = useStore((s) => s.askConfirm)
+  const checkForUpdate = useStore((s) => s.checkForUpdate)
+  const update = useStore((s) => s.update)
 
   if (!open) return null
 
@@ -159,6 +161,9 @@ export default function SettingsPanel(): React.JSX.Element | null {
           </button>
           <button className="settings-action" disabled={recentCount === 0} onClick={clearRecent}>
             Clear recent repositories{recentCount > 0 ? ` (${recentCount})` : ''}
+          </button>
+          <button className="settings-action" onClick={() => void checkForUpdate()}>
+            Check for updates{update ? ` — ${update.version} available` : ''}
           </button>
           <button className="settings-action danger" onClick={confirmReset}>
             Reset all preferences

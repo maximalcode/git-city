@@ -2383,3 +2383,53 @@
 .settings-action.danger:hover {
   border-color: var(--danger);
 }
+
+/* ---------- v15: update banner ---------- */
+.update-banner {
+  position: fixed;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px 8px 14px;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  backdrop-filter: blur(14px);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+  font-size: 13px;
+  color: var(--text);
+}
+.update-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ok);
+  box-shadow: 0 0 8px var(--ok);
+}
+.update-text strong {
+  color: var(--accent-2);
+}
+.update-view {
+  padding: 5px 12px;
+  border-radius: 7px;
+  background: var(--accent);
+  color: #10141e;
+  border: none;
+  font-weight: 600;
+  cursor: pointer;
+}
+.update-dismiss {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 13px;
+  padding: 2px 4px;
+}
+.update-dismiss:hover {
+  color: var(--text);
+}

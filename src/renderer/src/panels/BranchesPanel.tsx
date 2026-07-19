@@ -20,6 +20,12 @@ export default function BranchesPanel(): React.JSX.Element | null {
   const createTag = useStore((s) => s.createTag)
   const deleteTag = useStore((s) => s.deleteTag)
   const setRebaseOpen = useStore((s) => s.setRebaseOpen)
+  const submodules = useStore((s) => s.submodules)
+  const worktrees = useStore((s) => s.worktrees)
+  const repoPath = useStore((s) => s.repoPath)
+  const updateSubmodules = useStore((s) => s.updateSubmodules)
+  const removeWorktree = useStore((s) => s.removeWorktree)
+  const openPath = useStore((s) => s.openPath)
 
   const [newName, setNewName] = useState('')
   const [newTag, setNewTag] = useState('')
@@ -30,6 +36,33 @@ export default function BranchesPanel(): React.JSX.Element | null {
   const localBranches = branches.filter((b) => !b.isRemote)
   const remoteBranches = branches.filter((b) => b.isRemote)
   const dirty = (status?.files.length ?? 0) > 0
+  // a repo always has ≥1 (main) worktree — only surface the section when linked ones exist
+  const showWorktrees = worktrees.length > 1
+  const norm = (p: string): string => p.replace(/\\/g, '/').replace(/\/+$/, '')
+  const baseName = (p: string): string => norm(p).split('/').pop() || p
+
+  const tryRemoveWorktree = (path: string): void =>
+    askConfirm({
+      title: 'Remove this worktree?',
+      body: `Detach the worktree at "${path}". Its files stay on disk; git stops tracking it as a linked worktree.`,
+      confirmLabel: 'Remove',
+      danger: true,
+      onConfirm: async () => {
+        const before = useStore.getState().opError
+        await removeWorktree(path, false)
+        const err = useStore.getState().opError
+        if (err && err !== before) {
+          useStore.getState().dismissError()
+          askConfirm({
+            title: 'Worktree is dirty or locked',
+            body: 'Force-remove it anyway? Uncommitted changes in that worktree will be lost.',
+            confirmLabel: 'Force remove',
+            danger: true,
+            onConfirm: () => void removeWorktree(path, true)
+          })
+        }
+      }
+    })
 
   const trySwitch = (name: string): void => {
     if (!dirty) {
@@ -211,6 +244,70 @@ export default function BranchesPanel(): React.JSX.Element | null {
             </div>
           </div>
         ))}
+
+        {submodules.length > 0 && (
+          <>
+            <div className="section-head">
+              <span>Submodules ({submodules.length})</span>
+              <button disabled={busy} onClick={() => void updateSubmodules()}>
+                Update all
+              </button>
+            </div>
+            {submodules.map((s) => (
+              <div key={s.path} className="branch-row">
+                <div className="branch-main">
+                  <span className={`sub-state sub-${s.state}`} title={s.state} />
+                  <span className="branch-label">{s.path}</span>
+                  {s.describe && <span className="sub-describe">{s.describe}</span>}
+                </div>
+                <div className="branch-actions">
+                  <button disabled={busy} onClick={() => void updateSubmodules(s.path)}>
+                    Update
+                  </button>
+                </div>
+              </div>
+            ))}
+          </>
+        )}
+
+        {showWorktrees && (
+          <>
+            <div className="section-head">
+              <span>Worktrees ({worktrees.length})</span>
+            </div>
+            {worktrees.map((w) => {
+              const isCurrent = repoPath != null && norm(w.path) === norm(repoPath)
+              return (
+                <div key={w.path} className={`branch-row ${isCurrent ? 'current' : ''}`}>
+                  <div className="branch-main">
+                    <span className="branch-dot" />
+                    <span className="branch-label" title={w.path}>
+                      {baseName(w.path)}
+                    </span>
+                    <span className="wt-branch">
+                      {w.branch ?? (w.detached ? 'detached' : w.bare ? 'bare' : '')}
+                      {w.locked ? ' 🔒' : ''}
+                    </span>
+                  </div>
+                  {!isCurrent && (
+                    <div className="branch-actions">
+                      <button disabled={busy} onClick={() => void openPath(w.path)}>
+                        Open
+                      </button>
+                      <button
+                        className="danger"
+                        disabled={busy || w.bare}
+                        onClick={() => tryRemoveWorktree(w.path)}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </>
+        )}
       </div>
     </div>
   )

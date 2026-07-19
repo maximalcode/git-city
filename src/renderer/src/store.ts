@@ -9,8 +9,10 @@ import type {
   RepoOpState,
   ResetMode,
   StashEntry,
+  SubmoduleInfo,
   TagInfo,
-  WorkingStatus
+  WorkingStatus,
+  WorktreeInfo
 } from '../../shared/types'
 import { DEFAULT_THEME_ID } from './city/themes'
 import type { ColorMode } from './city/colorModes'
@@ -175,6 +177,8 @@ const REPO_STATE_RESET: Partial<GitCityState> = {
   branches: [],
   stashes: [],
   tags: [],
+  submodules: [],
+  worktrees: [],
   rebaseOpen: false,
   reflogOpen: false,
   panel: 'none',
@@ -224,6 +228,8 @@ interface GitCityState {
   branches: BranchInfo[]
   stashes: StashEntry[]
   tags: TagInfo[]
+  submodules: SubmoduleInfo[]
+  worktrees: WorktreeInfo[]
   rebaseOpen: boolean
   reflogOpen: boolean
   panel: Panel
@@ -286,6 +292,11 @@ interface GitCityState {
   refreshBranches(): Promise<void>
   refreshStashes(): Promise<void>
   refreshTags(): Promise<void>
+  refreshSubmodules(): Promise<void>
+  refreshWorktrees(): Promise<void>
+  updateSubmodules(path?: string): Promise<void>
+  addWorktree(path: string, ref: string): Promise<void>
+  removeWorktree(path: string, force: boolean): Promise<void>
   setRebaseOpen(open: boolean): void
   setReflogOpen(open: boolean): void
   createTag(name: string, ref?: string): Promise<void>
@@ -305,7 +316,7 @@ interface GitCityState {
   unstage(paths: string[]): Promise<void>
   discard(paths: string[]): Promise<void>
   applyHunk(path: string, header: string, mode: HunkMode): Promise<void>
-  commit(message: string, amend: boolean): Promise<void>
+  commit(message: string, amend: boolean, sign?: boolean): Promise<void>
   fetch(): Promise<void>
   pull(): Promise<void>
   push(setUpstream: boolean): Promise<void>
@@ -352,6 +363,8 @@ export const useStore = create<GitCityState>((set, get) => ({
   branches: [],
   stashes: [],
   tags: [],
+  submodules: [],
+  worktrees: [],
   rebaseOpen: false,
   reflogOpen: false,
   panel: 'none',
@@ -539,6 +552,35 @@ export const useStore = create<GitCityState>((set, get) => ({
     }
   },
 
+  refreshSubmodules: async () => {
+    const { repoPath } = get()
+    if (!hasApi() || !repoPath) return
+    try {
+      set({ submodules: await window.gitCity.submodules(repoPath) })
+    } catch {
+      /* ignore */
+    }
+  },
+
+  refreshWorktrees: async () => {
+    const { repoPath } = get()
+    if (!hasApi() || !repoPath) return
+    try {
+      set({ worktrees: await window.gitCity.worktrees(repoPath) })
+    } catch {
+      /* ignore */
+    }
+  },
+
+  updateSubmodules: (path) =>
+    runOp(set, get, 'Updating submodules…', (repo) => window.gitCity.updateSubmodules(repo, path)),
+  addWorktree: (path, ref) =>
+    runOp(set, get, 'Adding worktree…', (repo) => window.gitCity.addWorktree(repo, path, ref)),
+  removeWorktree: (path, force) =>
+    runOp(set, get, 'Removing worktree…', (repo) =>
+      window.gitCity.removeWorktree(repo, path, force)
+    ),
+
   setRebaseOpen: (rebaseOpen) => set({ rebaseOpen }),
   setReflogOpen: (reflogOpen) => set({ reflogOpen }),
 
@@ -643,12 +685,12 @@ export const useStore = create<GitCityState>((set, get) => ({
           : 'Discarding hunk…'
     return runOp(set, get, label, (repo) => window.gitCity.applyHunk(repo, path, header, mode))
   },
-  commit: (message, amend) =>
+  commit: (message, amend, sign) =>
     runOp(
       set,
       get,
       amend ? 'Amending…' : 'Committing…',
-      (repo) => window.gitCity.commit(repo, message, amend),
+      (repo) => window.gitCity.commit(repo, message, amend, sign),
       { reanalyze: true, effect: 'commit-settle' }
     ),
   // fetch never moves HEAD — it only updates remote refs, so no re-analysis;
@@ -790,6 +832,8 @@ async function runOp(
   await get().refreshBranches()
   await get().refreshStashes()
   await get().refreshTags()
+  await get().refreshSubmodules()
+  await get().refreshWorktrees()
 
   if (!result.ok) {
     if (result.code === 'conflict' && opts.conflictsOpenMerge) {
@@ -844,6 +888,8 @@ async function loadRepo(
       await get().refreshBranches()
       await get().refreshStashes()
       await get().refreshTags()
+      await get().refreshSubmodules()
+      await get().refreshWorktrees()
     }
   } catch (err) {
     set({ screen: 'welcome', error: cleanError(err) })

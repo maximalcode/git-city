@@ -29,6 +29,9 @@ import { createTag, deleteTag, listTags } from './git/tags'
 import { getRebaseTodo, runInteractiveRebase } from './git/rebaseInteractive'
 import { createBranch, deleteBranch, listBranches, switchBranch } from './git/branches'
 import { commit, getLastCommitMessage } from './git/commit'
+import { getSigningConfig } from './git/signing'
+import { listSubmodules, updateSubmodules } from './git/submodules'
+import { addWorktree, listWorktrees, removeWorktree } from './git/worktrees'
 import { readConflictFile, resolveConflictFile, resolveWholeFile } from './git/conflicts'
 import { mergeAbort, mergeBranch, mergeContinue } from './git/merge'
 import { withRepoLock } from './git/queue'
@@ -114,6 +117,9 @@ export function registerOpsIpc(): void {
   readOnly('branches', (repo) => listBranches(repo))
   readOnly('stash-list', (repo) => stashList(repo))
   readOnly('last-commit-message', (repo) => getLastCommitMessage(repo))
+  readOnly('signing-config', (repo) => getSigningConfig(repo))
+  readOnly('submodules', (repo) => listSubmodules(repo))
+  readOnly('worktrees', (repo) => listWorktrees(repo))
   readOnly('conflict-read', (repo, path: string) => readConflictFile(repo, path))
   readOnly('diff', (repo, path: string, rev?: string) =>
     getFileDiff(repo, path, rev ? { rev } : {})
@@ -149,7 +155,14 @@ export function registerOpsIpc(): void {
   mutating('apply-hunk', (repo, path: string, header: string, mode: HunkMode) =>
     applyHunk(repo, path, header, mode)
   )
-  mutating('commit', (repo, message: string, amend: boolean) => commit(repo, message, amend))
+  mutating('commit', (repo, message: string, amend: boolean, sign?: boolean) =>
+    commit(repo, message, amend, sign)
+  )
+  mutating('submodule-update', (repo, path?: string) => updateSubmodules(repo, path))
+  mutating('worktree-add', (repo, path: string, ref: string) => addWorktree(repo, path, ref))
+  mutating('worktree-remove', (repo, path: string, force: boolean) =>
+    removeWorktree(repo, path, force)
+  )
 
   // --- sync (needs the sender for progress events) ---
   const progressTo =

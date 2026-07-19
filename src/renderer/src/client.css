@@ -2069,3 +2069,37 @@
 .diff-line.diff-empty .diff-gutter {
   color: transparent;
 }
+
+/* ---------- v11: submodules + worktrees in the branches panel ---------- */
+.sub-state {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12) inset;
+}
+.sub-ok {
+  background: var(--ok);
+}
+.sub-modified {
+  background: var(--accent);
+}
+.sub-uninitialized {
+  background: var(--text-dim);
+}
+.sub-conflict {
+  background: var(--danger);
+}
+.sub-describe,
+.wt-branch {
+  font-size: 11px;
+  color: var(--text-dim);
+  font-family: Consolas, monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.wt-branch {
+  margin-left: auto;
+  padding-left: 8px;
+}

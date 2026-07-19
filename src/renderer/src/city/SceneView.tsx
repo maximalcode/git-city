@@ -24,6 +24,7 @@ import CommitGraphPanel from '../panels/CommitGraphPanel'
 import RebasePanel from '../panels/RebasePanel'
 import ReflogPanel from '../panels/ReflogPanel'
 import PullRequestsPanel from '../panels/PullRequestsPanel'
+import SettingsPanel from '../panels/SettingsPanel'
 import CommandPalette from './CommandPalette'
 import Onboarding from './Onboarding'
 import Minimap from './Minimap'
@@ -230,6 +231,7 @@ export default function SceneView(): React.JSX.Element {
       <RebasePanel />
       <ReflogPanel />
       <PullRequestsPanel />
+      <SettingsPanel />
       <MergeView />
     </div>
   )

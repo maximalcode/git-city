@@ -85,6 +85,10 @@ the line count as you scrub through history.
   the moment you do. Detached HEAD is labelled clearly and a missing `git`
   install is explained on the welcome screen
 - Recent repos, drag-drop a folder to open, file search with fly-to
+- **Settings** panel (`,`) gathering every preference in one place — theme,
+  view, time of day, a **reduce-motion** toggle (skips the intro orbit),
+  activity hotspots, the default diff layout, plus re-show the first-run guide,
+  clear recent repositories and reset all preferences
 
 **Keyboard shortcuts**
 
@@ -99,6 +103,7 @@ the line count as you scrub through history.
 | `P`              | Pull requests                  |
 | `V`              | Toggle City / Forest view      |
 | `/`              | Find a file (arrows + Enter)   |
+| `,`              | Settings                       |
 | `Space`          | Play/pause the timeline        |
 | `Escape`         | Close panels / clear selection |
 

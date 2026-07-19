@@ -105,6 +105,22 @@ function saveDiffSplit(on: boolean): void {
   }
 }
 
+const REDUCEMOTION_KEY = 'gitcity.reducemotion'
+function loadReduceMotion(): boolean {
+  try {
+    return localStorage.getItem(REDUCEMOTION_KEY) === 'on'
+  } catch {
+    return false
+  }
+}
+function saveReduceMotion(on: boolean): void {
+  try {
+    localStorage.setItem(REDUCEMOTION_KEY, on ? 'on' : 'off')
+  } catch {
+    /* ignore */
+  }
+}
+
 const ONBOARD_KEY = 'gitcity.onboarded'
 function loadOnboarded(): boolean {
   try {
@@ -265,6 +281,10 @@ interface GitCityState {
   showHotspots: boolean
   /** diff viewer layout: split (side-by-side) vs unified; global pref */
   diffSplit: boolean
+  /** damp the cinematic intro orbit (and other flourishes); global pref */
+  reduceMotion: boolean
+  /** settings panel open */
+  settingsOpen: boolean
   /** whether the first-run "what am I seeing?" overlay has been dismissed */
   onboarded: boolean
   /** transient: the encoding guide re-opened from the "?" button */
@@ -292,6 +312,9 @@ interface GitCityState {
   setTimeOfDay(t: number): void
   toggleHotspots(): void
   toggleDiffSplit(): void
+  toggleReduceMotion(): void
+  setSettingsOpen(open: boolean): void
+  resetPreferences(): void
   dismissOnboarding(): void
   setHelpOpen(open: boolean): void
   openCommit(hash: string): void
@@ -405,6 +428,8 @@ export const useStore = create<GitCityState>((set, get) => ({
   timeOfDay: loadTimeOfDay(),
   showHotspots: loadShowHotspots(),
   diffSplit: loadDiffSplit(),
+  reduceMotion: loadReduceMotion(),
+  settingsOpen: false,
   onboarded: loadOnboarded(),
   helpOpen: false,
   commitDetailHash: null,
@@ -508,6 +533,41 @@ export const useStore = create<GitCityState>((set, get) => ({
     const diffSplit = !get().diffSplit
     saveDiffSplit(diffSplit)
     set({ diffSplit })
+  },
+  toggleReduceMotion: () => {
+    const reduceMotion = !get().reduceMotion
+    saveReduceMotion(reduceMotion)
+    set({ reduceMotion })
+  },
+  setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
+  resetPreferences: () => {
+    // wipe every persisted appearance/behaviour pref and return to defaults.
+    // Recent repos are deliberately kept — they're data, not a preference,
+    // and have their own "Clear" action.
+    for (const key of [
+      THEME_KEY,
+      VIEW_KEY,
+      TOD_KEY,
+      HOTSPOTS_KEY,
+      DIFFSPLIT_KEY,
+      REDUCEMOTION_KEY,
+      ONBOARD_KEY
+    ]) {
+      try {
+        localStorage.removeItem(key)
+      } catch {
+        /* ignore */
+      }
+    }
+    set({
+      themeId: DEFAULT_THEME_ID,
+      viewMode: 'city',
+      timeOfDay: 0.5,
+      showHotspots: true,
+      diffSplit: false,
+      reduceMotion: false,
+      onboarded: false
+    })
   },
   dismissOnboarding: () => {
     saveOnboarded()

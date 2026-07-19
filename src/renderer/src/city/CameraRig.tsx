@@ -35,10 +35,12 @@ export default function CameraRig({
   const camera = useThree((s) => s.camera)
   const gl = useThree((s) => s.gl)
   const selected = useStore((s) => s.selected)
+  const reduceMotion = useStore((s) => s.reduceMotion)
 
   const controls = useMemo(() => new MapControls(camera, gl.domElement), [camera, gl])
 
-  const intro = useRef(true)
+  // "Reduce motion" skips the cinematic intro orbit entirely
+  const intro = useRef(!reduceMotion)
   const tween = useRef<{ target: Vector3; pos: Vector3 } | null>(null)
 
   // Create once. dispose() detaches the DOM listeners, so it must run ONLY on

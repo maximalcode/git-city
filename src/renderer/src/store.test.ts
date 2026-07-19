@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { WorkingStatus } from '../../shared/types'
-import { statusFingerprint } from './store'
+import { statusFingerprint, useStore } from './store'
 
 function baseStatus(): WorkingStatus {
   return {
@@ -47,5 +47,35 @@ describe('statusFingerprint', () => {
       files: [{ path: 'a.ts', index: 'modified', worktree: 'unmodified', conflicted: false }]
     }
     expect(statusFingerprint(before)).not.toBe(statusFingerprint(after))
+  })
+})
+
+describe('preferences', () => {
+  it('toggleReduceMotion flips the flag', () => {
+    const start = useStore.getState().reduceMotion
+    useStore.getState().toggleReduceMotion()
+    expect(useStore.getState().reduceMotion).toBe(!start)
+    useStore.getState().toggleReduceMotion()
+    expect(useStore.getState().reduceMotion).toBe(start)
+  })
+
+  it('resetPreferences returns every appearance/behaviour pref to its default', () => {
+    useStore.setState({
+      themeId: 'neon',
+      viewMode: 'forest',
+      timeOfDay: 0.12,
+      showHotspots: false,
+      diffSplit: true,
+      reduceMotion: true,
+      onboarded: true
+    })
+    useStore.getState().resetPreferences()
+    const s = useStore.getState()
+    expect(s.viewMode).toBe('city')
+    expect(s.timeOfDay).toBe(0.5)
+    expect(s.showHotspots).toBe(true)
+    expect(s.diffSplit).toBe(false)
+    expect(s.reduceMotion).toBe(false)
+    expect(s.onboarded).toBe(false)
   })
 })

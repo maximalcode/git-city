@@ -2304,3 +2304,82 @@
 .empty-repo-card .primary {
   margin-top: 6px;
 }
+
+/* ---------- v14: settings panel ---------- */
+.settings-section {
+  margin-bottom: 6px;
+}
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 2px;
+  font-size: 13px;
+  color: var(--text);
+}
+.settings-row > span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.settings-row small {
+  color: var(--text-dim);
+  font-size: 11px;
+}
+.settings-row select,
+.settings-row input[type='range'] {
+  max-width: 160px;
+}
+.settings-row.toggle input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.seg {
+  display: inline-flex;
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.seg button {
+  padding: 5px 12px;
+  font-size: 12.5px;
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.seg button.active {
+  background: var(--accent);
+  color: #10141e;
+  font-weight: 600;
+}
+.settings-action {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 9px 12px;
+  margin-top: 6px;
+  font-size: 13px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  color: var(--text);
+  cursor: pointer;
+}
+.settings-action:hover:not(:disabled) {
+  border-color: var(--accent-2);
+}
+.settings-action:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.settings-action.danger {
+  color: var(--danger);
+  border-color: rgba(255, 107, 107, 0.35);
+}
+.settings-action.danger:hover {
+  border-color: var(--danger);
+}

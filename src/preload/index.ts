@@ -30,9 +30,10 @@ const api: GitCityApi = {
   stage: (repoPath, paths) => ipcRenderer.invoke('git-city:stage', repoPath, paths),
   unstage: (repoPath, paths) => ipcRenderer.invoke('git-city:unstage', repoPath, paths),
   discard: (repoPath, paths) => ipcRenderer.invoke('git-city:discard', repoPath, paths),
-  commit: (repoPath, message, amend) =>
-    ipcRenderer.invoke('git-city:commit', repoPath, message, amend),
+  commit: (repoPath, message, amend, sign) =>
+    ipcRenderer.invoke('git-city:commit', repoPath, message, amend, sign),
   lastCommitMessage: (repoPath) => ipcRenderer.invoke('git-city:last-commit-message', repoPath),
+  signingConfig: (repoPath) => ipcRenderer.invoke('git-city:signing-config', repoPath),
 
   // --- sync ---
   fetch: (repoPath) => ipcRenderer.invoke('git-city:fetch', repoPath),
@@ -64,6 +65,14 @@ const api: GitCityApi = {
     ipcRenderer.invoke('git-city:search-commits', repoPath, query, scope),
   grepWorkingTree: (repoPath, query) => ipcRenderer.invoke('git-city:grep-tree', repoPath, query),
   commitDetail: (repoPath, hash) => ipcRenderer.invoke('git-city:commit-detail', repoPath, hash),
+  submodules: (repoPath) => ipcRenderer.invoke('git-city:submodules', repoPath),
+  updateSubmodules: (repoPath, path) =>
+    ipcRenderer.invoke('git-city:submodule-update', repoPath, path),
+  worktrees: (repoPath) => ipcRenderer.invoke('git-city:worktrees', repoPath),
+  addWorktree: (repoPath, path, ref) =>
+    ipcRenderer.invoke('git-city:worktree-add', repoPath, path, ref),
+  removeWorktree: (repoPath, path, force) =>
+    ipcRenderer.invoke('git-city:worktree-remove', repoPath, path, force),
   reflog: (repoPath, limit) => ipcRenderer.invoke('git-city:reflog', repoPath, limit),
   resetTo: (repoPath, ref, mode) => ipcRenderer.invoke('git-city:reset-to', repoPath, ref, mode),
   recoverToBranch: (repoPath, name, ref) =>

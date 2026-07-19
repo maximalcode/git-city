@@ -322,6 +322,30 @@ export interface ReflogEntry {
 
 export type ResetMode = 'soft' | 'mixed' | 'keep' | 'hard'
 
+/** Repo commit-signing configuration (read-only; keys are never handled here). */
+export interface SigningConfig {
+  signByDefault: boolean
+  format: 'openpgp' | 'ssh' | 'x509'
+}
+
+export interface SubmoduleInfo {
+  path: string
+  sha: string
+  /** the `(describe)` suffix from `git submodule status`, if any */
+  describe: string
+  state: 'ok' | 'uninitialized' | 'modified' | 'conflict'
+}
+
+export interface WorktreeInfo {
+  path: string
+  head: string
+  /** short branch name, or null when detached / bare */
+  branch: string | null
+  bare: boolean
+  detached: boolean
+  locked: boolean
+}
+
 /** API exposed to the renderer via the preload bridge. */
 export interface GitCityApi {
   /** Returns the installed git version, or null if git is missing. */
@@ -347,8 +371,10 @@ export interface GitCityApi {
   stage(repoPath: string, paths: string[]): Promise<OpResult>
   unstage(repoPath: string, paths: string[]): Promise<OpResult>
   discard(repoPath: string, paths: string[]): Promise<OpResult>
-  commit(repoPath: string, message: string, amend: boolean): Promise<OpResult>
+  commit(repoPath: string, message: string, amend: boolean, sign?: boolean): Promise<OpResult>
   lastCommitMessage(repoPath: string): Promise<string>
+  /** Read commit-signing config to default the "Sign" toggle. */
+  signingConfig(repoPath: string): Promise<SigningConfig>
 
   // --- sync ---
   fetch(repoPath: string): Promise<OpResult>
@@ -390,6 +416,15 @@ export interface GitCityApi {
   grepWorkingTree(repoPath: string, query: string): Promise<GrepResult>
   /** Full detail (header, signature, changed files) for one commit. */
   commitDetail(repoPath: string, hash: string): Promise<CommitDetail>
+
+  // --- submodules ---
+  submodules(repoPath: string): Promise<SubmoduleInfo[]>
+  updateSubmodules(repoPath: string, path?: string): Promise<OpResult>
+
+  // --- worktrees ---
+  worktrees(repoPath: string): Promise<WorktreeInfo[]>
+  addWorktree(repoPath: string, path: string, ref: string): Promise<OpResult>
+  removeWorktree(repoPath: string, path: string, force: boolean): Promise<OpResult>
 
   // --- reflog (undo / recover) ---
   reflog(repoPath: string, limit?: number): Promise<ReflogEntry[]>

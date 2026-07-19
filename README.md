@@ -61,6 +61,11 @@ the line count as you scrub through history.
 - Fetch / pull / push with progress and cancel — **force-push does not exist
   in this app, by design**
 - Branches (incl. remote-tracking), merge, rebase, cherry-pick, stashes, tags
+- **Submodules** (status + one-click update) and **worktrees** (list, open,
+  remove) surfaced in the Branches panel
+- **Commit signing**: a "Sign" toggle in the commit box (defaults to the repo's
+  `commit.gpgsign`), and a verified/unverified badge on commits — keys stay with
+  gpg-agent / ssh-agent, never handled by the app
 - Interactive rebase editor (reorder / squash / drop) — local history only
 - In-app merge-conflict resolver (ours / theirs / both / edit per hunk)
 - **Time machine (reflog):** one-click Undo of the last HEAD move (keeps your

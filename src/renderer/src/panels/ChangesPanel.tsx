@@ -51,6 +51,9 @@ export default function ChangesPanel(): React.JSX.Element | null {
 
   const [message, setMessage] = useState('')
   const [amend, setAmend] = useState(false)
+  // "Sign" defaults to the repo's commit.gpgsign config; user can still toggle it
+  const [sign, setSign] = useState(false)
+  const [canSign, setCanSign] = useState(false)
   // which file rows are expanded to show per-hunk staging; keyed by "which:path"
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const toggleExpand = (key: string): void =>
@@ -62,6 +65,24 @@ export default function ChangesPanel(): React.JSX.Element | null {
     })
 
   const parts = useMemo(() => (status ? partition(status) : null), [status])
+
+  // default the Sign toggle from the repo's commit.gpgsign config (once)
+  useEffect(() => {
+    const repo = useStore.getState().repoPath
+    if (!hasApi() || !repo) return
+    let cancelled = false
+    void window.gitCity
+      .signingConfig(repo)
+      .then((c) => {
+        if (cancelled) return
+        setCanSign(true)
+        setSign(c.signByDefault)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   if (panel !== 'changes') return null
 
@@ -100,14 +121,14 @@ export default function ChangesPanel(): React.JSX.Element | null {
         confirmLabel: 'Amend anyway',
         danger: true,
         onConfirm: () => {
-          void commitAction(message, amend)
+          void commitAction(message, amend, sign)
           setMessage('')
           setAmend(false)
         }
       })
       return
     }
-    void commitAction(message, amend)
+    void commitAction(message, amend, sign)
     setMessage('')
     setAmend(false)
   }
@@ -203,6 +224,17 @@ export default function ChangesPanel(): React.JSX.Element | null {
           <input type="checkbox" checked={amend} onChange={toggleAmend} disabled={busy} />
           Amend previous commit
         </label>
+        {canSign && (
+          <label className="amend-row">
+            <input
+              type="checkbox"
+              checked={sign}
+              onChange={(e) => setSign(e.target.checked)}
+              disabled={busy}
+            />
+            Sign commit (GPG/SSH)
+          </label>
+        )}
         <button className="primary commit-btn" disabled={!canCommit} onClick={doCommit}>
           {amend ? 'Amend' : 'Commit'}
           {stagedCount > 0 ? ` ${stagedCount} file${stagedCount === 1 ? '' : 's'}` : ''}

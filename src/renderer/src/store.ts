@@ -1,9 +1,11 @@
 import { create } from 'zustand'
 import type {
   BranchInfo,
+  GitHubAuth,
   OpResult,
   ProgressInfo,
   HunkMode,
+  PullRequestInfo,
   RebaseEntry,
   RepoAnalysis,
   RepoOpState,
@@ -179,6 +181,11 @@ const REPO_STATE_RESET: Partial<GitCityState> = {
   tags: [],
   submodules: [],
   worktrees: [],
+  githubAuth: null,
+  pullRequests: [],
+  currentPr: null,
+  prPanelOpen: false,
+  prLoading: false,
   rebaseOpen: false,
   reflogOpen: false,
   panel: 'none',
@@ -230,6 +237,11 @@ interface GitCityState {
   tags: TagInfo[]
   submodules: SubmoduleInfo[]
   worktrees: WorktreeInfo[]
+  githubAuth: GitHubAuth | null
+  pullRequests: PullRequestInfo[]
+  currentPr: PullRequestInfo | null
+  prPanelOpen: boolean
+  prLoading: boolean
   rebaseOpen: boolean
   reflogOpen: boolean
   panel: Panel
@@ -297,6 +309,11 @@ interface GitCityState {
   updateSubmodules(path?: string): Promise<void>
   addWorktree(path: string, ref: string): Promise<void>
   removeWorktree(path: string, force: boolean): Promise<void>
+  setPrPanelOpen(open: boolean): void
+  refreshGitHub(): Promise<void>
+  checkoutPr(number: number): Promise<void>
+  createPr(base: string, title: string, body: string): Promise<void>
+  openExternal(url: string): void
   setRebaseOpen(open: boolean): void
   setReflogOpen(open: boolean): void
   createTag(name: string, ref?: string): Promise<void>
@@ -365,6 +382,11 @@ export const useStore = create<GitCityState>((set, get) => ({
   tags: [],
   submodules: [],
   worktrees: [],
+  githubAuth: null,
+  pullRequests: [],
+  currentPr: null,
+  prPanelOpen: false,
+  prLoading: false,
   rebaseOpen: false,
   reflogOpen: false,
   panel: 'none',
@@ -580,6 +602,51 @@ export const useStore = create<GitCityState>((set, get) => ({
     runOp(set, get, 'Removing worktree…', (repo) =>
       window.gitCity.removeWorktree(repo, path, force)
     ),
+
+  setPrPanelOpen: (prPanelOpen) => {
+    set({ prPanelOpen })
+    if (prPanelOpen) void get().refreshGitHub()
+  },
+  refreshGitHub: async () => {
+    const { repoPath } = get()
+    if (!hasApi() || !repoPath) return
+    set({ prLoading: true })
+    try {
+      const auth = await window.gitCity.ghStatus(repoPath)
+      if (!auth.authed || !auth.isGitHub) {
+        set({ githubAuth: auth, pullRequests: [], currentPr: null })
+        return
+      }
+      const [pullRequests, currentPr] = await Promise.all([
+        window.gitCity.listPullRequests(repoPath),
+        window.gitCity.currentBranchPr(repoPath)
+      ])
+      set({ githubAuth: auth, pullRequests, currentPr })
+    } catch {
+      /* leave prior state; gh hiccup */
+    } finally {
+      set({ prLoading: false })
+    }
+  },
+  checkoutPr: (number) =>
+    runOp(
+      set,
+      get,
+      `Checking out PR #${number}…`,
+      (repo) => window.gitCity.checkoutPr(repo, number),
+      {
+        reanalyze: true
+      }
+    ),
+  createPr: async (base, title, body) => {
+    await runOp(set, get, 'Creating pull request…', (repo) =>
+      window.gitCity.createPr(repo, base, title, body)
+    )
+    if (!get().opError) await get().refreshGitHub()
+  },
+  openExternal: (url) => {
+    if (hasApi()) void window.gitCity.openExternal(url)
+  },
 
   setRebaseOpen: (rebaseOpen) => set({ rebaseOpen }),
   setReflogOpen: (reflogOpen) => set({ reflogOpen }),
@@ -890,6 +957,8 @@ async function loadRepo(
       await get().refreshTags()
       await get().refreshSubmodules()
       await get().refreshWorktrees()
+      // GitHub is a network call — populate the PR/CI state in the background
+      void get().refreshGitHub()
     }
   } catch (err) {
     set({ screen: 'welcome', error: cleanError(err) })

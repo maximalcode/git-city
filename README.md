@@ -76,6 +76,10 @@ the line count as you scrub through history.
   **word-level intra-line highlighting** — plus file history (follows renames)
   and blame
 - Commit graph with branch topology, ref chips, checkout/cherry-pick actions
+- **Pull requests** (GitHub, via the `gh` CLI — no token setup): list open PRs
+  with rolled-up CI status, see the current branch's PR, check one out, open it
+  in the browser, or create a PR for the current branch. Falls back to a clear
+  hint when `gh` is missing or logged out
 - Recent repos, drag-drop a folder to open, file search with fly-to
 
 **Keyboard shortcuts**
@@ -88,6 +92,7 @@ the line count as you scrub through history.
 | `S`              | Stashes panel                  |
 | `G`              | Commit graph                   |
 | `U`              | Time machine (reflog undo)     |
+| `P`              | Pull requests                  |
 | `V`              | Toggle City / Forest view      |
 | `/`              | Find a file (arrows + Enter)   |
 | `Space`          | Play/pause the timeline        |

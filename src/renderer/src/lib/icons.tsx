@@ -28,6 +28,8 @@ export type IconName =
   | 'sun'
   | 'flame'
   | 'help'
+  | 'pr'
+  | 'external'
 
 const PATHS: Record<IconName, JSX.Element> = {
   branch: (
@@ -144,6 +146,21 @@ const PATHS: Record<IconName, JSX.Element> = {
       <circle cx="12" cy="12" r="8.5" />
       <path d="M9.4 9.2a2.6 2.6 0 0 1 5 .8c0 1.7-2.4 2-2.4 3.6" />
       <path d="M12 17h0" />
+    </>
+  ),
+  pr: (
+    <>
+      <circle cx="6" cy="6" r="2.4" />
+      <circle cx="6" cy="18" r="2.4" />
+      <circle cx="18" cy="18" r="2.4" />
+      <path d="M6 8.4v7.2M18 15.6V11a3 3 0 0 0-3-3h-4M13 6l-2 2 2 2" />
+    </>
+  ),
+  external: (
+    <>
+      <path d="M14 5h5v5" />
+      <path d="M19 5l-7 7" />
+      <path d="M18 13.5V18a1.5 1.5 0 0 1-1.5 1.5H6A1.5 1.5 0 0 1 4.5 18V7.5A1.5 1.5 0 0 1 6 6h4.5" />
     </>
   )
 }

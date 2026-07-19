@@ -68,6 +68,7 @@ function KindLayer({
 }): React.JSX.Element | null {
   const setHovered = useStore((s) => s.setHovered)
   const setSelected = useStore((s) => s.setSelected)
+  const setDiffOpen = useStore((s) => s.setDiffOpen)
   const theme = getTheme(useStore((s) => s.themeId))
 
   const kind = TREE_KINDS[kindIndex]
@@ -152,6 +153,14 @@ function KindLayer({
     const p = pathAt(e.instanceId)
     if (p) setSelected(p)
   }
+  const onDoubleClick = (e: ThreeEvent<MouseEvent>): void => {
+    e.stopPropagation()
+    const p = pathAt(e.instanceId)
+    if (p) {
+      setSelected(p)
+      setDiffOpen(true)
+    }
+  }
 
   return (
     <group>
@@ -173,6 +182,7 @@ function KindLayer({
         onPointerMove={onMove}
         onPointerOut={() => setHovered(null)}
         onClick={onClick}
+        onDoubleClick={onDoubleClick}
       >
         <meshStandardMaterial roughness={0.85} metalness={0} vertexColors={false} />
       </instancedMesh>

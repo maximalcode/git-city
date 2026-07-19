@@ -1567,3 +1567,310 @@
 .hud-bottom {
   padding-left: 76px;
 }
+
+/* ===================================================================
+   v8 immersion: command palette, onboarding, minimap, playhead,
+   time-of-day, richer tooltip
+   =================================================================== */
+
+/* ---------- command palette (Ctrl/Cmd-K) ---------- */
+.palette-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(6, 8, 12, 0.45);
+  backdrop-filter: blur(2px);
+  z-index: 60;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+}
+.palette {
+  margin-top: 12vh;
+  width: 560px;
+  max-width: 88vw;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 14px;
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(18px);
+  overflow: hidden;
+  animation: pop-in 0.14s ease;
+}
+.palette-input {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 13px 16px;
+  border-bottom: 1px solid var(--panel-border);
+}
+.palette-input svg {
+  color: var(--text-dim);
+  flex-shrink: 0;
+}
+.palette-input input {
+  flex: 1;
+  background: transparent;
+  border: 0;
+  outline: none;
+  color: var(--text);
+  font-size: 15px;
+}
+.palette-results {
+  max-height: 44vh;
+  overflow-y: auto;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.palette-results button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  border-radius: 8px;
+  padding: 9px 11px;
+  color: var(--text);
+  font-size: 13.5px;
+}
+.palette-results button svg {
+  color: var(--text-dim);
+  flex-shrink: 0;
+}
+.palette-results button.active {
+  background: rgba(255, 179, 71, 0.16);
+}
+.palette-results button.active svg {
+  color: var(--accent);
+}
+.palette-label {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.palette-group {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-dim);
+  flex-shrink: 0;
+}
+.palette-empty {
+  padding: 18px;
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 13px;
+}
+
+/* ---------- onboarding / encoding guide ---------- */
+.onboard-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(6, 8, 12, 0.5);
+  backdrop-filter: blur(3px);
+  z-index: 55;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.onboard-card {
+  width: 460px;
+  max-width: 88vw;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 16px;
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(18px);
+  padding: 22px 24px;
+  animation: pop-in 0.16s ease;
+}
+.onboard-head h2 {
+  margin: 0 0 4px;
+  font-size: 20px;
+}
+.onboard-head p {
+  margin: 0 0 16px;
+  color: var(--text-dim);
+  font-size: 13.5px;
+}
+.onboard-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.onboard-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+.onboard-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  background: rgba(255, 179, 71, 0.14);
+  color: var(--accent);
+  flex-shrink: 0;
+}
+.onboard-title {
+  font-size: 14px;
+  font-weight: 600;
+}
+.onboard-body {
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+.onboard-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-top: 20px;
+}
+.onboard-tip {
+  font-size: 11.5px;
+  color: var(--text-dim);
+  line-height: 1.6;
+}
+.onboard-tip kbd,
+.tod kbd {
+  font-family: Consolas, monospace;
+  font-size: 10.5px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--panel-border);
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+.onboard-foot button.primary {
+  background: var(--accent);
+  color: #1a1205;
+  font-weight: 600;
+  border: 0;
+  border-radius: 9px;
+  padding: 9px 18px;
+  flex-shrink: 0;
+}
+
+/* ---------- minimap + compass ---------- */
+.minimap {
+  position: absolute;
+  left: 72px;
+  bottom: 104px;
+  width: 140px;
+  height: 140px;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(10px);
+  overflow: hidden;
+  z-index: 12;
+  pointer-events: none;
+}
+.minimap canvas {
+  display: block;
+}
+.minimap-n {
+  position: absolute;
+  top: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: var(--text-dim);
+}
+
+/* ---------- playhead banner (history playback) ---------- */
+.playhead {
+  position: absolute;
+  top: 58px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  max-width: 70vw;
+  padding: 9px 16px;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 999px;
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(14px);
+  z-index: 16;
+  animation: pop-in 0.16s ease;
+}
+.playhead-hash {
+  font-family: Consolas, monospace;
+  color: var(--accent-2);
+  font-size: 12.5px;
+}
+.playhead-msg {
+  color: var(--text);
+  font-size: 13.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 40vw;
+}
+.playhead-meta {
+  color: var(--text-dim);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+/* ---------- time-of-day popover ---------- */
+.tod {
+  position: relative;
+}
+.tod-popover {
+  position: absolute;
+  top: 40px;
+  right: 0;
+  width: 200px;
+  padding: 12px 14px;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(14px);
+  z-index: 40;
+  animation: pop-in 0.14s ease;
+}
+.tod-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.5px;
+  color: var(--text);
+  margin-bottom: 9px;
+}
+.tod-head svg {
+  color: var(--accent);
+}
+.tod-popover input[type='range'] {
+  width: 100%;
+  accent-color: var(--accent);
+}
+.tod-ends {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10.5px;
+  color: var(--text-dim);
+  margin-top: 4px;
+}
+
+/* richer hover tooltip */
+.tooltip-hint {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--accent-2);
+  opacity: 0.85;
+}

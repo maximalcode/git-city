@@ -24,6 +24,10 @@ export type IconName =
   | 'play'
   | 'pause'
   | 'chevron'
+  | 'command'
+  | 'sun'
+  | 'flame'
+  | 'help'
 
 const PATHS: Record<IconName, JSX.Element> = {
   branch: (
@@ -122,7 +126,26 @@ const PATHS: Record<IconName, JSX.Element> = {
       <rect x="13.8" y="5" width="3.2" height="14" rx="1" fill="currentColor" stroke="none" />
     </>
   ),
-  chevron: <path d="M6 9l6 6 6-6" />
+  chevron: <path d="M6 9l6 6 6-6" />,
+  command: (
+    <path d="M9 6.5a2.5 2.5 0 1 0-2.5 2.5H9m0 0h6m-6 0v6m6-6a2.5 2.5 0 1 0-2.5-2.5V9m2.5 6a2.5 2.5 0 1 0-2.5-2.5V15m-6 0a2.5 2.5 0 1 1 2.5 2.5V15" />
+  ),
+  sun: (
+    <>
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2.5v2.5M12 19v2.5M4.2 4.2l1.8 1.8M18 18l1.8 1.8M2.5 12h2.5M19 12h2.5M4.2 19.8 6 18M18 6l1.8-1.8" />
+    </>
+  ),
+  flame: (
+    <path d="M12 3.5c1.2 3 4.5 4.3 4.5 8.2A4.5 4.5 0 0 1 12 20a4.5 4.5 0 0 1-4.5-4.3c0-1.9 1.1-2.9 1.8-4.1.6 1 1.5 1.3 2 1.1-.7-2 .7-3.9.7-6.7Z" />
+  ),
+  help: (
+    <>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M9.4 9.2a2.6 2.6 0 0 1 5 .8c0 1.7-2.4 2-2.4 3.6" />
+      <path d="M12 17h0" />
+    </>
+  )
 }
 
 export default function Icon({

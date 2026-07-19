@@ -56,9 +56,13 @@ const camPos = (page: Page): Promise<[number, number, number] | null> =>
     return c ? [c.position.x, c.position.y, c.position.z] : null
   })
 
+// the r3f scene canvas is authored before the minimap's 2D canvas, so `.first()`
+// disambiguates the two `.city-root canvas` matches
+const sceneCanvas = (page: Page) => page.locator('.city-root canvas').first()
+
 /** right-drag across the middle of the canvas — MapControls orbits on it */
 const dragOrbit = async (page: Page): Promise<void> => {
-  const b = await page.locator('.city-root canvas').boundingBox()
+  const b = await sceneCanvas(page).boundingBox()
   if (!b) throw new Error('no canvas box')
   const cx = b.x + b.width / 2
   const cy = b.y + b.height / 2
@@ -99,7 +103,7 @@ test('city/forest switching never freezes the render loop or errors', async ({ p
 
   await installDrawCounter(page)
   await page.goto('/?mock')
-  await page.waitForSelector('.city-root canvas', { timeout: 20_000 })
+  await sceneCanvas(page).waitFor({ state: 'visible', timeout: 30_000 })
   await page.waitForFunction(
     () =>
       (
@@ -107,6 +111,16 @@ test('city/forest switching never freezes the render loop or errors', async ({ p
           __gitCityMock?: { store: { getState(): { screen: string } } }
         }
       ).__gitCityMock?.store.getState().screen === 'city'
+  )
+
+  // dismiss the first-run encoding guide (a real user clicks "Got it"); its
+  // full-screen backdrop would otherwise intercept the camera drags below
+  await page.evaluate(() =>
+    (
+      window as unknown as {
+        __gitCityMock: { store: { getState(): { dismissOnboarding(): void } } }
+      }
+    ).__gitCityMock.store.getState().dismissOnboarding()
   )
 
   // the render loop is alive at rest

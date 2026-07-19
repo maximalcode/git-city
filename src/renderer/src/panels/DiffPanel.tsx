@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { DiffHunk, DiffLine } from '../../../shared/types'
+import type { DiffHunk, DiffLine, ImageDiff } from '../../../shared/types'
 import type { DiffFile } from '../../../shared/types'
 import { cleanError, hasApi, isLiveState, useStore } from '../store'
 import { pairedWordSpans, toSideBySide, type SbsCell, type WordSpan } from '../lib/wordDiff'
+import { isImagePath } from '../../../shared/imageExt'
 
 /**
  * Shows the diff for the selected building's file. Context-aware: when viewing
@@ -24,6 +25,7 @@ export default function DiffPanel(): React.JSX.Element | null {
   const toggleSplit = useStore((s) => s.toggleDiffSplit)
 
   const [diff, setDiff] = useState<DiffFile | null>(null)
+  const [imgDiff, setImgDiff] = useState<ImageDiff | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [retryNonce, setRetryNonce] = useState(0)
@@ -39,10 +41,17 @@ export default function DiffPanel(): React.JSX.Element | null {
     let cancelled = false
     setLoading(true)
     setError(null)
+    setImgDiff(null)
     void window.gitCity
       .getFileDiff(repoPath, selected, rev)
-      .then((d) => {
-        if (!cancelled) setDiff(d)
+      .then(async (d) => {
+        if (cancelled) return
+        setDiff(d)
+        // a binary image → fetch the before/after bytes for a visual diff
+        if (d.binary && isImagePath(selected)) {
+          const img = await window.gitCity.imageDiff(repoPath, selected, rev).catch(() => null)
+          if (!cancelled) setImgDiff(img)
+        }
       })
       .catch((err) => {
         if (!cancelled) {
@@ -104,7 +113,10 @@ export default function DiffPanel(): React.JSX.Element | null {
             <button onClick={() => setRetryNonce((n) => n + 1)}>Retry</button>
           </div>
         )}
-        {!loading && diff && diff.binary && (
+        {!loading && diff && diff.binary && imgDiff && (imgDiff.old || imgDiff.new) && (
+          <ImageDiffView diff={imgDiff} />
+        )}
+        {!loading && diff && diff.binary && !(imgDiff && (imgDiff.old || imgDiff.new)) && (
           <div className="empty">Binary file — no line diff.</div>
         )}
         {!loading && diff && !diff.binary && diff.hunks.length === 0 && (
@@ -116,6 +128,49 @@ export default function DiffPanel(): React.JSX.Element | null {
           diff.hunks.map((h, hi) =>
             split ? <SplitHunk key={hi} hunk={h} /> : <UnifiedHunk key={hi} hunk={h} />
           )}
+      </div>
+    </div>
+  )
+}
+
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`
+}
+
+/** Side-by-side before/after view for a changed image. */
+function ImageDiffView({ diff }: { diff: ImageDiff }): React.JSX.Element {
+  const oldB = diff.old?.bytes ?? 0
+  const newB = diff.new?.bytes ?? 0
+  const delta = newB - oldB
+  return (
+    <div className="img-diff">
+      <div className="img-side">
+        <div className="img-label del">Before</div>
+        {diff.old ? (
+          <img src={diff.old.dataUri} alt="before" />
+        ) : (
+          <div className="img-absent">added</div>
+        )}
+        <div className="img-bytes">{diff.old ? formatBytes(diff.old.bytes) : '—'}</div>
+      </div>
+      <div className="img-side">
+        <div className="img-label add">After</div>
+        {diff.new ? (
+          <img src={diff.new.dataUri} alt="after" />
+        ) : (
+          <div className="img-absent">deleted</div>
+        )}
+        <div className="img-bytes">
+          {diff.new ? formatBytes(diff.new.bytes) : '—'}
+          {diff.old && diff.new && (
+            <span className={`img-delta ${delta >= 0 ? 'up' : 'down'}`}>
+              {delta >= 0 ? '+' : '−'}
+              {formatBytes(Math.abs(delta))}
+            </span>
+          )}
+        </div>
       </div>
     </div>
   )

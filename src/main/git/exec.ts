@@ -64,6 +64,40 @@ export async function runGit(cwd: string, args: string[]): Promise<string> {
   return res.stdout
 }
 
+/**
+ * Run git and return raw stdout bytes (never string-decoded) — for binary
+ * content like image blobs. Resolves null on a nonzero exit (e.g. the path
+ * doesn't exist at that ref) instead of throwing. Caps output to avoid loading
+ * a huge binary into memory.
+ */
+export function runGitBuffer(
+  cwd: string,
+  args: string[],
+  maxBytes = 12 * 1024 * 1024
+): Promise<Buffer | null> {
+  return new Promise((resolve) => {
+    const child = spawn('git', args, { cwd, stdio: ['ignore', 'pipe', 'pipe'], env: GIT_ENV })
+    const chunks: Buffer[] = []
+    let total = 0
+    let over = false
+    child.stdout.on('data', (d: Buffer) => {
+      total += d.length
+      if (total > maxBytes) {
+        over = true
+        child.kill()
+        return
+      }
+      chunks.push(d)
+    })
+    child.stderr.on('data', () => {}) // discard; a failure just means "no blob"
+    child.on('error', () => resolve(null))
+    child.on('close', (code) => {
+      if (over || code !== 0) resolve(null)
+      else resolve(Buffer.concat(chunks))
+    })
+  })
+}
+
 /** Stream git stdout line by line (for large outputs like `git log`). */
 export function runGitLines(
   cwd: string,

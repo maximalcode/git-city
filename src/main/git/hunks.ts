@@ -75,6 +75,64 @@ export async function getFileHunks(
   return { path, staged, binary: false, hunks: out }
 }
 
+/**
+ * Rebuild a hunk that stages only a subset of its changed lines. `selected`
+ * indexes the hunk's content lines (0-based, after the @@ header). Unselected
+ * additions are dropped; unselected deletions become context; the @@ header
+ * counts are recomputed. Returns null when the selection would produce no real
+ * change, or when the hunk carries a "\ No newline at end of file" marker
+ * (whole-hunk staging preserves those exactly; line-level cannot, so we refuse
+ * rather than risk corrupting the file).
+ */
+export function buildLinePatch(hunkText: string, selected: number[]): string | null {
+  if (hunkText.includes('\\ No newline at end of file')) return null
+  const raw = hunkText.split('\n')
+  const oldStart = parseInt(/^@@ -(\d+)/.exec(raw[0])?.[1] ?? '', 10)
+  if (!Number.isFinite(oldStart)) return null
+
+  const sel = new Set(selected)
+  const out: string[] = []
+  let oldCount = 0
+  let newCount = 0
+  let keptChange = false
+
+  // content lines are raw[1..]; a trailing '' from the final newline is skipped
+  for (let i = 1; i < raw.length; i++) {
+    const line = raw[i]
+    if (i === raw.length - 1 && line === '') break
+    const contentIdx = i - 1 // 0-based index the renderer uses
+    const c0 = line[0]
+    if (c0 === '+') {
+      if (sel.has(contentIdx)) {
+        out.push(line)
+        newCount++
+        keptChange = true
+      }
+      // unselected addition → omitted
+    } else if (c0 === '-') {
+      if (sel.has(contentIdx)) {
+        out.push(line)
+        oldCount++
+        keptChange = true
+      } else {
+        // unselected deletion → keep the line as context on both sides
+        out.push(' ' + line.slice(1))
+        oldCount++
+        newCount++
+      }
+    } else {
+      // context (' ' or bare)
+      out.push(line.startsWith(' ') ? line : ' ' + line)
+      oldCount++
+      newCount++
+    }
+  }
+
+  if (!keptChange) return null
+  const head = `@@ -${oldStart},${oldCount} +${oldStart},${newCount} @@`
+  return [head, ...out].join('\n') + '\n'
+}
+
 export async function applyHunk(
   repoPath: string,
   path: string,
@@ -98,6 +156,47 @@ export async function applyHunk(
   if (mode === 'stage' || mode === 'unstage') args.push('--cached')
   if (mode === 'unstage' || mode === 'discard') args.push('--reverse')
   args.push('-') // read the patch from stdin
+
+  const res = await runGitResult(repoPath, args, { input: patch })
+  return res.code === 0 ? ok() : failFrom(res)
+}
+
+/**
+ * Stage/unstage/discard only the selected lines within a hunk (finer than
+ * `applyHunk`). `lineIndices` are 0-based positions among the hunk's content
+ * lines, as the renderer numbers them.
+ */
+export async function applyLines(
+  repoPath: string,
+  path: string,
+  hunkHeader: string,
+  lineIndices: number[],
+  mode: HunkMode
+): Promise<OpResult> {
+  const fromStaged = mode === 'unstage'
+  const raw = await rawDiff(repoPath, path, fromStaged)
+  const { header, hunks } = splitDiff(raw)
+
+  const hunkText = hunks.find((h) => h.startsWith(hunkHeader))
+  if (!hunkText) {
+    return { ok: false, code: 'nothing-to-do', message: 'This change moved — reopen the file.' }
+  }
+
+  const rebuilt = buildLinePatch(hunkText, lineIndices)
+  if (!rebuilt) {
+    return {
+      ok: false,
+      code: 'nothing-to-do',
+      message:
+        'Select at least one changed line (use the whole hunk for files with no trailing newline).'
+    }
+  }
+
+  const patch = header + rebuilt
+  const args = ['apply']
+  if (mode === 'stage' || mode === 'unstage') args.push('--cached')
+  if (mode === 'unstage' || mode === 'discard') args.push('--reverse')
+  args.push('--recount', '-')
 
   const res = await runGitResult(repoPath, args, { input: patch })
   return res.code === 0 ? ok() : failFrom(res)

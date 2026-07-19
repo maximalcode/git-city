@@ -361,6 +361,18 @@ export interface UpdateInfo {
   publishedAt: string | null
 }
 
+/** One side of an image diff, as a base64 data URI plus its byte size. */
+export interface ImageBlob {
+  dataUri: string
+  bytes: number
+}
+
+/** Before/after image bytes for a changed image file (either side may be null). */
+export interface ImageDiff {
+  old: ImageBlob | null
+  new: ImageBlob | null
+}
+
 /** One file changed by a pull request (for lighting it up in the scene). */
 export interface PrFileChange {
   path: string
@@ -440,10 +452,20 @@ export interface GitCityApi {
   mergeContinue(repoPath: string): Promise<OpResult>
   /** Unified diff for a file: working changes (no rev) or a commit's change (rev). */
   getFileDiff(repoPath: string, path: string, rev?: string): Promise<DiffFile>
+  /** Before/after bytes for a changed image file (null for non-images). */
+  imageDiff(repoPath: string, path: string, rev?: string): Promise<ImageDiff | null>
   /** Hunks of a file's staged or unstaged diff, for partial staging. */
   fileHunks(repoPath: string, path: string, staged: boolean): Promise<FileHunks>
   /** Stage / unstage / discard a single hunk, keyed by its @@ header line. */
   applyHunk(repoPath: string, path: string, hunkHeader: string, mode: HunkMode): Promise<OpResult>
+  /** Stage/unstage/discard only the selected content-line indices within a hunk. */
+  applyLines(
+    repoPath: string,
+    path: string,
+    hunkHeader: string,
+    lineIndices: number[],
+    mode: HunkMode
+  ): Promise<OpResult>
   /** Commit history for a file (follows renames). */
   fileHistory(repoPath: string, path: string): Promise<FileCommit[]>
   /** Per-line blame for a file. */

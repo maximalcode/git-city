@@ -372,6 +372,7 @@ interface GitCityState {
   unstage(paths: string[]): Promise<void>
   discard(paths: string[]): Promise<void>
   applyHunk(path: string, header: string, mode: HunkMode): Promise<void>
+  applyLines(path: string, header: string, lineIndices: number[], mode: HunkMode): Promise<void>
   commit(message: string, amend: boolean, sign?: boolean): Promise<void>
   fetch(): Promise<void>
   pull(): Promise<void>
@@ -862,6 +863,18 @@ export const useStore = create<GitCityState>((set, get) => ({
           ? 'Unstaging hunk…'
           : 'Discarding hunk…'
     return runOp(set, get, label, (repo) => window.gitCity.applyHunk(repo, path, header, mode))
+  },
+  applyLines: (path, header, lineIndices, mode) => {
+    const n = lineIndices.length
+    const label =
+      mode === 'stage'
+        ? `Staging ${n} line${n === 1 ? '' : 's'}…`
+        : mode === 'unstage'
+          ? `Unstaging ${n} line${n === 1 ? '' : 's'}…`
+          : `Discarding ${n} line${n === 1 ? '' : 's'}…`
+    return runOp(set, get, label, (repo) =>
+      window.gitCity.applyLines(repo, path, header, lineIndices, mode)
+    )
   },
   commit: (message, amend, sign) =>
     runOp(

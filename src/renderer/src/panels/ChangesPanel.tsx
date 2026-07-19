@@ -345,10 +345,6 @@ function Row({
  *  (i.e. after any hunk op completes via runOp → refreshStatus). */
 function HunkList({ path, staged }: { path: string; staged: boolean }): React.JSX.Element {
   const status = useStore((s) => s.workingStatus) // refetch trigger
-  const busy = useStore((s) => s.opInProgress !== null)
-  const applyHunk = useStore((s) => s.applyHunk)
-  const askConfirm = useStore((s) => s.askConfirm)
-
   const [hunks, setHunks] = useState<HunkInfo[] | null>(null)
   const [binary, setBinary] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -376,61 +372,136 @@ function HunkList({ path, staged }: { path: string; staged: boolean }): React.JS
   if (!hunks) return <div className="hunk-note">Loading hunks…</div>
   if (hunks.length === 0) return <div className="hunk-note">No hunks.</div>
 
-  const discardHunk = (header: string): void =>
+  return (
+    <div className="hunk-list">
+      {hunks.map((h) => (
+        <HunkBlock key={h.header} path={path} staged={staged} hunk={h} />
+      ))}
+    </div>
+  )
+}
+
+/**
+ * One hunk with both whole-hunk actions and per-line selection: click any
+ * changed (+/−) line to select it, then stage/unstage/discard just those lines.
+ */
+function HunkBlock({
+  path,
+  staged,
+  hunk
+}: {
+  path: string
+  staged: boolean
+  hunk: HunkInfo
+}): React.JSX.Element {
+  const busy = useStore((s) => s.opInProgress !== null)
+  const applyHunk = useStore((s) => s.applyHunk)
+  const applyLines = useStore((s) => s.applyLines)
+  const askConfirm = useStore((s) => s.askConfirm)
+  const [sel, setSel] = useState<Set<number>>(new Set())
+
+  const toggle = (i: number, kind: string): void => {
+    if (kind !== 'add' && kind !== 'del') return // only changed lines are selectable
+    setSel((prev) => {
+      const next = new Set(prev)
+      if (next.has(i)) next.delete(i)
+      else next.add(i)
+      return next
+    })
+  }
+  const clearSel = (): void => setSel(new Set())
+  const indices = (): number[] => [...sel].sort((a, b) => a - b)
+
+  const stageLines = (): void => {
+    void applyLines(path, hunk.header, indices(), staged ? 'unstage' : 'stage')
+    clearSel()
+  }
+  const discardLines = (): void =>
+    askConfirm({
+      title: `Discard ${sel.size} line${sel.size === 1 ? '' : 's'}?`,
+      body: `Throw away the selected change${sel.size === 1 ? '' : 's'} to "${path}"? This cannot be undone.`,
+      confirmLabel: 'Discard',
+      danger: true,
+      onConfirm: () => {
+        void applyLines(path, hunk.header, indices(), 'discard')
+        clearSel()
+      }
+    })
+  const discardHunk = (): void =>
     askConfirm({
       title: 'Discard this hunk?',
       body: `Throw away this one change to "${path}"? This cannot be undone.`,
       confirmLabel: 'Discard',
       danger: true,
-      onConfirm: () => void applyHunk(path, header, 'discard')
+      onConfirm: () => void applyHunk(path, hunk.header, 'discard')
     })
 
   return (
-    <div className="hunk-list">
-      {hunks.map((h) => (
-        <div key={h.header} className="hunk-block">
-          <div className="hunk-bar">
-            <span className="hunk-counts">
-              <span className="diff-add">+{h.additions}</span>{' '}
-              <span className="diff-del">−{h.deletions}</span>
-            </span>
-            <span className="hunk-header" title={h.header}>
-              {h.header}
-            </span>
-            <span className="hunk-btns">
-              {staged ? (
-                <button disabled={busy} onClick={() => void applyHunk(path, h.header, 'unstage')}>
-                  − Unstage
+    <div className="hunk-block">
+      <div className="hunk-bar">
+        <span className="hunk-counts">
+          <span className="diff-add">+{hunk.additions}</span>{' '}
+          <span className="diff-del">−{hunk.deletions}</span>
+        </span>
+        <span className="hunk-header" title={hunk.header}>
+          {hunk.header}
+        </span>
+        <span className="hunk-btns">
+          {sel.size > 0 ? (
+            <>
+              <button disabled={busy} onClick={stageLines}>
+                {staged ? '−' : '+'} {sel.size} line{sel.size === 1 ? '' : 's'}
+              </button>
+              {!staged && (
+                <button
+                  disabled={busy}
+                  className="danger"
+                  title="Discard lines"
+                  onClick={discardLines}
+                >
+                  ↺
                 </button>
-              ) : (
-                <>
-                  <button disabled={busy} onClick={() => void applyHunk(path, h.header, 'stage')}>
-                    + Stage
-                  </button>
-                  <button
-                    disabled={busy}
-                    className="danger"
-                    title="Discard hunk"
-                    onClick={() => discardHunk(h.header)}
-                  >
-                    ↺
-                  </button>
-                </>
               )}
-            </span>
-          </div>
-          <div className="hunk-lines">
-            {h.lines.map((l, i) => (
-              <div key={i} className={`diff-line diff-${l.kind}`}>
-                <span className="diff-gutter">
-                  {l.kind === 'add' ? '+' : l.kind === 'del' ? '−' : ' '}
-                </span>
-                <span className="diff-text">{l.text || ' '}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      ))}
+              <button title="Clear selection" onClick={clearSel}>
+                ✕
+              </button>
+            </>
+          ) : staged ? (
+            <button disabled={busy} onClick={() => void applyHunk(path, hunk.header, 'unstage')}>
+              − Unstage
+            </button>
+          ) : (
+            <>
+              <button disabled={busy} onClick={() => void applyHunk(path, hunk.header, 'stage')}>
+                + Stage
+              </button>
+              <button disabled={busy} className="danger" title="Discard hunk" onClick={discardHunk}>
+                ↺
+              </button>
+            </>
+          )}
+        </span>
+      </div>
+      <div className="hunk-lines">
+        {hunk.lines.map((l, i) => {
+          const selectable = l.kind === 'add' || l.kind === 'del'
+          return (
+            <div
+              key={i}
+              className={`diff-line diff-${l.kind}${selectable ? ' selectable' : ''}${
+                sel.has(i) ? ' picked' : ''
+              }`}
+              onClick={selectable ? () => toggle(i, l.kind) : undefined}
+              title={selectable ? 'Click to select this line' : undefined}
+            >
+              <span className="diff-gutter">
+                {sel.has(i) ? '☑' : l.kind === 'add' ? '+' : l.kind === 'del' ? '−' : ' '}
+              </span>
+              <span className="diff-text">{l.text || ' '}</span>
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }

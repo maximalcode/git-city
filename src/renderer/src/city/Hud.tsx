@@ -51,6 +51,8 @@ export default function Hud({ snapshot, model }: Props): React.JSX.Element {
   const timeOfDay = useStore((s) => s.timeOfDay)
   const setTimeOfDay = useStore((s) => s.setTimeOfDay)
   const setHelpOpen = useStore((s) => s.setHelpOpen)
+  const startExport = useStore((s) => s.startExport)
+  const exporting = useStore((s) => s.exporting)
   const modalOpen = useStore((s) => s.confirm !== null || s.mergeView !== null)
 
   const byPath = useMemo(() => new Map(snapshot.files.map((f) => [f.path, f])), [snapshot])
@@ -219,6 +221,15 @@ export default function Hud({ snapshot, model }: Props): React.JSX.Element {
           <ColorModePicker colorMode={colorMode} setColorMode={setColorMode} />
           <ThemePicker themeId={themeId} setTheme={setTheme} />
           <TimeOfDayControl timeOfDay={timeOfDay} setTimeOfDay={setTimeOfDay} />
+          <button
+            className="icon-btn"
+            disabled={exporting}
+            onClick={() => startExport()}
+            title="Export a time-lapse video of the whole history"
+            aria-label="Export a time-lapse video"
+          >
+            <Icon name="record" size={16} />
+          </button>
           <button
             className="icon-btn"
             onClick={() => setHelpOpen(true)}

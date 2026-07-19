@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { Bloom, EffectComposer, N8AO, Vignette } from '@react-three/postprocessing'
 import { Vector3 } from 'three'
@@ -25,6 +25,7 @@ import RebasePanel from '../panels/RebasePanel'
 import ReflogPanel from '../panels/ReflogPanel'
 import PullRequestsPanel from '../panels/PullRequestsPanel'
 import SettingsPanel from '../panels/SettingsPanel'
+import TimelapseExporter from './TimelapseExporter'
 import CommandPalette from './CommandPalette'
 import Onboarding from './Onboarding'
 import Minimap from './Minimap'
@@ -74,7 +75,10 @@ export default function SceneView(): React.JSX.Element {
   // forces a fresh GL context on recovery.
   const [contextLost, setContextLost] = useState(false)
   const [canvasKey, setCanvasKey] = useState(0)
+  // the live drawing surface, handed to the time-lapse exporter for captureStream
+  const canvasElRef = useRef<HTMLCanvasElement | null>(null)
   const onCanvasCreated = useCallback(({ gl }: { gl: { domElement: HTMLCanvasElement } }) => {
+    canvasElRef.current = gl.domElement
     gl.domElement.addEventListener(
       'webglcontextlost',
       (e) => {
@@ -232,6 +236,7 @@ export default function SceneView(): React.JSX.Element {
       <ReflogPanel />
       <PullRequestsPanel />
       <SettingsPanel />
+      <TimelapseExporter canvasRef={canvasElRef} />
       <MergeView />
     </div>
   )

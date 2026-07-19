@@ -2433,3 +2433,39 @@
 .update-dismiss:hover {
   color: var(--text);
 }
+
+/* ---------- v16: time-lapse export ---------- */
+.export-overlay {
+  position: fixed;
+  top: 64px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px 9px 14px;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  backdrop-filter: blur(14px);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+  font-size: 13px;
+  color: var(--text);
+}
+.export-overlay .spinner {
+  border-color: rgba(255, 255, 255, 0.25);
+  border-top-color: var(--danger);
+}
+.export-overlay button {
+  padding: 4px 10px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--panel-border);
+  color: var(--text);
+  cursor: pointer;
+}
+.export-overlay.error {
+  border-color: rgba(255, 107, 107, 0.4);
+  color: var(--danger);
+}

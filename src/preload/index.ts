@@ -60,6 +60,10 @@ const api: GitCityApi = {
   fileHistory: (repoPath, path) => ipcRenderer.invoke('git-city:file-history', repoPath, path),
   blame: (repoPath, path, rev) => ipcRenderer.invoke('git-city:blame', repoPath, path, rev),
   commitGraph: (repoPath, limit) => ipcRenderer.invoke('git-city:commit-graph', repoPath, limit),
+  searchCommits: (repoPath, query, scope) =>
+    ipcRenderer.invoke('git-city:search-commits', repoPath, query, scope),
+  grepWorkingTree: (repoPath, query) => ipcRenderer.invoke('git-city:grep-tree', repoPath, query),
+  commitDetail: (repoPath, hash) => ipcRenderer.invoke('git-city:commit-detail', repoPath, hash),
   reflog: (repoPath, limit) => ipcRenderer.invoke('git-city:reflog', repoPath, limit),
   resetTo: (repoPath, ref, mode) => ipcRenderer.invoke('git-city:reset-to', repoPath, ref, mode),
   recoverToBranch: (repoPath, name, ref) =>

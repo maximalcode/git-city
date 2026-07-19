@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useStore } from '../store'
+import { hasApi, useStore } from '../store'
 import { fuzzyFilter } from '../lib/fuzzy'
+import { formatDate } from '../lib/format'
 import Icon, { type IconName } from '../lib/icons'
 import { THEMES } from './themes'
 import { COLOR_MODES } from './colorModes'
+import type { CommitHit, GrepHit } from '../../../shared/types'
 
 interface Command {
   id: string
@@ -14,14 +16,22 @@ interface Command {
   run: () => void
 }
 
+/** A rendered palette row: a static command, a matched commit, or a code hit. */
+type Result =
+  | { kind: 'command'; cmd: Command }
+  | { kind: 'commit'; hit: CommitHit }
+  | { kind: 'grep'; hit: GrepHit }
+
 const MAX_RESULTS = 12
+const SEARCH_DEBOUNCE = 180
 
 /**
- * Fuzzy command palette (Ctrl/Cmd-K). One search box over everything the app can
- * do — switch view/theme/colour, open a panel, jump to any file (camera flies
- * there), switch a branch, pop a stash, sync. Actions come first so an empty
- * query shows the common ones; files (there can be hundreds) rank in by fuzzy
- * match. Arrow keys move, Enter runs, Escape closes.
+ * Fuzzy command palette (Ctrl/Cmd-K). One box over everything the app can do —
+ * plus two search modes chosen by a leading sigil:
+ *   `@query`  → search commits (message / author / hash) across all refs
+ *   `:query`  → search code in tracked files (git grep)
+ * With no sigil it fuzzy-matches actions + files. Arrow keys move, Enter runs,
+ * Escape closes.
  */
 export default function CommandPalette({
   model
@@ -33,8 +43,11 @@ export default function CommandPalette({
   const branches = useStore((s) => s.branches)
   const stashes = useStore((s) => s.stashes)
   const workingStatus = useStore((s) => s.workingStatus)
+  const repoPath = useStore((s) => s.repoPath)
   const [q, setQ] = useState('')
   const [activeIdx, setActiveIdx] = useState(0)
+  const [hits, setHits] = useState<Result[]>([])
+  const [searching, setSearching] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
 
@@ -42,8 +55,17 @@ export default function CommandPalette({
     if (open) {
       inputRef.current?.focus()
       setQ('')
+      setHits([])
     }
   }, [open])
+
+  // mode + search term derived from the leading sigil
+  const mode: 'command' | 'commit' | 'grep' = q.startsWith('@')
+    ? 'commit'
+    : q.startsWith(':')
+      ? 'grep'
+      : 'command'
+  const term = mode === 'command' ? q : q.slice(1).trim()
 
   const commands = useMemo<Command[]>(() => {
     const s = useStore.getState()
@@ -54,7 +76,6 @@ export default function CommandPalette({
     }
     const list: Command[] = []
 
-    // view
     const otherView = s.viewMode === 'city' ? 'forest' : 'city'
     list.push({
       id: 'view',
@@ -63,8 +84,6 @@ export default function CommandPalette({
       label: `Switch to ${otherView === 'forest' ? 'Forest' : 'City'} view`,
       run: act(() => s.setViewMode(otherView))
     })
-
-    // playback
     list.push({
       id: 'play',
       group: 'Playback',
@@ -73,7 +92,6 @@ export default function CommandPalette({
       run: act(() => s.setPlaying(!s.playing))
     })
 
-    // panels & tools
     const panelCmds: [string, string, IconName, () => void][] = [
       ['changes', 'Open Changes', 'changes', () => s.setPanel('changes')],
       ['branches', 'Open Branches', 'branch', () => s.setPanel('branches')],
@@ -84,8 +102,6 @@ export default function CommandPalette({
     for (const [id, label, icon, fn] of panelCmds) {
       list.push({ id: `panel-${id}`, group: 'Tools', icon, label, run: act(fn) })
     }
-
-    // hotspots
     list.push({
       id: 'hotspots',
       group: 'Tools',
@@ -94,7 +110,6 @@ export default function CommandPalette({
       run: act(() => s.toggleHotspots())
     })
 
-    // sync
     if ((workingStatus?.remotes.length ?? 0) > 0) {
       list.push({
         id: 'fetch',
@@ -129,7 +144,6 @@ export default function CommandPalette({
       }
     }
 
-    // time of day
     const times: [string, number][] = [
       ['Dawn', 0.25],
       ['Noon', 0.5],
@@ -145,8 +159,6 @@ export default function CommandPalette({
         run: act(() => s.setTimeOfDay(t))
       })
     }
-
-    // theme
     for (const t of THEMES) {
       list.push({
         id: `theme-${t.id}`,
@@ -157,8 +169,6 @@ export default function CommandPalette({
         run: act(() => s.setTheme(t.id))
       })
     }
-
-    // color mode
     for (const m of COLOR_MODES) {
       list.push({
         id: `color-${m.id}`,
@@ -169,8 +179,6 @@ export default function CommandPalette({
         run: act(() => s.setColorMode(m.id))
       })
     }
-
-    // branches (local, switch-able)
     for (const b of branches) {
       if (b.isRemote || b.current) continue
       list.push({
@@ -181,8 +189,6 @@ export default function CommandPalette({
         run: act(() => void s.switchBranch(b.name))
       })
     }
-
-    // stashes
     for (const st of stashes) {
       list.push({
         id: `stash-${st.index}`,
@@ -192,8 +198,6 @@ export default function CommandPalette({
         run: act(() => void s.stashPop(st.index))
       })
     }
-
-    // repo
     list.push({
       id: 'open-repo',
       group: 'Repository',
@@ -201,8 +205,6 @@ export default function CommandPalette({
       label: 'Open another repository…',
       run: act(() => s.backToWelcome())
     })
-
-    // files last — the long list, surfaced by fuzzy match
     for (const p of model.paths) {
       list.push({
         id: `file-${p}`,
@@ -212,16 +214,60 @@ export default function CommandPalette({
         run: act(() => s.setSelected(p))
       })
     }
-
     return list
   }, [model, branches, stashes, workingStatus])
 
-  const results = useMemo(
-    () => fuzzyFilter(q, commands, (c) => `${c.label} ${c.group}`, MAX_RESULTS),
-    [q, commands]
-  )
+  // async commit / code search (debounced), only in the sigil modes
+  useEffect(() => {
+    if (mode === 'command') {
+      setHits([])
+      setSearching(false)
+      return
+    }
+    if (!hasApi() || !repoPath || term.length < 2) {
+      setHits([])
+      setSearching(false)
+      return
+    }
+    let cancelled = false
+    setSearching(true)
+    const id = setTimeout(() => {
+      const run =
+        mode === 'commit'
+          ? window.gitCity
+              .searchCommits(repoPath, term, 'auto')
+              .then((r) => r.hits.map((hit): Result => ({ kind: 'commit', hit })))
+          : window.gitCity
+              .grepWorkingTree(repoPath, term)
+              .then((r) => r.hits.map((hit): Result => ({ kind: 'grep', hit })))
+      void run
+        .then((rs) => {
+          if (!cancelled) setHits(rs)
+        })
+        .catch(() => {
+          if (!cancelled) setHits([])
+        })
+        .finally(() => {
+          if (!cancelled) setSearching(false)
+        })
+    }, SEARCH_DEBOUNCE)
+    return () => {
+      cancelled = true
+      clearTimeout(id)
+    }
+  }, [mode, term, repoPath])
 
-  useEffect(() => setActiveIdx(0), [q])
+  const results = useMemo<Result[]>(() => {
+    if (mode === 'command') {
+      return fuzzyFilter(q, commands, (c) => `${c.label} ${c.group}`, MAX_RESULTS).map((cmd) => ({
+        kind: 'command' as const,
+        cmd
+      }))
+    }
+    return hits
+  }, [mode, q, commands, hits])
+
+  useEffect(() => setActiveIdx(0), [q, hits])
   useEffect(() => {
     const el = listRef.current?.querySelector('[aria-selected="true"]')
     el?.scrollIntoView({ block: 'nearest' })
@@ -229,8 +275,15 @@ export default function CommandPalette({
 
   if (!open) return null
 
-  const run = (c: Command | undefined): void => {
-    if (c) c.run()
+  const run = (r: Result | undefined): void => {
+    if (!r) return
+    const s = useStore.getState()
+    if (r.kind === 'command') r.cmd.run()
+    else if (r.kind === 'commit') s.openCommit(r.hit.hash)
+    else {
+      s.setSelected(r.hit.path)
+      s.setPaletteOpen(false)
+    }
   }
 
   const onKeyDown = (e: React.KeyboardEvent): void => {
@@ -247,40 +300,124 @@ export default function CommandPalette({
     }
   }
 
+  const modeIcon: IconName = mode === 'commit' ? 'graph' : mode === 'grep' ? 'search' : 'command'
+  const emptyMsg =
+    mode === 'command'
+      ? 'No matching command'
+      : term.length < 2
+        ? mode === 'commit'
+          ? 'Type to search commits (message, author or hash)…'
+          : 'Type to search code in tracked files…'
+        : searching
+          ? 'Searching…'
+          : mode === 'commit'
+            ? 'No matching commit'
+            : 'No code match'
+
   return (
     <div className="palette-backdrop" onMouseDown={() => setOpen(false)}>
       <div className="palette" onMouseDown={(e) => e.stopPropagation()}>
         <div className="palette-input">
-          <Icon name="command" size={17} />
+          <Icon name={modeIcon} size={17} />
           <input
             ref={inputRef}
             type="text"
-            placeholder="Type a command or file…"
+            placeholder="Type a command  ·  @ commits  ·  : code"
             aria-label="Command palette"
             value={q}
             onChange={(e) => setQ(e.target.value)}
             onKeyDown={onKeyDown}
           />
+          {mode !== 'command' && (
+            <span className="palette-mode">{mode === 'commit' ? 'Commits' : 'Code'}</span>
+          )}
         </div>
         <div className="palette-results" role="listbox" ref={listRef}>
-          {results.map((c, i) => (
-            <button
-              key={c.id}
-              role="option"
-              aria-selected={i === activeIdx}
-              className={i === activeIdx ? 'active' : ''}
-              onClick={() => run(c)}
-              onMouseEnter={() => setActiveIdx(i)}
-              title={c.label}
-            >
-              {c.icon && <Icon name={c.icon} size={15} />}
-              <span className="palette-label">{c.label}</span>
-              <span className="palette-group">{c.group}</span>
-            </button>
+          {results.map((r, i) => (
+            <PaletteRow
+              key={rowKey(r, i)}
+              result={r}
+              active={i === activeIdx}
+              onClick={() => run(r)}
+              onHover={() => setActiveIdx(i)}
+            />
           ))}
-          {results.length === 0 && <div className="palette-empty">No matching command</div>}
+          {results.length === 0 && <div className="palette-empty">{emptyMsg}</div>}
         </div>
       </div>
     </div>
+  )
+}
+
+function rowKey(r: Result, i: number): string {
+  if (r.kind === 'command') return r.cmd.id
+  if (r.kind === 'commit') return `c${r.hit.hash}`
+  return `g${r.hit.path}:${r.hit.line}:${i}`
+}
+
+function PaletteRow({
+  result,
+  active,
+  onClick,
+  onHover
+}: {
+  result: Result
+  active: boolean
+  onClick: () => void
+  onHover: () => void
+}): React.JSX.Element {
+  if (result.kind === 'commit') {
+    const h = result.hit
+    return (
+      <button
+        role="option"
+        aria-selected={active}
+        className={active ? 'active' : ''}
+        onClick={onClick}
+        onMouseEnter={onHover}
+        title={h.subject}
+      >
+        <Icon name="graph" size={15} />
+        <span className="palette-label">{h.subject}</span>
+        <span className="palette-hash">{h.shortHash}</span>
+        <span className="palette-group">
+          {h.author} · {formatDate(h.date)}
+        </span>
+      </button>
+    )
+  }
+  if (result.kind === 'grep') {
+    const h = result.hit
+    return (
+      <button
+        role="option"
+        aria-selected={active}
+        className={active ? 'active' : ''}
+        onClick={onClick}
+        onMouseEnter={onHover}
+        title={`${h.path}:${h.line}`}
+      >
+        <Icon name="search" size={15} />
+        <span className="palette-label palette-code">{h.text.trim()}</span>
+        <span className="palette-group">
+          {h.path}:{h.line}
+        </span>
+      </button>
+    )
+  }
+  const c = result.cmd
+  return (
+    <button
+      role="option"
+      aria-selected={active}
+      className={active ? 'active' : ''}
+      onClick={onClick}
+      onMouseEnter={onHover}
+      title={c.label}
+    >
+      {c.icon && <Icon name={c.icon} size={15} />}
+      <span className="palette-label">{c.label}</span>
+      <span className="palette-group">{c.group}</span>
+    </button>
   )
 }

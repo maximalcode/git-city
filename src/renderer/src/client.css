@@ -1874,3 +1874,138 @@
   color: var(--accent-2);
   opacity: 0.85;
 }
+
+/* ---------- v9: palette search modes + commit detail ---------- */
+.palette-mode {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: #1a1205;
+  background: var(--accent);
+  border-radius: 5px;
+  padding: 2px 7px;
+  flex-shrink: 0;
+}
+.palette-hash {
+  font-family: Consolas, monospace;
+  font-size: 11.5px;
+  color: var(--accent-2);
+  flex-shrink: 0;
+}
+.palette-label.palette-code {
+  font-family: Consolas, monospace;
+  font-size: 12px;
+  color: var(--text);
+}
+
+/* commit-detail panel (reuses .side-panel geometry) */
+.commit-detail .panel-scroll {
+  padding: 14px 16px;
+}
+.cd-subject {
+  font-size: 14.5px;
+  font-weight: 600;
+  line-height: 1.4;
+  margin-bottom: 10px;
+}
+.cd-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-bottom: 12px;
+}
+.cd-hash {
+  font-family: Consolas, monospace;
+  color: var(--accent-2);
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  padding: 1px 7px;
+  font-size: 11.5px;
+}
+.cd-sig {
+  border-radius: 5px;
+  padding: 1px 7px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.cd-sig-good {
+  color: #7ee0a0;
+  background: rgba(126, 224, 160, 0.12);
+}
+.cd-sig-bad {
+  color: #ff8a8a;
+  background: rgba(255, 138, 138, 0.14);
+}
+.cd-sig-unknown {
+  color: var(--text-dim);
+  background: rgba(255, 255, 255, 0.06);
+}
+.cd-body {
+  font-family: inherit;
+  font-size: 12.5px;
+  color: var(--text-dim);
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  max-height: 160px;
+  overflow-y: auto;
+}
+.cd-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.cd-actions button {
+  font-size: 12px;
+  padding: 6px 11px;
+}
+.cd-files-head {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-dim);
+  margin-bottom: 6px;
+}
+.cd-files {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.cd-file {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  border-radius: 7px;
+  padding: 7px 9px;
+  color: var(--text);
+  font-size: 12.5px;
+}
+.cd-file:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+.cd-file-path {
+  font-family: Consolas, monospace;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cd-file-stat,
+.cd-file-bin {
+  flex-shrink: 0;
+  font-size: 11.5px;
+}
+.cd-file-bin {
+  color: var(--text-dim);
+}

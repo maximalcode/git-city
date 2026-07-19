@@ -172,7 +172,8 @@ const REPO_STATE_RESET: Partial<GitCityState> = {
   fileView: 'none',
   graphOpen: false,
   paletteOpen: false,
-  helpOpen: false
+  helpOpen: false,
+  commitDetailHash: null
 }
 
 /** Cheap fingerprint so identical statuses (editor atomic-save churn) don't re-render.
@@ -232,6 +233,8 @@ interface GitCityState {
   onboarded: boolean
   /** transient: the encoding guide re-opened from the "?" button */
   helpOpen: boolean
+  /** commit whose detail panel is open (from a search hit), or null */
+  commitDetailHash: string | null
 
   init(): void
   openLocal(): Promise<void>
@@ -254,6 +257,8 @@ interface GitCityState {
   toggleHotspots(): void
   dismissOnboarding(): void
   setHelpOpen(open: boolean): void
+  openCommit(hash: string): void
+  closeCommit(): void
   backToWelcome(): void
 
   // live actions
@@ -347,6 +352,7 @@ export const useStore = create<GitCityState>((set, get) => ({
   showHotspots: loadShowHotspots(),
   onboarded: loadOnboarded(),
   helpOpen: false,
+  commitDetailHash: null,
 
   init: () => {
     // absent when the renderer runs in a plain browser (vite preview) instead of Electron
@@ -448,6 +454,8 @@ export const useStore = create<GitCityState>((set, get) => ({
     set({ onboarded: true, helpOpen: false })
   },
   setHelpOpen: (helpOpen) => set({ helpOpen }),
+  openCommit: (hash) => set({ commitDetailHash: hash, paletteOpen: false }),
+  closeCommit: () => set({ commitDetailHash: null }),
   backToWelcome: () => {
     if (hasApi()) void window.gitCity.watchStop()
     lastFingerprint = ''

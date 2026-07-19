@@ -227,6 +227,55 @@ export interface BlameLine {
   text: string
 }
 
+/** One commit matched by a search (message / author / content / hash). */
+export interface CommitHit {
+  hash: string
+  shortHash: string
+  author: string
+  /** unix ms */
+  date: number
+  subject: string
+}
+export interface CommitSearchResult {
+  hits: CommitHit[]
+  /** more matches existed than the returned limit */
+  truncated: boolean
+}
+export type CommitSearchScope = 'auto' | 'message' | 'author' | 'content' | 'hash'
+
+/** One `git grep` hit in the working tree. */
+export interface GrepHit {
+  path: string
+  line: number
+  text: string
+}
+export interface GrepResult {
+  hits: GrepHit[]
+  truncated: boolean
+}
+
+/** One file changed by a commit (numstat; additions/deletions are -1 for binary). */
+export interface CommitFileChange {
+  path: string
+  additions: number
+  deletions: number
+  binary: boolean
+}
+/** Full detail for one commit, for the commit-detail panel. */
+export interface CommitDetail {
+  hash: string
+  shortHash: string
+  author: string
+  email: string
+  /** unix ms */
+  date: number
+  subject: string
+  body: string
+  /** GPG/SSH signature state from `%G?` */
+  verification: 'good' | 'bad' | 'unknown' | 'none'
+  files: CommitFileChange[]
+}
+
 export interface GraphRef {
   name: string
   kind: 'head' | 'branch' | 'remote' | 'tag'
@@ -329,6 +378,18 @@ export interface GitCityApi {
   blame(repoPath: string, path: string, rev?: string): Promise<BlameLine[]>
   /** Full commit graph across all refs (branch/merge topology). */
   commitGraph(repoPath: string, limit?: number): Promise<CommitGraph>
+
+  // --- search ---
+  /** Search commits across all refs by message / author / content (pickaxe) / hash. */
+  searchCommits(
+    repoPath: string,
+    query: string,
+    scope: CommitSearchScope
+  ): Promise<CommitSearchResult>
+  /** Search tracked working-tree file contents (git grep). */
+  grepWorkingTree(repoPath: string, query: string): Promise<GrepResult>
+  /** Full detail (header, signature, changed files) for one commit. */
+  commitDetail(repoPath: string, hash: string): Promise<CommitDetail>
 
   // --- reflog (undo / recover) ---
   reflog(repoPath: string, limit?: number): Promise<ReflogEntry[]>

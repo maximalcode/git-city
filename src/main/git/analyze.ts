@@ -194,20 +194,39 @@ export async function analyzeRepo(
   }
 
   onProgress({ phase: 'counting', done: 0, total: 1 })
-  let commitCount: number
+  let commitCount = 0
   try {
     commitCount = parseInt(
       (await runGit(repoPath, ['rev-list', '--count', '--first-parent', 'HEAD'])).trim(),
       10
     )
   } catch {
-    throw new Error('This repository has no commits yet.')
+    // unborn HEAD (fresh `git init`, no commits) — rev-list exits non-zero
+    commitCount = 0
   }
-  if (!Number.isFinite(commitCount) || commitCount === 0) {
-    throw new Error('This repository has no commits yet.')
+  if (!Number.isFinite(commitCount)) commitCount = 0
+
+  // A repo with no commits still opens: `branch` comes from the symbolic ref
+  // (which resolves even on an unborn branch), and we return an empty analysis
+  // so the user can stage files and make the first commit from inside the app.
+  if (commitCount === 0) {
+    const unborn = (
+      await runGit(repoPath, ['symbolic-ref', '--short', '-q', 'HEAD']).catch(() => 'main')
+    ).trim()
+    const empty: RepoAnalysis = {
+      info: { path: repoPath, name: basename(repoPath), branch: unborn || 'main', commitCount: 0 },
+      snapshots: []
+    }
+    analysisCache.set(repoPath, empty)
+    return empty
   }
 
-  const branch = (await runGit(repoPath, ['rev-parse', '--abbrev-ref', 'HEAD'])).trim()
+  // detached HEAD reports the literal "HEAD"; label it so the UI can show it
+  const branchRaw = (await runGit(repoPath, ['rev-parse', '--abbrev-ref', 'HEAD'])).trim()
+  const branch =
+    branchRaw === 'HEAD'
+      ? `detached @ ${(await runGit(repoPath, ['rev-parse', '--short', 'HEAD'])).trim()}`
+      : branchRaw
   const sampleIdx = pickSampleIndices(commitCount, sampleTarget)
 
   const state = new Map<string, FileState>()

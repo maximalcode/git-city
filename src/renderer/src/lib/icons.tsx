@@ -30,6 +30,7 @@ export type IconName =
   | 'help'
   | 'pr'
   | 'external'
+  | 'settings'
 
 const PATHS: Record<IconName, JSX.Element> = {
   branch: (
@@ -161,6 +162,12 @@ const PATHS: Record<IconName, JSX.Element> = {
       <path d="M14 5h5v5" />
       <path d="M19 5l-7 7" />
       <path d="M18 13.5V18a1.5 1.5 0 0 1-1.5 1.5H6A1.5 1.5 0 0 1 4.5 18V7.5A1.5 1.5 0 0 1 6 6h4.5" />
+    </>
+  ),
+  settings: (
+    <>
+      <circle cx="12" cy="12" r="3" />
+      <path d="M12 2.5v3M12 18.5v3M4.2 7l2.6 1.5M17.2 15.5l2.6 1.5M4.2 17l2.6-1.5M17.2 8.5l2.6-1.5" />
     </>
   )
 }

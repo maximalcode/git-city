@@ -4,6 +4,7 @@ import ChangesPanel from '../panels/ChangesPanel'
 import BranchesPanel from '../panels/BranchesPanel'
 import StashPanel from '../panels/StashPanel'
 import DiffPanel from '../panels/DiffPanel'
+import SettingsPanel from '../panels/SettingsPanel'
 
 /**
  * Shown when a repository has no commits yet (a fresh `git init`). There is no
@@ -54,6 +55,7 @@ export default function EmptyRepoView(): React.JSX.Element {
       <BranchesPanel />
       <StashPanel />
       <DiffPanel />
+      <SettingsPanel />
     </div>
   )
 }

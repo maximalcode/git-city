@@ -98,6 +98,7 @@ export default function Hud({ snapshot, model }: Props): React.JSX.Element {
       g: () => useStore.getState().setGraphOpen(!useStore.getState().graphOpen),
       u: () => useStore.getState().setReflogOpen(!useStore.getState().reflogOpen),
       p: () => useStore.getState().setPrPanelOpen(!useStore.getState().prPanelOpen),
+      ',': () => useStore.getState().setSettingsOpen(!useStore.getState().settingsOpen),
       v: () => {
         const st = useStore.getState()
         st.setViewMode(st.viewMode === 'city' ? 'forest' : 'city')
@@ -113,6 +114,7 @@ export default function Hud({ snapshot, model }: Props): React.JSX.Element {
         st.setHelpOpen(false)
         st.setSearchOpen(false)
         st.setPrPanelOpen(false)
+        st.setSettingsOpen(false)
         st.setPanel('none')
         st.setDiffOpen(false)
         st.setFileView('none')

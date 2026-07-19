@@ -17,6 +17,8 @@ export default function SideRail(): JSX.Element {
   const setSearchOpen = useStore((s) => s.setSearchOpen)
   const prPanelOpen = useStore((s) => s.prPanelOpen)
   const setPrPanelOpen = useStore((s) => s.setPrPanelOpen)
+  const settingsOpen = useStore((s) => s.settingsOpen)
+  const setSettingsOpen = useStore((s) => s.setSettingsOpen)
   const workingStatus = useStore((s) => s.workingStatus)
 
   const changeCount = workingStatus?.files.length ?? 0
@@ -80,6 +82,13 @@ export default function SideRail(): JSX.Element {
 
       <div className="rail-group">
         <RailButton icon="search" label="Find" hotkey="/" onClick={() => setSearchOpen(true)} />
+        <RailButton
+          icon="settings"
+          label="Settings"
+          hotkey=","
+          active={settingsOpen}
+          onClick={() => setSettingsOpen(!settingsOpen)}
+        />
       </div>
     </nav>
   )

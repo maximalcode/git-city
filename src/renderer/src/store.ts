@@ -946,7 +946,9 @@ async function loadRepo(
       recentRepos: recent,
       analysis,
       repoPath: path,
-      snapshotIndex: analysis.snapshots.length - 1,
+      snapshotIndex: Math.max(0, analysis.snapshots.length - 1),
+      // a commit-less repo lands on the Changes panel — the only useful next step
+      panel: analysis.snapshots.length === 0 ? 'changes' : 'none',
       screen: 'city'
     })
     if (hasApi()) {

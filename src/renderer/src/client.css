@@ -2243,3 +2243,64 @@
 .pr-base {
   width: 90px;
 }
+
+/* ---------- v13: empty repo (no commits yet) ---------- */
+.empty-repo {
+  background:
+    radial-gradient(1100px 500px at 20% -10%, rgba(110, 200, 255, 0.08), transparent 60%),
+    radial-gradient(900px 500px at 90% 110%, rgba(255, 179, 71, 0.06), transparent 60%), var(--bg);
+}
+.empty-repo-hero {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 24px 24px 92px; /* clear the side rail */
+  pointer-events: none;
+}
+.empty-repo-card {
+  pointer-events: auto;
+  max-width: 460px;
+  text-align: center;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 16px;
+  padding: 30px 32px;
+  backdrop-filter: blur(14px);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+}
+.empty-repo-badge {
+  display: inline-block;
+  font-size: 12px;
+  color: var(--accent-2);
+  border: 1px solid var(--panel-border);
+  border-radius: 999px;
+  padding: 3px 12px;
+  margin-bottom: 14px;
+  font-family: Consolas, monospace;
+}
+.empty-repo-card h2 {
+  font-size: 22px;
+  margin-bottom: 12px;
+  color: var(--text);
+}
+.empty-repo-card p {
+  color: var(--text-dim);
+  font-size: 14px;
+  line-height: 1.55;
+  margin-bottom: 12px;
+}
+.empty-repo-card strong {
+  color: var(--text);
+}
+.empty-repo-steps {
+  font-size: 13px !important;
+}
+.empty-repo-card .mono {
+  font-family: Consolas, monospace;
+  color: var(--accent-2);
+}
+.empty-repo-card .primary {
+  margin-top: 6px;
+}

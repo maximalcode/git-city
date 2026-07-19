@@ -75,6 +75,44 @@ describe('analyzeRepo', () => {
   })
 })
 
+describe('analyzeRepo — repos with no history', () => {
+  it('opens a fresh repo with no commits as an empty analysis (does not throw)', async () => {
+    const fresh = mkdtempSync(join(tmpdir(), 'git-city-empty-'))
+    try {
+      execFileSync('git', ['init', '-b', 'trunk'], { cwd: fresh, stdio: 'pipe' })
+      const result = await analyzeRepo(fresh, 50, () => {})
+      expect(result.info.commitCount).toBe(0)
+      expect(result.info.branch).toBe('trunk') // unborn branch name still resolves
+      expect(result.snapshots).toHaveLength(0)
+    } finally {
+      rmSync(fresh, { recursive: true, force: true })
+    }
+  })
+
+  it('labels a detached HEAD instead of reporting the literal "HEAD"', async () => {
+    const det = mkdtempSync(join(tmpdir(), 'git-city-detach-'))
+    const g = (...a: string[]): void => {
+      execFileSync('git', ['-c', 'user.name=T', '-c', 'user.email=t@e.co', ...a], {
+        cwd: det,
+        stdio: 'pipe'
+      })
+    }
+    try {
+      g('init', '-b', 'main')
+      writeFileSync(join(det, 'f.txt'), 'x\n')
+      g('add', '.')
+      g('commit', '-m', 'c1')
+      const head = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: det }).toString().trim()
+      g('checkout', head) // detach
+      const result = await analyzeRepo(det, 50, () => {})
+      expect(result.info.branch).toMatch(/^detached @ /)
+      expect(result.info.commitCount).toBe(1)
+    } finally {
+      rmSync(det, { recursive: true, force: true })
+    }
+  })
+})
+
 describe('pickSampleIndices', () => {
   it('includes first and last commits and stays within range', () => {
     const picks = pickSampleIndices(1000, 50)

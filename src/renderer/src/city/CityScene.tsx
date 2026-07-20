@@ -5,6 +5,7 @@ import { getTheme } from './themes'
 import { sunState } from '../lib/daylight'
 import type { CityModel, Targets } from './cityData'
 import Buildings from './Buildings'
+import RoofClutter from './RoofClutter'
 import Hotspots from './Hotspots'
 import Districts from './Districts'
 import Roads from './Roads'
@@ -97,6 +98,7 @@ export default function CityScene({
       <Roads model={model} />
       <StreetLife model={model} />
       <Buildings model={model} targets={targets} />
+      <RoofClutter model={model} targets={targets} />
       <Highlight model={model} targets={targets} />
       <StatusOverlay model={model} targets={targets} />
       <ConstructionSites model={model} />

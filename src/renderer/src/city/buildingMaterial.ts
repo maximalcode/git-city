@@ -1,13 +1,24 @@
 import { Color, MeshStandardMaterial } from 'three'
+import { concreteTextures } from './pbrTextures'
 
 /**
- * A MeshStandardMaterial patched (via onBeforeCompile) to draw procedural
- * emissive "windows" on the vertical faces of every building — computed in
- * WORLD space so windows stay a consistent size no matter how the per-instance
- * matrix scales each box. Driven by three uniforms the caller updates per theme.
+ * A MeshStandardMaterial patched (via onBeforeCompile) into a real facade
+ * shader. Everything is computed in FACE-LOCAL space (meters from the face's
+ * left edge / from the building base, derived from the per-instance scale of
+ * the unit box), so window grids are quantized to fit each facade exactly —
+ * no half panes clipped at building corners.
  *
- * Keeps instancing intact (three still injects its instancing chunks); we only
- * add a world-position varying and an additive emissive term.
+ * Per building (hashed from its stable instance translation) one of three
+ * facade styles is chosen:
+ *   0 — office grid: regular mid-size panes
+ *   1 — punched windows: smaller panes, more wall
+ *   2 — glass curtain wall: floor-to-ceiling glass with mullions
+ *
+ * The panes darken the diffuse color in ALL themes (glassy facades by day) and
+ * add the theme's emissive window glow at night. A bundled CC0 concrete map
+ * breaks up flat wall color, and a fake contact-AO band grounds each building.
+ *
+ * Keeps instancing intact — three still injects its instancing chunks.
  */
 export interface WindowUniforms {
   enabled: { value: number }
@@ -38,6 +49,7 @@ export function createBuildingMaterial(): {
   }
 
   const material = new MeshStandardMaterial({ roughness: 0.5, metalness: 0.2 })
+  const concrete = concreteTextures()
 
   material.onBeforeCompile = (shader) => {
     shader.uniforms.uWinEnabled = win.enabled
@@ -46,26 +58,38 @@ export function createBuildingMaterial(): {
     shader.uniforms.uShopEnabled = win.shopEnabled
     shader.uniforms.uShopColor = win.shopColor
     shader.uniforms.uShopIntensity = win.shopIntensity
+    shader.uniforms.uConcreteMap = { value: concrete.map }
 
     shader.vertexShader = shader.vertexShader
       .replace(
         '#include <common>',
         `#include <common>
-         varying vec3 vWPosNW;
          varying vec3 vONormNW;
-         varying float vBldHNW;`
+         varying float vBldHNW;
+         varying vec2 vFaceNW;
+         varying float vFaceWNW;
+         varying float vSeedNW;`
       )
       .replace(
         '#include <project_vertex>',
         `#include <project_vertex>
          #ifdef USE_INSTANCING
-           vec4 wpNW = modelMatrix * instanceMatrix * vec4( transformed, 1.0 );
-           vBldHNW = instanceMatrix[1][1];
+           vec3 dimsNW = vec3( instanceMatrix[0][0], instanceMatrix[1][1], instanceMatrix[2][2] );
+           vBldHNW = dimsNW.y;
+           // face-local meters: x from the face's min edge, y from the base
+           float horizNW = abs( normal.x ) > 0.5
+             ? ( position.z + 0.5 ) * dimsNW.z
+             : ( position.x + 0.5 ) * dimsNW.x;
+           vFaceNW = vec2( horizNW, ( position.y + 0.5 ) * dimsNW.y );
+           vFaceWNW = abs( normal.x ) > 0.5 ? dimsNW.z : dimsNW.x;
+           // stable per-building seed from the instance translation
+           vSeedNW = fract( sin( dot( instanceMatrix[3].xz, vec2(127.1,311.7) ) ) * 43758.5453 );
          #else
-           vec4 wpNW = modelMatrix * vec4( transformed, 1.0 );
            vBldHNW = 0.0;
+           vFaceNW = vec2( 0.0 );
+           vFaceWNW = 1.0;
+           vSeedNW = 0.0;
          #endif
-         vWPosNW = wpNW.xyz;
          vONormNW = normal;`
       )
 
@@ -73,52 +97,105 @@ export function createBuildingMaterial(): {
       .replace(
         '#include <common>',
         `#include <common>
-         varying vec3 vWPosNW;
          varying vec3 vONormNW;
          varying float vBldHNW;
+         varying vec2 vFaceNW;
+         varying float vFaceWNW;
+         varying float vSeedNW;
          uniform float uWinEnabled;
          uniform vec3 uWinColor;
          uniform float uWinIntensity;
          uniform float uShopEnabled;
          uniform vec3 uShopColor;
          uniform float uShopIntensity;
+         uniform sampler2D uConcreteMap;
          float hashNW( vec2 p ){ return fract( sin( dot( p, vec2(127.1,311.7) ) ) * 43758.5453 ); }`
+      )
+      .replace(
+        '#include <color_fragment>',
+        `#include <color_fragment>
+         {
+           float upNW = abs( vONormNW.y );
+           // quantize the interpolated seed — raw varyings wiggle by ulps across
+           // a triangle, and sin-based hashes amplify that into per-pixel dither
+           float seedQ = floor( vSeedNW * 1024.0 + 0.5 ) / 1024.0;
+           // concrete grain everywhere (walls face-local, roofs reuse face coords)
+           vec3 grain = texture2D( uConcreteMap, vFaceNW / 3.1 ).rgb;
+           diffuseColor.rgb *= mix( vec3( 1.0 ), grain / 0.55, 0.55 );
+           if ( upNW < 0.5 ) {
+             // ---- facade style from the per-building seed ----
+             float colW; float paneW; float paneH; float rowH = 3.0;
+             if ( seedQ < 0.4 )      { colW = 2.2; paneW = 0.60; paneH = 0.52; }
+             else if ( seedQ < 0.75 ){ colW = 2.8; paneW = 0.36; paneH = 0.44; }
+             else                    { colW = 1.5; paneW = 0.90; paneH = 0.86; rowH = 2.6; }
+             // quantized grid: whole columns only, margins keep panes off corners
+             float m = 0.45;
+             float availW = max( vFaceWNW - 2.0 * m, 0.001 );
+             float nCols = max( 1.0, floor( availW / colW ) );
+             float cw = availW / nCols;
+             float cx = ( vFaceNW.x - m ) / cw;
+             float inX = step( 0.0, cx ) * step( cx, nCols );
+             float cyRaw = ( vFaceNW.y - 0.9 ) / rowH;
+             float nRows = floor( max( vBldHNW - 1.5, 0.0 ) / rowH );
+             float inY = step( 0.0, cyRaw ) * step( cyRaw, nRows );
+             float fx = fract( cx );
+             float fy = fract( cyRaw );
+             float pane = inX * inY
+               * step( 0.5 - paneW * 0.5, fx ) * step( fx, 0.5 + paneW * 0.5 )
+               * step( 0.5 - paneH * 0.5, fy ) * step( fy, 0.5 + paneH * 0.5 );
+             // shopfront zone replaces regular facade at street level
+             float shopZone = uShopEnabled
+               * step( vFaceNW.y, ${SHOP_HEIGHT.toFixed(1)} )
+               * step( ${SHOP_MIN_BUILDING_HEIGHT.toFixed(1)}, vBldHNW );
+             pane *= ( 1.0 - shopZone );
+             // glassy panes: darker than the wall but with a sky-reflection lift
+             // so windows still read on shadowed facades
+             vec3 glassNW = diffuseColor.rgb * 0.32 + vec3( 0.05, 0.08, 0.13 );
+             diffuseColor.rgb = mix( diffuseColor.rgb, glassNW, pane * 0.85 );
+             vPaneNW = pane;
+             vShopZoneNW = shopZone;
+             vSeedQNW = seedQ;
+             vColRowNW = vec2( floor( cx ), floor( cyRaw ) );
+             // fake contact occlusion grounds the building
+             diffuseColor.rgb *= mix( 0.78, 1.0, smoothstep( 0.0, 2.4, vFaceNW.y ) );
+           } else {
+             // roofs: darker, matte
+             diffuseColor.rgb *= 0.85;
+           }
+         }`
       )
       .replace(
         '#include <emissivemap_fragment>',
         `#include <emissivemap_fragment>
-         if ( uWinEnabled > 0.5 || uShopEnabled > 0.5 ) {
-           float up = abs( vONormNW.y );
-           if ( up < 0.5 ) {
-             float rowH = 3.0;
-             float colW = 2.4;
-             float horiz = abs( vONormNW.x ) > 0.5 ? vWPosNW.z : vWPosNW.x;
-             // ground-floor shop band: only tall buildings, only when the theme asks
-             float shopZone = uShopEnabled
-               * step( vWPosNW.y, ${SHOP_HEIGHT.toFixed(1)} )
-               * step( ${SHOP_MIN_BUILDING_HEIGHT.toFixed(1)}, vBldHNW );
-             if ( uWinEnabled > 0.5 ) {
-               float ry = fract( vWPosNW.y / rowH );
-               float rx = fract( horiz / colW );
-               float pane = step(0.18, ry) * step(ry, 0.72) * step(0.22, rx) * step(rx, 0.78);
-               float lit = step( 0.42, hashNW( floor( vec2( horiz / colW, vWPosNW.y / rowH ) ) ) );
-               // regular windows stop where the shopfront begins
-               totalEmissiveRadiance += uWinColor * ( pane * lit * uWinIntensity ) * ( 1.0 - shopZone );
-             }
-             if ( shopZone > 0.5 ) {
-               float shopW = colW * 2.2;
-               float sx = fract( horiz / shopW );
-               // wide, always-lit display windows below a signage stripe
-               float pane = step( 0.06, sx ) * step( sx, 0.94 )
-                 * step( 0.15, vWPosNW.y ) * step( vWPosNW.y, ${(SHOP_HEIGHT * 0.78).toFixed(2)} );
-               float sign = step( ${(SHOP_HEIGHT * 0.85).toFixed(2)}, vWPosNW.y )
-                 * step( vWPosNW.y, ${(SHOP_HEIGHT * 0.97).toFixed(2)} );
-               // vary the sign tint per building so streets don't repeat
-               vec3 tint = mix( uShopColor, uShopColor.gbr, step( 0.5, hashNW( floor( vWPosNW.xz / 8.0 ) ) ) );
-               totalEmissiveRadiance += tint * ( pane * 0.6 + sign ) * uShopIntensity;
-             }
+         if ( abs( vONormNW.y ) < 0.5 ) {
+           if ( uWinEnabled > 0.5 && vPaneNW > 0.0 ) {
+             // per-window lit/dark, stable per building via the quantized seed
+             float lit = step( 0.42, hashNW( vColRowNW + vec2( vSeedQNW * 97.0, 0.0 ) ) );
+             totalEmissiveRadiance += uWinColor * vPaneNW * lit * uWinIntensity;
+           }
+           if ( vShopZoneNW > 0.5 ) {
+             float shopW = 4.8;
+             float sx = fract( vFaceNW.x / shopW );
+             // wide, always-lit display windows below a signage stripe
+             float spane = step( 0.06, sx ) * step( sx, 0.94 )
+               * step( 0.15, vFaceNW.y ) * step( vFaceNW.y, ${(SHOP_HEIGHT * 0.78).toFixed(2)} );
+             float sign = step( ${(SHOP_HEIGHT * 0.85).toFixed(2)}, vFaceNW.y )
+               * step( vFaceNW.y, ${(SHOP_HEIGHT * 0.97).toFixed(2)} );
+             // vary the sign tint per building so streets don't repeat
+             vec3 tint = mix( uShopColor, uShopColor.gbr, step( 0.5, vSeedQNW ) );
+             totalEmissiveRadiance += tint * ( spane * 0.6 + sign ) * uShopIntensity;
            }
          }`
+      )
+      // scratch "varyings" written in color_fragment, read in emissive — plain
+      // globals within the fragment shader, declared next to the real varyings
+      .replace(
+        'float hashNW( vec2 p )',
+        `float vPaneNW = 0.0;
+         float vShopZoneNW = 0.0;
+         float vSeedQNW = 0.0;
+         vec2 vColRowNW = vec2( 0.0 );
+         float hashNW( vec2 p )`
       )
   }
 

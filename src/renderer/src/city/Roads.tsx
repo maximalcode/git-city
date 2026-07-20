@@ -3,6 +3,7 @@ import {
   AdditiveBlending,
   CanvasTexture,
   ClampToEdgeWrapping,
+  Color,
   DoubleSide,
   LinearFilter,
   LinearMipmapLinearFilter,
@@ -10,14 +11,27 @@ import {
 } from 'three'
 import type { CityModel } from './cityData'
 import { buildRoadGeometry } from './roadGeometry'
+import { asphaltTextures, pavingTextures } from './pbrTextures'
 import { useStore } from '../store'
 import { getTheme } from './themes'
 
 /**
- * Street surfaces: raised sidewalks with curbs, the textured asphalt on top,
+ * Street surfaces: raised paving-stone sidewalks with curbs, photo-real PBR
+ * asphalt (bundled CC0 maps, tinted per theme), a dashed-centerline overlay,
  * zebra crosswalks at junctions, and (for neon themes) an additive markings
- * overlay the bloom pass picks up. All static, built once per city model.
+ * layer the bloom pass picks up. All static, built once per city model.
  */
+
+/** Average luminance of the bundled color maps — the theme's flat surface color
+ *  multiplies the map, so dividing by this keeps the street exactly as bright
+ *  as the pre-PBR flat-color look. */
+const ASPHALT_MAP_LUMA = 0.42
+const PAVING_MAP_LUMA = 0.52
+
+function tinted(hex: string, mapLuma: number): Color {
+  return new Color(hex).multiplyScalar(1 / mapLuma)
+}
+
 export default function Roads({ model }: { model: CityModel }): React.JSX.Element | null {
   const theme = getTheme(useStore((s) => s.themeId))
 
@@ -25,34 +39,41 @@ export default function Roads({ model }: { model: CityModel }): React.JSX.Elemen
   useEffect(
     () => () => {
       geo.asphalt.dispose()
+      geo.junction.dispose()
       geo.sidewalk.dispose()
       geo.crosswalk.dispose()
     },
     [geo]
   )
 
-  const surfaceTex = useMemo(
-    () => makeRoadTexture(theme.road.surface, theme.road.marking, false),
-    [theme.road.surface, theme.road.marking]
-  )
-  useEffect(() => () => surfaceTex.dispose(), [surfaceTex])
+  const asphalt = asphaltTextures()
+  const paving = pavingTextures()
+
+  const markingTex = useMemo(() => makeMarkingTexture(theme.road.marking, false), [
+    theme.road.marking
+  ])
+  useEffect(() => () => markingTex.dispose(), [markingTex])
 
   const glowTex = useMemo(
-    () =>
-      theme.road.markingEmissive > 0 ? makeRoadTexture('#000000', theme.road.marking, true) : null,
+    () => (theme.road.markingEmissive > 0 ? makeMarkingTexture(theme.road.marking, true) : null),
     [theme.road.markingEmissive, theme.road.marking]
   )
   useEffect(() => () => glowTex?.dispose(), [glowTex])
+
+  const asphaltTint = useMemo(() => tinted(theme.road.surface, ASPHALT_MAP_LUMA), [theme])
+  const sidewalkTint = useMemo(() => tinted(theme.road.sidewalk, PAVING_MAP_LUMA), [theme])
 
   if (model.roadGraph.edges.length === 0) return null
 
   return (
     <group>
-      {/* raised concrete sidewalks + curb faces (grayscale vertex colours shade
-          the curb; DoubleSide so the vertical faces light from both sides) */}
+      {/* raised paving-stone sidewalks + curb faces (grayscale vertex colours
+          shade the curb; DoubleSide so the vertical faces light from both sides) */}
       <mesh geometry={geo.sidewalk} receiveShadow castShadow>
         <meshStandardMaterial
-          color={theme.road.sidewalk}
+          color={sidewalkTint}
+          map={paving.map}
+          normalMap={paving.normalMap}
           roughness={0.9}
           metalness={0}
           vertexColors
@@ -60,9 +81,39 @@ export default function Roads({ model }: { model: CityModel }): React.JSX.Elemen
         />
       </mesh>
 
-      {/* asphalt carriageway */}
+      {/* asphalt carriageway — real road photogrammetry, tinted per theme */}
       <mesh geometry={geo.asphalt} receiveShadow>
-        <meshStandardMaterial map={surfaceTex} roughness={0.95} metalness={0} />
+        <meshStandardMaterial
+          color={asphaltTint}
+          map={asphalt.map}
+          normalMap={asphalt.normalMap}
+          roughnessMap={asphalt.roughnessMap}
+          roughness={1}
+          metalness={0}
+        />
+      </mesh>
+
+      {/* junction squares — same asphalt, world UVs, no centerline on top */}
+      <mesh geometry={geo.junction} receiveShadow>
+        <meshStandardMaterial
+          color={asphaltTint}
+          map={asphalt.map}
+          normalMap={asphalt.normalMap}
+          roughnessMap={asphalt.roughnessMap}
+          roughness={1}
+          metalness={0}
+        />
+      </mesh>
+
+      {/* dashed centerline overlay (transparent outside the dash band) */}
+      <mesh geometry={geo.asphalt} position={[0, 0.005, 0]}>
+        <meshStandardMaterial
+          map={markingTex}
+          transparent
+          depthWrite={false}
+          roughness={0.7}
+          metalness={0}
+        />
       </mesh>
 
       {/* zebra crossings */}
@@ -92,27 +143,21 @@ export default function Roads({ model }: { model: CityModel }): React.JSX.Elemen
 }
 
 /**
- * 128×64 canvas: asphalt fill with a dashed centerline along u. The dash band
- * sits in the middle rows; edge rows stay plain so junction quads (constant UV
- * near the border) and the v-clamp never sample a marking.
- * glowOnly = black background + marking (used additively for neon streets).
+ * 128×64 canvas holding ONLY the dashed centerline (u = half the dash period).
+ * The dash band sits in the middle rows; edge rows stay empty so junction quads
+ * (constant UV near the border) and the v-clamp never sample a marking.
+ * glowOnly = opaque black background + marking, used additively for neon.
  */
-function makeRoadTexture(surface: string, marking: string, glowOnly: boolean): CanvasTexture {
+function makeMarkingTexture(marking: string, glowOnly: boolean): CanvasTexture {
   const canvas = document.createElement('canvas')
   canvas.width = 128
   canvas.height = 64
   const ctx = canvas.getContext('2d')!
-  ctx.fillStyle = glowOnly ? '#000000' : surface
-  ctx.fillRect(0, 0, 128, 64)
-  if (!glowOnly) {
-    // faint asphalt speckle so large surfaces don't read perfectly flat
-    ctx.fillStyle = 'rgba(255,255,255,0.03)'
-    for (let i = 0; i < 40; i++) {
-      // deterministic scatter (no Math.random: identical texture every build)
-      const x = (i * 37) % 128
-      const y = (i * 53) % 64
-      ctx.fillRect(x, y, 2, 2)
-    }
+  if (glowOnly) {
+    ctx.fillStyle = '#000000'
+    ctx.fillRect(0, 0, 128, 64)
+  } else {
+    ctx.clearRect(0, 0, 128, 64)
   }
   ctx.fillStyle = marking
   ctx.fillRect(0, 29, 64, 6) // dash: half the u-period, centered in v

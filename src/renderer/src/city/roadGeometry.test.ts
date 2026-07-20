@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { buildRoadGraph } from '../layout/roads'
 import { cityLayout } from '../layout/treemap'
-import { buildRoadGeometry, roadY } from './roadGeometry'
+import { buildRoadGeometry, planarUV, PAVING_TILE, roadY } from './roadGeometry'
 
 const files = Array.from({ length: 50 }, (_, i) => ({
   path: `${['src', 'src/core', 'lib', 'test'][i % 4]}/f${i}.ts`,
@@ -77,10 +77,43 @@ describe('buildRoadGeometry', () => {
     expect(sawFace).toBe(true)
   })
 
+  it('emits junction squares separately with world-planar UVs', () => {
+    const pos = geo.junction.getAttribute('position')
+    const uv = geo.junction.getAttribute('uv')
+    expect(pos.count).toBeGreaterThan(0)
+    expect(pos.count % 6).toBe(0)
+    expect(uv.count).toBe(pos.count)
+    // world-planar: uv scales 1:1 with position (u = x/DASH_PERIOD, v = z/DASH_PERIOD)
+    for (let i = 0; i < pos.count; i++) {
+      expect(uv.getX(i)).toBeCloseTo(pos.getX(i) / 4)
+      expect(uv.getY(i)).toBeCloseTo(pos.getZ(i) / 4)
+    }
+  })
+
+  it('gives sidewalks UVs so the paving texture can tile in world space', () => {
+    const sw = geo.sidewalk
+    const pos = sw.getAttribute('position')
+    const uv = sw.getAttribute('uv')
+    expect(uv.count).toBe(pos.count)
+  })
+
   it('handles an empty graph', () => {
     const empty = buildRoadGeometry(buildRoadGraph([]))
     expect(empty.asphalt.getAttribute('position').count).toBe(0)
+    expect(empty.junction.getAttribute('position').count).toBe(0)
     expect(empty.sidewalk.getAttribute('position').count).toBe(0)
     expect(empty.crosswalk.getAttribute('position').count).toBe(0)
+  })
+})
+
+describe('planarUV', () => {
+  it('maps top faces from the ground plane', () => {
+    expect(planarUV(0, 1, 0, 3.4, 0.2, -1.7)).toEqual([3.4 / PAVING_TILE, -1.7 / PAVING_TILE])
+  })
+  it('maps x-facing curb faces from their wall plane', () => {
+    expect(planarUV(1, 0, 0, 5, 0.1, 2)).toEqual([2 / PAVING_TILE, 0.1 / PAVING_TILE])
+  })
+  it('maps z-facing curb faces from their wall plane', () => {
+    expect(planarUV(0, 0, -1, 5, 0.1, 2)).toEqual([5 / PAVING_TILE, 0.1 / PAVING_TILE])
   })
 })

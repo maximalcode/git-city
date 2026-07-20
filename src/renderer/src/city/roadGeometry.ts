@@ -12,7 +12,9 @@
  *
  * The asphalt keeps the same UV contract as before: u = world-units along the
  * street / DASH_PERIOD (continuous across junction-split edges), v = 0..1 across
- * the width; junction quads sample a marking-free texel.
+ * the width. Junction squares live in their own `junction` geometry with
+ * world-planar UVs, so the centerline-marking overlay (drawn only on `asphalt`)
+ * never crosses a junction.
  */
 
 import { BufferAttribute, BufferGeometry } from 'three'
@@ -20,9 +22,6 @@ import type { RoadGraph } from '../layout/roads'
 
 /** world units per dash cycle in the road texture */
 export const DASH_PERIOD = 4
-/** constant UV of a marking-free texel (texture edge rows are plain asphalt) */
-const PLAIN_U = 0.25
-const PLAIN_V = 0.1
 
 /** height of the curb / raised sidewalk above the carriageway */
 const CURB_H = 0.16
@@ -33,6 +32,9 @@ const CW_MIN_WIDTH = 1.1
 
 export interface RoadGeometry {
   asphalt: BufferGeometry
+  /** junction squares: same material as asphalt but real (world) UVs — kept
+   *  separate so the centerline-marking overlay never covers a junction */
+  junction: BufferGeometry
   sidewalk: BufferGeometry
   crosswalk: BufferGeometry
 }
@@ -47,10 +49,33 @@ function sidewalkWidthFor(width: number): number {
   return Math.min(Math.max(width * 0.2, 0.22), 0.7)
 }
 
-/** A growing triangle soup with position + normal (+ optional grayscale color). */
+/** world units per paving-texture tile on sidewalks (and other soup surfaces) */
+export const PAVING_TILE = 1.7
+
+/**
+ * Planar UV by dominant normal axis: tops map from the ground plane (xz), curb
+ * faces map from their wall plane — so a world-space paving texture runs
+ * seamlessly along strips regardless of quad orientation. Pure + exported for
+ * tests.
+ */
+export function planarUV(
+  nx: number,
+  ny: number,
+  nz: number,
+  x: number,
+  y: number,
+  z: number
+): [number, number] {
+  if (Math.abs(ny) >= 0.5) return [x / PAVING_TILE, z / PAVING_TILE]
+  if (Math.abs(nx) >= 0.5) return [z / PAVING_TILE, y / PAVING_TILE]
+  return [x / PAVING_TILE, y / PAVING_TILE]
+}
+
+/** A growing triangle soup with position + normal + uv (+ optional color). */
 class Soup {
   pos: number[] = []
   nrm: number[] = []
+  uv: number[] = []
   col: number[] = []
   withColor: boolean
   constructor(withColor: boolean) {
@@ -80,6 +105,8 @@ class Soup {
     for (const v of [a, b, c, a, c, d]) {
       this.pos.push(v[0], v[1], v[2])
       this.nrm.push(nx, ny, nz)
+      const [tu, tv] = planarUV(nx, ny, nz, v[0], v[1], v[2])
+      this.uv.push(tu, tv)
       if (this.withColor) this.col.push(color, color, color)
     }
   }
@@ -87,6 +114,7 @@ class Soup {
     const geo = new BufferGeometry()
     geo.setAttribute('position', new BufferAttribute(new Float32Array(this.pos), 3))
     geo.setAttribute('normal', new BufferAttribute(new Float32Array(this.nrm), 3))
+    geo.setAttribute('uv', new BufferAttribute(new Float32Array(this.uv), 2))
     if (this.withColor) geo.setAttribute('color', new BufferAttribute(new Float32Array(this.col), 3))
     return geo
   }
@@ -100,6 +128,7 @@ export function buildRoadGeometry(graph: RoadGraph): RoadGeometry {
     uvs: [number, number][]
   }
   const asphaltQuads: Quad[] = []
+  const junctionQuads: Quad[] = []
   const sidewalk = new Soup(true)
   const crosswalk = new Soup(false)
 
@@ -182,15 +211,16 @@ export function buildRoadGeometry(graph: RoadGraph): RoadGeometry {
     if (size === null) return
     const half = size / 2
     const y = roadY(Math.min(...graph.adjacency[ni].map((ei) => graph.edges[ei].depth))) + 0.002
-    asphaltQuads.push({
+    // world-planar UVs: the junction samples the asphalt photo at street density
+    junctionQuads.push({
       xs: [n.x - half, n.x + half, n.x + half, n.x - half],
       zs: [n.z - half, n.z - half, n.z + half, n.z + half],
       y,
       uvs: [
-        [PLAIN_U, PLAIN_V],
-        [PLAIN_U, PLAIN_V],
-        [PLAIN_U, PLAIN_V],
-        [PLAIN_U, PLAIN_V]
+        [(n.x - half) / DASH_PERIOD, (n.z - half) / DASH_PERIOD],
+        [(n.x + half) / DASH_PERIOD, (n.z - half) / DASH_PERIOD],
+        [(n.x + half) / DASH_PERIOD, (n.z + half) / DASH_PERIOD],
+        [(n.x - half) / DASH_PERIOD, (n.z + half) / DASH_PERIOD]
       ]
     })
     // zebra crossings as each wide road enters this junction
@@ -201,30 +231,38 @@ export function buildRoadGeometry(graph: RoadGraph): RoadGeometry {
     }
   })
 
-  // --- assemble the textured asphalt geometry (normals all +Y, uv per quad) ---
-  const positions = new Float32Array(asphaltQuads.length * 6 * 3)
-  const normals = new Float32Array(asphaltQuads.length * 6 * 3)
-  const uvs = new Float32Array(asphaltQuads.length * 6 * 2)
-  const order = [0, 2, 1, 0, 3, 2] // two CCW triangles seen from +Y
-  asphaltQuads.forEach((q, qi) => {
-    for (let v = 0; v < 6; v++) {
-      const c = order[v]
-      const o = (qi * 6 + v) * 3
-      positions[o] = q.xs[c]
-      positions[o + 1] = q.y
-      positions[o + 2] = q.zs[c]
-      normals[o + 1] = 1
-      const uo = (qi * 6 + v) * 2
-      uvs[uo] = q.uvs[c][0]
-      uvs[uo + 1] = q.uvs[c][1]
-    }
-  })
-  const asphalt = new BufferGeometry()
-  asphalt.setAttribute('position', new BufferAttribute(positions, 3))
-  asphalt.setAttribute('normal', new BufferAttribute(normals, 3))
-  asphalt.setAttribute('uv', new BufferAttribute(uvs, 2))
+  // --- assemble the textured surfaces (normals all +Y, uv per quad) ---
+  const buildQuads = (quads: Quad[]): BufferGeometry => {
+    const positions = new Float32Array(quads.length * 6 * 3)
+    const normals = new Float32Array(quads.length * 6 * 3)
+    const uvs = new Float32Array(quads.length * 6 * 2)
+    const order = [0, 2, 1, 0, 3, 2] // two CCW triangles seen from +Y
+    quads.forEach((q, qi) => {
+      for (let v = 0; v < 6; v++) {
+        const c = order[v]
+        const o = (qi * 6 + v) * 3
+        positions[o] = q.xs[c]
+        positions[o + 1] = q.y
+        positions[o + 2] = q.zs[c]
+        normals[o + 1] = 1
+        const uo = (qi * 6 + v) * 2
+        uvs[uo] = q.uvs[c][0]
+        uvs[uo + 1] = q.uvs[c][1]
+      }
+    })
+    const geo = new BufferGeometry()
+    geo.setAttribute('position', new BufferAttribute(positions, 3))
+    geo.setAttribute('normal', new BufferAttribute(normals, 3))
+    geo.setAttribute('uv', new BufferAttribute(uvs, 2))
+    return geo
+  }
 
-  return { asphalt, sidewalk: sidewalk.build(), crosswalk: crosswalk.build() }
+  return {
+    asphalt: buildQuads(asphaltQuads),
+    junction: buildQuads(junctionQuads),
+    sidewalk: sidewalk.build(),
+    crosswalk: crosswalk.build()
+  }
 }
 
 /**

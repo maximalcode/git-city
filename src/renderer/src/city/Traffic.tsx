@@ -6,6 +6,7 @@ import { useStore } from '../store'
 import { getTheme, type Theme } from './themes'
 import type { CityModel } from './cityData'
 import { roadY } from './roadGeometry'
+import { LANE_OFFSET_CAP } from './streetFurniture'
 import { geometryFor, type AgentKind } from './trafficShapes'
 
 const dummy = new Object3D()
@@ -291,9 +292,10 @@ function AgentLayer({
       const k = cur.length > 0 ? a.s / cur.length : 0
       let x = na.x + (nb.x - na.x) * k
       let z = na.z + (nb.z - na.z) * k
-      // right-hand lane offset so opposing traffic never overlaps
+      // right-hand lane offset so opposing traffic never overlaps; capped so
+      // cars keep to the inner lanes of wide boulevards (outer strip parks)
       const target = edgeAngle(a.edge, a.dir)
-      const laneOff = cur.width * 0.22 * agentScale
+      const laneOff = Math.min(cur.width * 0.22, LANE_OFFSET_CAP) * agentScale
       x += Math.sin(target) * laneOff
       z += -Math.cos(target) * laneOff
       // steer smoothly toward the street direction (junction turns)

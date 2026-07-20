@@ -273,7 +273,9 @@ export function cityLayout(files: CityInput[], size = 140): CityLayout {
   const roads: RoadSegment[] = []
 
   const recurse = (node: DirNode, rect: Rect, depth: number, outerPad: number): void => {
-    const pad = Math.max(0.5, 2.6 / (depth + 1))
+    // generous top-level padding: boulevards wide enough for two driving lanes
+    // PLUS curb parking (see streetFurniture's clearance math)
+    const pad = Math.max(0.5, 3.4 / (depth + 1))
     const items: Item<{ dir?: DirNode; file?: { path: string; weight: number } }>[] = [
       ...Array.from(node.dirs.values(), (d) => ({ weight: d.weight, payload: { dir: d } })),
       ...node.files.map((f) => ({ weight: f.weight, payload: { file: f } }))

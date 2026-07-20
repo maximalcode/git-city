@@ -44,9 +44,25 @@ export function roadY(depth: number): number {
   return depth > 0 ? depth * 0.09 + 0.06 + 0.004 : 0.004
 }
 
-function sidewalkWidthFor(width: number): number {
+export function sidewalkWidthFor(width: number): number {
   if (width < SW_MIN_WIDTH) return 0
   return Math.min(Math.max(width * 0.2, 0.22), 0.7)
+}
+
+/**
+ * Junction square half-sizes per node (null = no junction there): a junction
+ * exists where edges of both axes meet (T or X) or 3+ edges meet. Exported so
+ * street-detail placement (stop lines, traffic lights, parked cars) agrees
+ * exactly with the rendered junction squares.
+ */
+export function junctionHalfSizes(graph: RoadGraph): (number | null)[] {
+  return graph.nodes.map((_, ni) => {
+    const inc = graph.adjacency[ni]
+    if (inc.length < 2) return null
+    const axes = new Set(inc.map((ei) => graph.edges[ei].axis))
+    if (inc.length === 2 && axes.size === 1) return null
+    return Math.max(...inc.map((ei) => graph.edges[ei].width)) / 2
+  })
 }
 
 /** world units per paving-texture tile on sidewalks (and other soup surfaces) */
@@ -132,14 +148,7 @@ export function buildRoadGeometry(graph: RoadGraph): RoadGeometry {
   const sidewalk = new Soup(true)
   const crosswalk = new Soup(false)
 
-  // A junction exists where edges of both axes meet (T or X) or 3+ edges meet.
-  const junctionSize: (number | null)[] = graph.nodes.map((_, ni) => {
-    const inc = graph.adjacency[ni]
-    if (inc.length < 2) return null
-    const axes = new Set(inc.map((ei) => graph.edges[ei].axis))
-    if (inc.length === 2 && axes.size === 1) return null // straight pass-through
-    return Math.max(...inc.map((ei) => graph.edges[ei].width))
-  })
+  const jHalf = junctionHalfSizes(graph)
 
   for (const e of graph.edges) {
     const na = graph.nodes[e.a]
@@ -148,8 +157,8 @@ export function buildRoadGeometry(graph: RoadGraph): RoadGeometry {
     const half = e.width / 2
     const sw = sidewalkWidthFor(e.width)
     // trim the asphalt back from junction squares so surfaces never stack
-    const trimA = junctionSize[e.a] !== null ? junctionSize[e.a]! / 2 : 0
-    const trimB = junctionSize[e.b] !== null ? junctionSize[e.b]! / 2 : 0
+    const trimA = jHalf[e.a] ?? 0
+    const trimB = jHalf[e.b] ?? 0
 
     if (e.axis === 'z') {
       const x = na.x
@@ -207,9 +216,8 @@ export function buildRoadGeometry(graph: RoadGraph): RoadGeometry {
 
   // junction squares sit a hair above the street quads (lowest incident plate)
   graph.nodes.forEach((n, ni) => {
-    const size = junctionSize[ni]
-    if (size === null) return
-    const half = size / 2
+    const half = jHalf[ni]
+    if (half === null) return
     const y = roadY(Math.min(...graph.adjacency[ni].map((ei) => graph.edges[ei].depth))) + 0.002
     // world-planar UVs: the junction samples the asphalt photo at street density
     junctionQuads.push({

@@ -9,6 +9,7 @@ import RoofClutter from './RoofClutter'
 import Hotspots from './Hotspots'
 import Districts from './Districts'
 import Roads from './Roads'
+import StreetDetail from './StreetDetail'
 import StreetLife from './StreetLife'
 import Highlight from './Highlight'
 import StatusOverlay from './StatusOverlay'
@@ -96,6 +97,7 @@ export default function CityScene({
 
       <Districts model={model} />
       <Roads model={model} />
+      <StreetDetail model={model} />
       <StreetLife model={model} />
       <Buildings model={model} targets={targets} />
       <RoofClutter model={model} targets={targets} />

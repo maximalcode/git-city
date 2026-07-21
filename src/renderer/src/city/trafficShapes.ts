@@ -18,7 +18,10 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
  * palette color (materials use vertexColors): white parts take the paint job,
  * dark parts (glass, tires) stay dark whatever the instance color is.
  */
-export type AgentKind = 'car' | 'bike' | 'futuristic'
+export type AgentKind = 'car' | 'wagon' | 'van' | 'bus' | 'bike' | 'futuristic'
+
+/** the four road-vehicle body styles, in the order Traffic mixes them */
+export const CAR_KINDS: AgentKind[] = ['car', 'wagon', 'van', 'bus']
 
 /** Write a constant `color` attribute over the whole geometry. */
 function paint(geo: BufferGeometry, r: number, g = r, b = r): BufferGeometry {
@@ -48,41 +51,134 @@ function merge(parts: BufferGeometry[]): BufferGeometry {
   return merged
 }
 
-/** Car: chassis + dark greenhouse + roof cap + four wheels, ~2.4 long. */
-export function carGeometry(): BufferGeometry {
-  const chassis = paint(new BoxGeometry(2.4, 0.34, 1.0), 1)
-  chassis.translate(0, 0.42, 0)
-  const glass = paint(new BoxGeometry(1.29, 0.3, 0.96), 0.1)
-  glass.translate(-0.12, 0.72, 0)
-  const roof = paint(new BoxGeometry(1.15, 0.1, 0.86), 1)
-  roof.translate(-0.12, 0.92, 0)
-  const parts = [chassis, glass, roof]
-  for (const sx of [-0.78, 0.78]) {
-    for (const sz of [-0.55, 0.55]) {
-      const wheel = paint(new CylinderGeometry(0.26, 0.26, 0.16, 12), 0.12)
+/**
+ * Body spec for a road vehicle, in world units. Real proportions: a car is
+ * ~4.5 m × 1.8 m, and one world unit here is ~2.5 m, so a car body is ~1.9
+ * long and ~0.74 wide — narrow enough to leave a driving lane free beside a
+ * parked row. `cabFrac` is where the greenhouse sits along the body (0 = rear,
+ * 1 = front); `roofDrop` insets the roof for a sloped-ish silhouette.
+ */
+interface BodySpec {
+  length: number
+  width: number
+  /** height of the chassis box top above the ground */
+  bodyH: number
+  cabLen: number
+  cabH: number
+  cabAt: number
+  wheelR: number
+  axles: number[]
+}
+
+const BODIES: Record<'car' | 'wagon' | 'van' | 'bus', BodySpec> = {
+  car: {
+    length: 1.9,
+    width: 0.74,
+    bodyH: 0.34,
+    cabLen: 0.82,
+    cabH: 0.26,
+    cabAt: -0.05,
+    wheelR: 0.19,
+    axles: [-0.6, 0.6]
+  },
+  wagon: {
+    length: 2.05,
+    width: 0.76,
+    bodyH: 0.36,
+    cabLen: 1.15,
+    cabH: 0.3,
+    cabAt: -0.15,
+    wheelR: 0.2,
+    axles: [-0.66, 0.66]
+  },
+  van: {
+    length: 2.2,
+    width: 0.82,
+    bodyH: 0.44,
+    cabLen: 1.5,
+    cabH: 0.46,
+    cabAt: -0.2,
+    wheelR: 0.21,
+    axles: [-0.72, 0.72]
+  },
+  bus: {
+    length: 3.4,
+    width: 0.9,
+    bodyH: 0.52,
+    cabLen: 2.9,
+    cabH: 0.62,
+    cabAt: -0.05,
+    wheelR: 0.24,
+    axles: [-1.2, 0.2, 1.15]
+  }
+}
+
+/**
+ * A road vehicle: chassis, greenhouse with a dark glass band, roof, wheels,
+ * and emissive-white head/tail light blocks. Modelled facing +X with its base
+ * at y=0. Lights are painted pure white so the instance color multiplies them
+ * to the paint job's hue — Traffic overrides them with a dedicated glow layer.
+ */
+function bodyGeometry(kind: 'car' | 'wagon' | 'van' | 'bus'): BufferGeometry {
+  const s = BODIES[kind]
+  const hw = s.width / 2
+  const hl = s.length / 2
+  const floorY = s.wheelR * 0.85
+
+  const chassis = paint(new BoxGeometry(s.length, s.bodyH, s.width), 1)
+  chassis.translate(0, floorY + s.bodyH / 2, 0)
+  // greenhouse: a slightly inset painted shell with a dark glass band inside it
+  const cabY = floorY + s.bodyH
+  const glass = paint(new BoxGeometry(s.cabLen, s.cabH, s.width * 0.97), 0.08)
+  glass.translate(s.cabAt, cabY + s.cabH / 2, 0)
+  const roof = paint(new BoxGeometry(s.cabLen * 0.94, 0.07, s.width * 0.9), 1)
+  roof.translate(s.cabAt, cabY + s.cabH + 0.03, 0)
+  const parts: BufferGeometry[] = [chassis, glass, roof]
+
+  for (const ax of s.axles) {
+    for (const sz of [-hw + 0.03, hw - 0.03]) {
+      const wheel = paint(new CylinderGeometry(s.wheelR, s.wheelR, 0.12, 10), 0.1)
       wheel.rotateX(Math.PI / 2)
-      wheel.translate(sx, 0.26, sz)
+      wheel.translate(ax, s.wheelR, sz)
       parts.push(wheel)
     }
   }
+
+  // head + tail light blocks, flush with the body ends
+  const lampY = floorY + s.bodyH * 0.62
+  for (const [ax, w] of [
+    [hl - 0.02, 0.05],
+    [-hl + 0.02, 0.05]
+  ] as [number, number][]) {
+    for (const sz of [-hw * 0.62, hw * 0.62]) {
+      const lamp = paint(new BoxGeometry(w, 0.09, 0.16), 1)
+      lamp.translate(ax, lampY, sz)
+      parts.push(lamp)
+    }
+  }
+
   return merge(parts)
+}
+
+export function carGeometry(): BufferGeometry {
+  return bodyGeometry('car')
 }
 
 /** Bicycle: two dark wheels, painted frame, neutral rider (torso + head). */
 export function bikeGeometry(): BufferGeometry {
   const parts: BufferGeometry[] = []
-  for (const sx of [-0.55, 0.55]) {
-    const wheel = paint(new CylinderGeometry(0.32, 0.32, 0.1, 10), 0.12)
+  for (const sx of [-0.4, 0.4]) {
+    const wheel = paint(new CylinderGeometry(0.24, 0.24, 0.07, 10), 0.12)
     wheel.rotateX(Math.PI / 2)
-    wheel.translate(sx, 0.32, 0)
+    wheel.translate(sx, 0.24, 0)
     parts.push(wheel)
   }
-  const frame = paint(new BoxGeometry(1.3, 0.1, 0.1), 1)
-  frame.translate(0, 0.62, 0)
-  const torso = paint(new CylinderGeometry(0.16, 0.2, 0.5, 8), 0.55)
-  torso.translate(-0.1, 0.95, 0)
-  const head = paint(new SphereGeometry(0.16, 8, 6), 0.55)
-  head.translate(-0.1, 1.34, 0)
+  const frame = paint(new BoxGeometry(0.95, 0.07, 0.07), 1)
+  frame.translate(0, 0.46, 0)
+  const torso = paint(new CylinderGeometry(0.12, 0.15, 0.38, 8), 0.55)
+  torso.translate(-0.07, 0.7, 0)
+  const head = paint(new SphereGeometry(0.12, 8, 6), 0.55)
+  head.translate(-0.07, 0.99, 0)
   parts.push(frame, torso, head)
   return merge(parts)
 }
@@ -114,7 +210,10 @@ export function geometryFor(kind: AgentKind): BufferGeometry {
 function buildGeometry(kind: AgentKind): BufferGeometry {
   switch (kind) {
     case 'car':
-      return carGeometry()
+    case 'wagon':
+    case 'van':
+    case 'bus':
+      return bodyGeometry(kind)
     case 'bike':
       return bikeGeometry()
     case 'futuristic':

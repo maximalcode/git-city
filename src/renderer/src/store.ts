@@ -74,6 +74,23 @@ function saveTimeOfDay(t: number): void {
   }
 }
 
+const SUNFOLLOW_KEY = 'gitcity.sunfollow'
+function loadSunFollows(): boolean {
+  try {
+    // default ON: the sky tracking the commit clock is the intended first look
+    return localStorage.getItem(SUNFOLLOW_KEY) !== '0'
+  } catch {
+    return true
+  }
+}
+function saveSunFollows(on: boolean): void {
+  try {
+    localStorage.setItem(SUNFOLLOW_KEY, on ? '1' : '0')
+  } catch {
+    /* ignore */
+  }
+}
+
 const HOTSPOTS_KEY = 'gitcity.hotspots'
 function loadShowHotspots(): boolean {
   try {
@@ -287,6 +304,9 @@ interface GitCityState {
   paletteOpen: boolean
   /** time-of-day for the sun, 0..1 (0/1 = midnight, 0.5 = noon); global pref */
   timeOfDay: number
+  /** when true, the sun tracks the current commit's local hour instead of the
+   *  manual slider; moving the slider turns this off. Global pref, default on. */
+  sunFollowsCommit: boolean
   /** pulse the repo's current hotspots (most-churned recent files); global pref */
   showHotspots: boolean
   /** diff viewer layout: split (side-by-side) vs unified; global pref */
@@ -320,6 +340,7 @@ interface GitCityState {
   setGraphOpen(open: boolean): void
   setPaletteOpen(open: boolean): void
   setTimeOfDay(t: number): void
+  toggleSunFollowsCommit(): void
   toggleHotspots(): void
   toggleDiffSplit(): void
   toggleReduceMotion(): void
@@ -443,6 +464,7 @@ export const useStore = create<GitCityState>((set, get) => ({
   graphOpen: false,
   paletteOpen: false,
   timeOfDay: loadTimeOfDay(),
+  sunFollowsCommit: loadSunFollows(),
   showHotspots: loadShowHotspots(),
   diffSplit: loadDiffSplit(),
   reduceMotion: loadReduceMotion(),
@@ -546,7 +568,14 @@ export const useStore = create<GitCityState>((set, get) => ({
   setTimeOfDay: (t) => {
     const timeOfDay = Math.min(1, Math.max(0, t))
     saveTimeOfDay(timeOfDay)
-    set({ timeOfDay })
+    // grabbing the slider means "I want manual control" — stop tracking commits
+    saveSunFollows(false)
+    set({ timeOfDay, sunFollowsCommit: false })
+  },
+  toggleSunFollowsCommit: () => {
+    const sunFollowsCommit = !get().sunFollowsCommit
+    saveSunFollows(sunFollowsCommit)
+    set({ sunFollowsCommit })
   },
   toggleHotspots: () => {
     const showHotspots = !get().showHotspots
@@ -572,6 +601,7 @@ export const useStore = create<GitCityState>((set, get) => ({
       THEME_KEY,
       VIEW_KEY,
       TOD_KEY,
+      SUNFOLLOW_KEY,
       HOTSPOTS_KEY,
       DIFFSPLIT_KEY,
       REDUCEMOTION_KEY,
@@ -587,6 +617,7 @@ export const useStore = create<GitCityState>((set, get) => ({
       themeId: DEFAULT_THEME_ID,
       viewMode: 'city',
       timeOfDay: 0.5,
+      sunFollowsCommit: true,
       showHotspots: true,
       diffSplit: false,
       reduceMotion: false,

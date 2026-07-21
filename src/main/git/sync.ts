@@ -16,15 +16,26 @@ let currentOp: AbortController | null = null
 
 /**
  * simple-git refuses remote tasks when the env carries GIT_EDITOR (unsafe-
- * editor protection), and a parent process may well have set one. Remote ops
- * never open an editor, so strip those keys instead of opting into unsafe mode.
+ * editor protection) or GIT_ASKPASS (unsafe-askpass protection), and a parent
+ * process may well have set either — VS Code terminals export GIT_ASKPASS, so
+ * without this every remote op fails when the app is launched from one.
+ * Remote ops never open an editor, and auth stays with the system git
+ * (credential manager / SSH agent), so strip those keys instead of opting
+ * into simple-git's unsafe mode.
  */
-const EDITOR_VARS = new Set(['GIT_EDITOR', 'GIT_SEQUENCE_EDITOR', 'EDITOR', 'VISUAL'])
+const UNSAFE_ENV_VARS = new Set([
+  'GIT_EDITOR',
+  'GIT_SEQUENCE_EDITOR',
+  'EDITOR',
+  'VISUAL',
+  'GIT_ASKPASS',
+  'SSH_ASKPASS'
+])
 
 function remoteEnv(): Record<string, string> {
   const env: Record<string, string> = {}
   for (const [k, v] of Object.entries(process.env)) {
-    if (v !== undefined && !EDITOR_VARS.has(k)) env[k] = v
+    if (v !== undefined && !UNSAFE_ENV_VARS.has(k)) env[k] = v
   }
   env.GIT_TERMINAL_PROMPT = '0'
   return env

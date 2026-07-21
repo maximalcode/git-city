@@ -6,6 +6,7 @@ import { useStore } from '../store'
 import { getTheme, type Theme } from './themes'
 import type { CityModel } from './cityData'
 import { roadY } from './roadGeometry'
+import { LANE_OFFSET_CAP } from './streetFurniture'
 import { geometryFor, type AgentKind } from './trafficShapes'
 
 const dummy = new Object3D()
@@ -54,21 +55,29 @@ function layersForTheme(theme: Theme, nEdges: number): LayerSpec[] {
       }
     ]
   }
+  // a realistic mix: mostly cars, some wagons, fewer vans, a couple of buses
+  const mix: [AgentKind, number, number, number][] = [
+    // kind, share of `base`, speed, min street width
+    ['car', 0.36, 3.2, 1.3],
+    ['wagon', 0.2, 3.0, 1.3],
+    ['van', 0.1, 2.6, 1.5],
+    ['bus', 0.05, 2.2, 2.2]
+  ]
   return [
-    {
-      kind: 'car',
-      count: Math.floor(base * 0.7),
-      material: 'lit',
+    ...mix.map(([kind, share, speed, minWidth]) => ({
+      kind,
+      count: Math.max(1, Math.floor(base * share)),
+      material: 'lit' as const,
       palette: CAR_COLORS,
       color: '#fff',
       hover: 0,
-      speed: 3.2,
+      speed,
       spin: false,
-      minWidth: 1.4
-    },
+      minWidth
+    })),
     {
       kind: 'bike',
-      count: Math.floor(base * 0.3),
+      count: Math.floor(base * 0.25),
       material: 'lit',
       palette: BIKE_COLORS,
       color: '#fff',
@@ -291,9 +300,10 @@ function AgentLayer({
       const k = cur.length > 0 ? a.s / cur.length : 0
       let x = na.x + (nb.x - na.x) * k
       let z = na.z + (nb.z - na.z) * k
-      // right-hand lane offset so opposing traffic never overlaps
+      // right-hand lane offset so opposing traffic never overlaps; capped so
+      // cars keep to the inner lanes of wide boulevards (outer strip parks)
       const target = edgeAngle(a.edge, a.dir)
-      const laneOff = cur.width * 0.22 * agentScale
+      const laneOff = Math.min(cur.width * 0.22, LANE_OFFSET_CAP) * agentScale
       x += Math.sin(target) * laneOff
       z += -Math.cos(target) * laneOff
       // steer smoothly toward the street direction (junction turns)

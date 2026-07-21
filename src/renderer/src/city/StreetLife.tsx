@@ -1,4 +1,5 @@
-import { useLayoutEffect, useMemo, useRef } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
+import { useFrame } from '@react-three/fiber'
 import {
   BoxGeometry,
   Color,
@@ -11,6 +12,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import type { CityModel } from './cityData'
 import { roadY } from './roadGeometry'
 import { foliageGeometry, trunkGeometry } from './treeShapes'
+import { createFoliageMaterial } from './foliageMaterial'
 import { useStore } from '../store'
 import { getTheme } from './themes'
 
@@ -61,6 +63,7 @@ function pseudo(i: number): number {
 
 export default function StreetLife({ model }: { model: CityModel }): React.JSX.Element | null {
   const theme = getTheme(useStore((s) => s.themeId))
+  const reduceMotion = useStore((s) => s.reduceMotion)
   const graph = model.roadGraph
   const size = model.citySize
 
@@ -140,6 +143,17 @@ export default function StreetLife({ model }: { model: CityModel }): React.JSX.E
   const headRef = useRef<InstancedMesh>(null!)
   const trunkRef = useRef<InstancedMesh>(null!)
   const foliageRef = useRef<InstancedMesh>(null!)
+
+  // passed as a prop (not JSX-created), so R3F won't dispose it for us
+  const { material: foliageMaterial, wind } = useMemo(() => createFoliageMaterial(), [])
+  useEffect(() => () => foliageMaterial.dispose(), [foliageMaterial])
+  useEffect(() => {
+    // "Reduce motion" holds the canopies still
+    wind.strength.value = reduceMotion ? 0 : 0.09
+  }, [wind, reduceMotion])
+  useFrame((state) => {
+    if (!reduceMotion) wind.time.value = state.clock.elapsedTime
+  })
 
   useLayoutEffect(() => {
     const pole = poleRef.current
@@ -223,9 +237,8 @@ export default function StreetLife({ model }: { model: CityModel }): React.JSX.E
             ref={foliageRef}
             args={[foliageGeometry('tree'), undefined, trees.length]}
             castShadow
-          >
-            <meshStandardMaterial roughness={0.85} metalness={0} />
-          </instancedMesh>
+            material={foliageMaterial}
+          />
         </>
       )}
     </group>

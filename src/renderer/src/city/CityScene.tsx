@@ -3,11 +3,14 @@ import type { Snapshot } from '../../../shared/types'
 import { useStore } from '../store'
 import { getTheme } from './themes'
 import { sunState } from '../lib/daylight'
+import { timeOfDayFromCommit } from '../lib/daytime'
 import type { CityModel, Targets } from './cityData'
 import Buildings from './Buildings'
+import RoofClutter from './RoofClutter'
 import Hotspots from './Hotspots'
 import Districts from './Districts'
 import Roads from './Roads'
+import StreetDetail from './StreetDetail'
 import StreetLife from './StreetLife'
 import Highlight from './Highlight'
 import StatusOverlay from './StatusOverlay'
@@ -32,8 +35,11 @@ export default function CityScene({
   reviewPaths?: string[]
 }): React.JSX.Element {
   const theme = getTheme(useStore((s) => s.themeId))
-  const timeOfDay = useStore((s) => s.timeOfDay)
+  const manualTimeOfDay = useStore((s) => s.timeOfDay)
+  const sunFollowsCommit = useStore((s) => s.sunFollowsCommit)
   const size = model.citySize
+  // "sun follows commit" derives the sky from the shown commit's local hour
+  const timeOfDay = sunFollowsCommit ? timeOfDayFromCommit(snapshot.date) : manualTimeOfDay
   const sun = sunState(timeOfDay, size)
 
   // beacon anchors at a set of files' rooftops (shared by hotspots + PR review)
@@ -95,8 +101,10 @@ export default function CityScene({
 
       <Districts model={model} />
       <Roads model={model} />
+      <StreetDetail model={model} />
       <StreetLife model={model} />
       <Buildings model={model} targets={targets} />
+      <RoofClutter model={model} targets={targets} />
       <Highlight model={model} targets={targets} />
       <StatusOverlay model={model} targets={targets} />
       <ConstructionSites model={model} />

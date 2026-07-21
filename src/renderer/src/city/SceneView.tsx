@@ -205,6 +205,7 @@ export default function SceneView(): React.JSX.Element {
             <ForestScene
               model={forestModel}
               targets={forestTgt}
+              snapshot={snapshot}
               hotspots={hotspotPaths}
               reviewPaths={reviewPaths}
             />

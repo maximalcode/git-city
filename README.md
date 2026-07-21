@@ -18,14 +18,18 @@ the line count as you scrub through history.
 
 - **Two view modes** (`V` to switch, persisted): the 3D **City** and the
   **Forest**
-- City: districts per folder, buildings per file, real streets with raised
-  sidewalks, curbs and zebra crossings; commit-weighted traffic driving on
-  them (cars and bikes — hover-craft in Neon); lamp posts and street trees
-  lining the roads with a belt of greenery around the city; ground-floor
-  shopfront glow on tall buildings in night themes
+- City: districts per folder, buildings per file with **photo-real facades**
+  (per-building window grids in three styles, ground-floor shopfronts, rooftop
+  clutter — AC units, water tanks, antennas — and a contact-shadow base); real
+  streets surfaced with **bundled CC0 PBR textures** (asphalt, paving-stone
+  sidewalks), zebra crossings, stop lines, manholes, parked cars at the curb and
+  traffic lights at big junctions; commit-weighted traffic in four body styles
+  (sedan / wagon / van / bus, plus bikes — hover-craft in Neon) with head/tail
+  lights; lamp posts and street trees along the roads
 - Forest: every file is a tree (bush / tree / ancient by size) standing in its
-  folder's grove; canopies grow in and breathe with the live line count and
-  colour by the active colour mode; a gentle wind sway keeps it alive
+  folder's grove; **cross-plane alpha-textured canopies** grow in and breathe
+  with the live line count and colour by the active colour mode; a vertex-shader
+  wind sway keeps the leaves alive
 - Timeline playback: scrub or play the entire history (a full replay fits in
   ~10 seconds)
 - 5 themes (Realistic Day/Night, Neon, Golden Hour, Midnight Ink) with
@@ -44,7 +48,10 @@ the line count as you scrub through history.
 - **Orientation minimap** with a compass marker tracking the camera, so big
   repos never lose you (north up)
 - **Time-of-day** control decoupled from the theme — drag the sun from night
-  through noon to dusk; the key light and shadows move with it
+  through noon to dusk; the key light and shadows move with it. Or leave
+  **"sky follows commit time"** on (default): the sun tracks each commit's local
+  hour, so scrubbing history walks the city from a morning commit's light into a
+  late-night commit's dark — the commit clock shows in the playback ticker
 - **Activity hotspots**: the files churning most this week pulse with a glowing
   beacon over their rooftop / canopy
 - **First-run guide** explaining the height / colour / shape encoding, re-openable
@@ -93,9 +100,10 @@ the line count as you scrub through history.
   install is explained on the welcome screen
 - Recent repos, drag-drop a folder to open, file search with fly-to
 - **Settings** panel (`,`) gathering every preference in one place — theme,
-  view, time of day, a **reduce-motion** toggle (skips the intro orbit),
-  activity hotspots, the default diff layout, plus re-show the first-run guide,
-  clear recent repositories and reset all preferences
+  view, time of day, sky-follows-commit, a **reduce-motion** toggle (skips the
+  intro orbit and stills the wind), activity hotspots, the default diff layout,
+  plus re-show the first-run guide, clear recent repositories and reset all
+  preferences
 - **Update check**: on launch Git City asks GitHub Releases whether a newer
   version exists and, if so, shows an unobtrusive banner linking to the
   download. No token, no background download, no telemetry — you stay in

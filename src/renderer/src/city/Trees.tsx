@@ -5,6 +5,7 @@ import { useStore } from '../store'
 import { getTheme } from './themes'
 import type { ForestModel, ForestTargets } from '../layout/forest'
 import { TREE_KINDS, foliageGeometry, trunkGeometry } from './treeShapes'
+import { createFoliageMaterial } from './foliageMaterial'
 
 const dummy = new Object3D()
 const colorScratch = new Color()
@@ -70,6 +71,15 @@ function KindLayer({
   const setSelected = useStore((s) => s.setSelected)
   const setDiffOpen = useStore((s) => s.setDiffOpen)
   const theme = getTheme(useStore((s) => s.themeId))
+  const reduceMotion = useStore((s) => s.reduceMotion)
+
+  // passed as a prop (not JSX-created), so R3F won't dispose it for us
+  const { material: foliageMaterial, wind } = useMemo(() => createFoliageMaterial(), [])
+  useEffect(() => () => foliageMaterial.dispose(), [foliageMaterial])
+  useEffect(() => {
+    // per-leaf shader sway, on top of the whole-tree sway in useFrame below
+    wind.strength.value = reduceMotion ? 0 : 0.07
+  }, [wind, reduceMotion])
 
   const kind = TREE_KINDS[kindIndex]
   const trunkGeo = useMemo(() => trunkGeometry(kind), [kind])
@@ -90,6 +100,7 @@ function KindLayer({
     const foliage = foliageRef.current
     if (!trunk || !foliage || count === 0) return
     const t = state.clock.elapsedTime
+    if (!reduceMotion) wind.time.value = t
     const k = 1 - Math.exp(-Math.min(dt, 0.1) * theme.lerpSpeed)
     const lerpColors = !anim.settledColors
     let maxColorDelta = 0
@@ -183,9 +194,8 @@ function KindLayer({
         onPointerOut={() => setHovered(null)}
         onClick={onClick}
         onDoubleClick={onDoubleClick}
-      >
-        <meshStandardMaterial roughness={0.85} metalness={0} vertexColors={false} />
-      </instancedMesh>
+        material={foliageMaterial}
+      />
     </group>
   )
 }

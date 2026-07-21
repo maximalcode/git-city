@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest'
 import { buildRoadGraph } from '../layout/roads'
 import { cityLayout } from '../layout/treemap'
 import { junctionHalfSizes } from './roadGeometry'
-import { buildStreetDetail, CAR_HALF_WIDTH, LANE_OFFSET_CAP, PARK_MIN_WIDTH } from './streetFurniture'
+import {
+  buildStreetDetail,
+  CAR_HALF_WIDTH,
+  LANE_OFFSET_CAP,
+  PARK_MIN_WIDTH
+} from './streetFurniture'
 
 const files = Array.from({ length: 120 }, (_, i) => ({
   path: `${['src', 'src/core', 'src/ui', 'lib', 'test', 'docs'][i % 6]}/f${i}.ts`,
@@ -53,7 +58,9 @@ describe('buildStreetDetail', () => {
       const e = graph.edges.find((e) => {
         if (e.width < PARK_MIN_WIDTH) return false
         const na = graph.nodes[e.a]
-        return e.axis === 'x' ? Math.abs(p.z - na.z) <= e.width / 2 : Math.abs(p.x - na.x) <= e.width / 2
+        return e.axis === 'x'
+          ? Math.abs(p.z - na.z) <= e.width / 2
+          : Math.abs(p.x - na.x) <= e.width / 2
       })!
       const na = graph.nodes[e.a]
       const off = e.axis === 'x' ? Math.abs(p.z - na.z) : Math.abs(p.x - na.x)

@@ -49,9 +49,10 @@ export default function Roads({ model }: { model: CityModel }): React.JSX.Elemen
   const asphalt = asphaltTextures()
   const paving = pavingTextures()
 
-  const markingTex = useMemo(() => makeMarkingTexture(theme.road.marking, false), [
-    theme.road.marking
-  ])
+  const markingTex = useMemo(
+    () => makeMarkingTexture(theme.road.marking, false),
+    [theme.road.marking]
+  )
   useEffect(() => () => markingTex.dispose(), [markingTex])
 
   const glowTex = useMemo(

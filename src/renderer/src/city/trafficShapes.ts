@@ -71,10 +71,46 @@ interface BodySpec {
 }
 
 const BODIES: Record<'car' | 'wagon' | 'van' | 'bus', BodySpec> = {
-  car: { length: 1.9, width: 0.74, bodyH: 0.34, cabLen: 0.82, cabH: 0.26, cabAt: -0.05, wheelR: 0.19, axles: [-0.6, 0.6] },
-  wagon: { length: 2.05, width: 0.76, bodyH: 0.36, cabLen: 1.15, cabH: 0.3, cabAt: -0.15, wheelR: 0.2, axles: [-0.66, 0.66] },
-  van: { length: 2.2, width: 0.82, bodyH: 0.44, cabLen: 1.5, cabH: 0.46, cabAt: -0.2, wheelR: 0.21, axles: [-0.72, 0.72] },
-  bus: { length: 3.4, width: 0.9, bodyH: 0.52, cabLen: 2.9, cabH: 0.62, cabAt: -0.05, wheelR: 0.24, axles: [-1.2, 0.2, 1.15] }
+  car: {
+    length: 1.9,
+    width: 0.74,
+    bodyH: 0.34,
+    cabLen: 0.82,
+    cabH: 0.26,
+    cabAt: -0.05,
+    wheelR: 0.19,
+    axles: [-0.6, 0.6]
+  },
+  wagon: {
+    length: 2.05,
+    width: 0.76,
+    bodyH: 0.36,
+    cabLen: 1.15,
+    cabH: 0.3,
+    cabAt: -0.15,
+    wheelR: 0.2,
+    axles: [-0.66, 0.66]
+  },
+  van: {
+    length: 2.2,
+    width: 0.82,
+    bodyH: 0.44,
+    cabLen: 1.5,
+    cabH: 0.46,
+    cabAt: -0.2,
+    wheelR: 0.21,
+    axles: [-0.72, 0.72]
+  },
+  bus: {
+    length: 3.4,
+    width: 0.9,
+    bodyH: 0.52,
+    cabLen: 2.9,
+    cabH: 0.62,
+    cabAt: -0.05,
+    wheelR: 0.24,
+    axles: [-1.2, 0.2, 1.15]
+  }
 }
 
 /**

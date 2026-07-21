@@ -1,11 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  foliageGeometry,
-  TREE_KINDS,
-  treeHeight,
-  treeKindFor,
-  trunkGeometry
-} from './treeShapes'
+import { foliageGeometry, TREE_KINDS, treeHeight, treeKindFor, trunkGeometry } from './treeShapes'
 
 describe('treeKindFor', () => {
   it('grows the tree class with the line count', () => {

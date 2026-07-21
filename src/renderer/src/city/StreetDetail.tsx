@@ -56,10 +56,7 @@ export default function StreetDetail({ model }: { model: CityModel }): React.JSX
   const theme = getTheme(useStore((s) => s.themeId))
   const agentScale = Math.min(1, model.citySize / 140)
 
-  const data = useMemo(
-    () => buildStreetDetail(model.roadGraph, agentScale),
-    [model, agentScale]
-  )
+  const data = useMemo(() => buildStreetDetail(model.roadGraph, agentScale), [model, agentScale])
 
   // ground vehicles look wrong under the hovercraft theme — keep lights/manholes
   const showParked = theme.id !== 'neon'

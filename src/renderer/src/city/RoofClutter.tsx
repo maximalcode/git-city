@@ -116,8 +116,10 @@ export default function RoofClutter({
       const seed = i * 7 + 3
       const s = Math.min(1, side * 0.42) // gear shrinks on narrow roofs
       const inset = 0.28 * s + 0.12
-      const px = (): number => rect.x + inset + pseudo(seed + out.ac.length * 13 + 1) * (rect.w - 2 * inset)
-      const pz = (): number => rect.y + inset + pseudo(seed + out.ac.length * 17 + 2) * (rect.h - 2 * inset)
+      const px = (): number =>
+        rect.x + inset + pseudo(seed + out.ac.length * 13 + 1) * (rect.w - 2 * inset)
+      const pz = (): number =>
+        rect.y + inset + pseudo(seed + out.ac.length * 17 + 2) * (rect.h - 2 * inset)
       // every qualifying roof gets 1-2 AC units
       const nAc = 1 + (pseudo(seed) > 0.55 ? 1 : 0)
       for (let a = 0; a < nAc; a++) {
@@ -189,10 +191,7 @@ function ClutterLayer({
   const base = useMemo(() => new Color(KIND_COLOR[kind]), [kind])
 
   // mirror the buildings' height lerp so gear rides the roof up
-  const anim = useMemo(
-    () => ({ heights: new Float32Array(items.length), settled: false }),
-    [items]
-  )
+  const anim = useMemo(() => ({ heights: new Float32Array(items.length), settled: false }), [items])
   useEffect(() => {
     anim.settled = false
   }, [targets, anim])

@@ -95,15 +95,13 @@ export default function SettingsPanel(): React.JSX.Element | null {
               Sky follows commit time
               <small>A morning commit gets morning light</small>
             </span>
-            <input
-              type="checkbox"
-              checked={sunFollowsCommit}
-              onChange={toggleSunFollowsCommit}
-            />
+            <input type="checkbox" checked={sunFollowsCommit} onChange={toggleSunFollowsCommit} />
           </label>
 
           <label className="settings-row">
-            <span>Time of day{sunFollowsCommit && <small>Manual — turns off the tracking above</small>}</span>
+            <span>
+              Time of day{sunFollowsCommit && <small>Manual — turns off the tracking above</small>}
+            </span>
             <input
               type="range"
               min={0}

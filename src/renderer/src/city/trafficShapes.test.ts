@@ -14,24 +14,21 @@ describe('traffic agent geometries', () => {
     expect(geo.getAttribute('normal')).toBeTruthy()
   })
 
-  it.each([...CAR_KINDS, 'bike'] as AgentKind[])(
-    '%s carries paint-job vertex colors',
-    (kind) => {
-      const geo = geometryFor(kind)
-      const color = geo.getAttribute('color')
-      expect(color).toBeTruthy()
-      expect(color.count).toBe(geo.getAttribute('position').count)
-      // both paintable (white) and fixed-dark parts must exist
-      let sawLight = false
-      let sawDark = false
-      for (let i = 0; i < color.count; i++) {
-        if (color.getX(i) > 0.9) sawLight = true
-        if (color.getX(i) < 0.2) sawDark = true
-      }
-      expect(sawLight).toBe(true)
-      expect(sawDark).toBe(true)
+  it.each([...CAR_KINDS, 'bike'] as AgentKind[])('%s carries paint-job vertex colors', (kind) => {
+    const geo = geometryFor(kind)
+    const color = geo.getAttribute('color')
+    expect(color).toBeTruthy()
+    expect(color.count).toBe(geo.getAttribute('position').count)
+    // both paintable (white) and fixed-dark parts must exist
+    let sawLight = false
+    let sawDark = false
+    for (let i = 0; i < color.count; i++) {
+      if (color.getX(i) > 0.9) sawLight = true
+      if (color.getX(i) < 0.2) sawDark = true
     }
-  )
+    expect(sawLight).toBe(true)
+    expect(sawDark).toBe(true)
+  })
 
   it('person kind no longer exists', () => {
     const kindsNow: string[] = [...CAR_KINDS, 'bike', 'futuristic']

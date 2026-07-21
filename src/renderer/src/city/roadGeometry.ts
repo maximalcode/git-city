@@ -131,7 +131,8 @@ class Soup {
     geo.setAttribute('position', new BufferAttribute(new Float32Array(this.pos), 3))
     geo.setAttribute('normal', new BufferAttribute(new Float32Array(this.nrm), 3))
     geo.setAttribute('uv', new BufferAttribute(new Float32Array(this.uv), 2))
-    if (this.withColor) geo.setAttribute('color', new BufferAttribute(new Float32Array(this.col), 3))
+    if (this.withColor)
+      geo.setAttribute('color', new BufferAttribute(new Float32Array(this.col), 3))
     return geo
   }
 }

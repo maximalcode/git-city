@@ -1,9 +1,11 @@
 import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import { Color, InstancedMesh, Object3D } from 'three'
+import type { Snapshot } from '../../../shared/types'
 import type { ForestModel, ForestTargets } from '../layout/forest'
 import { useStore } from '../store'
 import { getTheme } from './themes'
 import { sunState } from '../lib/daylight'
+import { timeOfDayFromCommit } from '../lib/daytime'
 import Effects from './Effects'
 import SkyDome from './SkyDome'
 import Trees from './Trees'
@@ -29,18 +31,22 @@ const dummy = new Object3D()
 export default function ForestScene({
   model,
   targets,
+  snapshot,
   hotspots = [],
   reviewPaths = []
 }: {
   model: ForestModel
   targets: ForestTargets
+  snapshot: Snapshot
   hotspots?: string[]
   reviewPaths?: string[]
 }): React.JSX.Element {
   const theme = getTheme(useStore((s) => s.themeId))
-  const timeOfDay = useStore((s) => s.timeOfDay)
+  const manualTimeOfDay = useStore((s) => s.timeOfDay)
+  const sunFollowsCommit = useStore((s) => s.sunFollowsCommit)
   const size = model.worldSize
   const grass = GRASS[theme.id] ?? '#2f5227'
+  const timeOfDay = sunFollowsCommit ? timeOfDayFromCommit(snapshot.date) : manualTimeOfDay
   const sun = sunState(timeOfDay, size)
 
   // beacon anchors floating over a set of trees' canopies (hotspots + PR review)

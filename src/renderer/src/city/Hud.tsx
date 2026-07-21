@@ -3,6 +3,7 @@ import type { Snapshot } from '../../../shared/types'
 import { languageOf } from '../lib/languages'
 import { useHotkeys } from '../lib/useHotkeys'
 import { AheadBehind, formatDate } from '../lib/format'
+import { commitTimeLabel } from '../lib/daytime'
 import Picker from '../lib/Picker'
 import Icon from '../lib/icons'
 import { useStore, type ColorMode, type ViewMode } from '../store'
@@ -23,6 +24,7 @@ interface Props {
 export default function Hud({ snapshot, model }: Props): React.JSX.Element {
   const analysis = useStore((s) => s.analysis)!
   const snapshotIndex = useStore((s) => s.snapshotIndex)
+  const sunFollowsCommit = useStore((s) => s.sunFollowsCommit)
   const setSnapshotIndex = useStore((s) => s.setSnapshotIndex)
   const playing = useStore((s) => s.playing)
   const setPlaying = useStore((s) => s.setPlaying)
@@ -327,8 +329,17 @@ export default function Hud({ snapshot, model }: Props): React.JSX.Element {
             {snapshot.message}
           </span>
           <span>
-            {snapshot.author} · {formatDate(snapshot.date)} · commit {snapshot.index + 1} of{' '}
-            {analysis.info.commitCount.toLocaleString()}
+            {snapshot.author} · {formatDate(snapshot.date)} · {commitTimeLabel(snapshot.date)}
+            {sunFollowsCommit && (
+              <span
+                className="sun-follow-tag"
+                title="Sky follows the commit time — change it in Settings"
+              >
+                {' '}
+                ☀
+              </span>
+            )}{' '}
+            · commit {snapshot.index + 1} of {analysis.info.commitCount.toLocaleString()}
           </span>
           {snapshotIndex < last && st?.branch && (
             <button

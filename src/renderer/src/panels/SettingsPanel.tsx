@@ -17,6 +17,8 @@ export default function SettingsPanel(): React.JSX.Element | null {
   const setViewMode = useStore((s) => s.setViewMode)
   const timeOfDay = useStore((s) => s.timeOfDay)
   const setTimeOfDay = useStore((s) => s.setTimeOfDay)
+  const sunFollowsCommit = useStore((s) => s.sunFollowsCommit)
+  const toggleSunFollowsCommit = useStore((s) => s.toggleSunFollowsCommit)
   const reduceMotion = useStore((s) => s.reduceMotion)
   const toggleReduceMotion = useStore((s) => s.toggleReduceMotion)
   const showHotspots = useStore((s) => s.showHotspots)
@@ -88,8 +90,20 @@ export default function SettingsPanel(): React.JSX.Element | null {
             </div>
           </div>
 
+          <label className="settings-row toggle">
+            <span>
+              Sky follows commit time
+              <small>A morning commit gets morning light</small>
+            </span>
+            <input
+              type="checkbox"
+              checked={sunFollowsCommit}
+              onChange={toggleSunFollowsCommit}
+            />
+          </label>
+
           <label className="settings-row">
-            <span>Time of day</span>
+            <span>Time of day{sunFollowsCommit && <small>Manual — turns off the tracking above</small>}</span>
             <input
               type="range"
               min={0}

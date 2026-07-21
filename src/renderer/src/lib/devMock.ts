@@ -60,6 +60,13 @@ function buildAnalysis(): RepoAnalysis {
   }
 
   const base = 1735689600000 // 2025-01-01 (ms, matching the analyzer)
+  // spread commit times across the day so "sky follows commit time" is visible:
+  // a deterministic hour walk that sweeps morning → night as the city grows
+  const commitDate = (s: number): number => {
+    const day = base + s * 86400_000 * 9
+    const hour = 6 + ((s * 5) % 18) // 06:00 → 23:00, wrapping
+    return day + hour * 3600_000
+  }
   const snapshots: Snapshot[] = []
   for (let s = 0; s < SNAPSHOT_COUNT; s++) {
     const files: FileState[] = []
@@ -70,14 +77,14 @@ function buildAnalysis(): RepoAnalysis {
         path: f.path,
         loc: Math.max(5, Math.floor(f.peak * Math.min(1, age * 1.4))),
         commits: 1 + Math.floor(age * 40 * ((f.peak % 7) / 6 + 0.2)),
-        lastTouched: base + s * 86400_000 * 9,
+        lastTouched: commitDate(s),
         lastAuthor: authors[(f.peak + s) % authors.length],
         binary: false
       })
     }
     snapshots.push({
       hash: `mock${s.toString(16).padStart(4, '0')}${'0'.repeat(32)}`,
-      date: base + s * 86400_000 * 9,
+      date: commitDate(s),
       author: authors[s % authors.length],
       message: `mock commit ${s + 1}: grow the city`,
       index: s,

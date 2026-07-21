@@ -46,11 +46,14 @@ export interface TrafficLight {
 }
 
 /** roads narrower than this get no parking lane (would clip moving traffic) */
-export const PARK_MIN_WIDTH = 4.6
+export const PARK_MIN_WIDTH = 3.2
 /** moving traffic keeps within this centerline offset (must match Traffic.tsx) */
 export const LANE_OFFSET_CAP = 0.5
-/** distance between parked-car slot centers, world units (car is 2.4 long) */
-const PARK_PITCH = 2.9
+/** half-width of the widest parked body incl. wheel bulge (van: 0.41 body +
+ *  0.03 wheel overhang; see trafficShapes BODIES) */
+export const CAR_HALF_WIDTH = 0.45
+/** distance between parked-car slot centers, world units (bodies are ~2 long) */
+const PARK_PITCH = 2.5
 /** fraction of slots deliberately left empty */
 const PARK_VACANCY = 0.28
 /** junctions whose max road is at least this wide get traffic lights */
@@ -92,9 +95,12 @@ export function buildStreetDetail(graph: RoadGraph, agentScale: number): StreetD
     const usable = e.length - trimA - trimB
 
     // --- parked cars: only where the parking lane clears the driving lane ---
-    const parkOff = half - sw - 0.5 * agentScale
-    const laneEdge = Math.min(e.width * 0.22, LANE_OFFSET_CAP) * agentScale + 0.5 * agentScale
-    const clears = parkOff - 0.46 * agentScale > laneEdge + 0.05
+    const carHalf = CAR_HALF_WIDTH * agentScale
+    // parked row hugs the curb: outer edge just inside the sidewalk
+    const parkOff = half - sw - carHalf
+    // outer edge of the moving lane (lane center + a body half-width)
+    const laneEdge = Math.min(e.width * 0.22, LANE_OFFSET_CAP) * agentScale + carHalf
+    const clears = parkOff - carHalf > laneEdge + 0.05
     if (e.width >= PARK_MIN_WIDTH && clears && usable > PARK_PITCH) {
       const slots = Math.floor(usable / PARK_PITCH)
       for (let s = 0; s < slots; s++) {

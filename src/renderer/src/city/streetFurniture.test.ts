@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { buildRoadGraph } from '../layout/roads'
 import { cityLayout } from '../layout/treemap'
 import { junctionHalfSizes } from './roadGeometry'
-import { buildStreetDetail, LANE_OFFSET_CAP, PARK_MIN_WIDTH } from './streetFurniture'
+import { buildStreetDetail, CAR_HALF_WIDTH, LANE_OFFSET_CAP, PARK_MIN_WIDTH } from './streetFurniture'
 
 const files = Array.from({ length: 120 }, (_, i) => ({
   path: `${['src', 'src/core', 'src/ui', 'lib', 'test', 'docs'][i % 6]}/f${i}.ts`,
@@ -57,8 +57,9 @@ describe('buildStreetDetail', () => {
       })!
       const na = graph.nodes[e.a]
       const off = e.axis === 'x' ? Math.abs(p.z - na.z) : Math.abs(p.x - na.x)
-      // parked body (half 0.46) stays clear of the moving lane's outer edge
-      expect(off - 0.46).toBeGreaterThan(Math.min(e.width * 0.22, LANE_OFFSET_CAP) + 0.5)
+      // the parked body stays clear of the moving lane's outer edge
+      const laneEdge = Math.min(e.width * 0.22, LANE_OFFSET_CAP) + CAR_HALF_WIDTH
+      expect(off - CAR_HALF_WIDTH).toBeGreaterThan(laneEdge)
     }
   })
 

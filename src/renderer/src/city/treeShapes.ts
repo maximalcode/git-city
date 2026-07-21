@@ -1,4 +1,4 @@
-import { CylinderGeometry, SphereGeometry, type BufferGeometry } from 'three'
+import { CylinderGeometry, PlaneGeometry, type BufferGeometry } from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 
 /**
@@ -87,16 +87,34 @@ export function trunkGeometry(kind: TreeKind): BufferGeometry {
   return trunk
 }
 
+/**
+ * Canopy as CROSS-PLANES rather than solid spheres — the standard game-engine
+ * trick: each blob becomes a few camera-agnostic quads through its center,
+ * textured with an alpha-tested leaf cluster. Reads as real foliage (light
+ * passes through, silhouette is ragged) instead of a plastic ball, and costs
+ * far fewer triangles than the sphere cluster it replaces.
+ *
+ * Quads are double-sided (the material sets side), UV-mapped 0..1 per quad.
+ */
 export function foliageGeometry(kind: TreeKind): BufferGeometry {
   const cached = foliageCache.get(kind)
   if (cached) return cached
   const s = SPECS[kind]
-  const parts = s.blobs.map(([x, y, z, r]) => {
-    const seg = r > 1 ? 14 : 10
-    const blob = new SphereGeometry(r, seg, seg).toNonIndexed()
-    blob.translate(x, y, z)
-    return blob
-  })
+  const parts: BufferGeometry[] = []
+  for (const [x, y, z, r] of s.blobs) {
+    // 3 planes per blob at 60° apart — enough to look solid from any angle
+    for (let p = 0; p < 3; p++) {
+      const quad = new PlaneGeometry(r * 2.3, r * 2.3)
+      quad.rotateY((p * Math.PI) / 3)
+      quad.translate(x, y, z)
+      parts.push(quad.toNonIndexed())
+    }
+    // one horizontal plane keeps the canopy from vanishing when seen top-down
+    const flat = new PlaneGeometry(r * 2.1, r * 2.1)
+    flat.rotateX(-Math.PI / 2)
+    flat.translate(x, y, z)
+    parts.push(flat.toNonIndexed())
+  }
   const merged = mergeGeometries(parts)!
   for (const p of parts) p.dispose()
   foliageCache.set(kind, merged)

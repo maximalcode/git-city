@@ -9,7 +9,7 @@ import {
 } from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import type { CityModel } from './cityData'
-import { geometryFor } from './trafficShapes'
+import { geometryFor, type AgentKind } from './trafficShapes'
 import { buildStreetDetail } from './streetFurniture'
 import { useStore } from '../store'
 import { getTheme } from './themes'
@@ -23,6 +23,9 @@ import { getTheme } from './themes'
 
 const dummy = new Object3D()
 const colorScratch = new Color()
+
+/** body styles found at the curb (no buses — they don't park on the street) */
+const PARKED_KINDS: AgentKind[] = ['car', 'wagon', 'van']
 
 /** parked cars are duller than moving traffic — sun-faded curb colors */
 const PARKED_COLORS = [
@@ -65,9 +68,14 @@ export default function StreetDetail({ model }: { model: CityModel }): React.JSX
 
   return (
     <group>
-      {showParked && data.parked.length > 0 && (
-        <ParkedCars data={data.parked} scale={agentScale} />
-      )}
+      {showParked &&
+        PARKED_KINDS.map((kind, ki) => {
+          // deterministic body-style mix so a parked row isn't a clone army
+          const slice = data.parked.filter((p) => p.tint % PARKED_KINDS.length === ki)
+          return slice.length > 0 ? (
+            <ParkedCars key={kind} kind={kind} data={slice} scale={agentScale} />
+          ) : null
+        })}
       {data.stopLines.length > 0 && <StopLines data={data.stopLines} color={theme.road.marking} />}
       {data.manholes.length > 0 && <Manholes data={data.manholes} scale={agentScale} />}
       {data.lights.length > 0 && <TrafficLights data={data.lights} scale={agentScale} />}
@@ -76,14 +84,16 @@ export default function StreetDetail({ model }: { model: CityModel }): React.JSX
 }
 
 function ParkedCars({
+  kind,
   data,
   scale
 }: {
+  kind: AgentKind
   data: ReturnType<typeof buildStreetDetail>['parked']
   scale: number
 }): React.JSX.Element {
   const meshRef = useRef<InstancedMesh>(null!)
-  const geometry = geometryFor('car')
+  const geometry = geometryFor(kind)
 
   useLayoutEffect(() => {
     const mesh = meshRef.current
@@ -92,7 +102,7 @@ function ParkedCars({
       const p = data[i]
       dummy.position.set(p.x, p.y, p.z)
       dummy.rotation.set(0, -p.angle, 0)
-      dummy.scale.setScalar(scale * 0.92)
+      dummy.scale.setScalar(scale)
       dummy.updateMatrix()
       mesh.setMatrixAt(i, dummy.matrix)
       mesh.setColorAt(i, colorScratch.set(PARKED_COLORS[p.tint % PARKED_COLORS.length]))

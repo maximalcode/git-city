@@ -65,7 +65,6 @@ const SPECS: Record<TreeKind, Spec> = {
 const trunkCache = new Map<TreeKind, BufferGeometry>()
 const foliageCache = new Map<TreeKind, BufferGeometry>()
 
-/** Approx model-space height of a tree kind (trunk base → top of the canopy). */
 export function trunkGeometry(kind: TreeKind): BufferGeometry {
   const cached = trunkCache.get(kind)
   if (cached) return cached

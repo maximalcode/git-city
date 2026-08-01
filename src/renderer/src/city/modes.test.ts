@@ -1,5 +1,23 @@
 import { describe, expect, it } from 'vitest'
+import type { RepoAnalysis, Snapshot } from '../../../shared/types'
 import { DEFAULT_MODE, MODES, getMode, isViewMode, nextMode } from './modes'
+
+function analysis(): RepoAnalysis {
+  const files = ['a.ts', 'b/c.ts', 'b/d.css'].map((path) => ({
+    path,
+    loc: 100,
+    commits: 1,
+    lastTouched: 0,
+    lastAuthor: 'a',
+    binary: false
+  }))
+  return {
+    info: { name: 'r', path: '/r', branch: 'main', commitCount: 1 },
+    snapshots: [
+      { hash: 'h0', date: 1_700_000_000_000, author: 'a', message: 'c0', index: 0, files }
+    ] as Snapshot[]
+  }
+}
 
 /**
  * The registry replaced a per-mode ternary repeated across the shell, so
@@ -72,5 +90,21 @@ describe('mode registry', () => {
 
   it('defaults to a mode the registry knows', () => {
     expect(isViewMode(DEFAULT_MODE)).toBe(true)
+  })
+
+  /**
+   * The minimap rebuilds its static base layer whenever the dot array changes
+   * identity, so dots must be the same array across snapshots and colour modes —
+   * they are positions and language colours, neither of which those affect.
+   */
+  it('hands back the same dot array for one analysis', () => {
+    const a = analysis()
+    const snapshot = a.snapshots[0]
+    for (const mode of MODES) {
+      const first = mode.prepare(a, snapshot, 'language').dots()
+      const again = mode.prepare(a, snapshot, 'activity').dots()
+      expect(first.length).toBeGreaterThan(0)
+      expect(again).toBe(first)
+    }
   })
 })

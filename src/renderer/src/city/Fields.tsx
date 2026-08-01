@@ -108,10 +108,17 @@ export default function Fields({
 
   // Planted once per model: the rows never move, only the crop height changes.
   const tufts = useMemo(() => {
-    let planted = plantRows(model, BASE_SPACING)
-    if (planted.count > TUFT_BUDGET) {
-      // widen the drills until the whole farm fits, and fatten each tuft to match
-      planted = plantRows(model, BASE_SPACING * Math.sqrt(planted.count / TUFT_BUDGET))
+    // Widen the drills until the whole farm fits, fattening each tuft to match.
+    // Every field keeps at least one tuft, so a repo with more files than the
+    // budget can never fit however wide the drills get — stop as soon as a
+    // wider pitch buys nothing rather than spinning on it.
+    let spacing = BASE_SPACING
+    let planted = plantRows(model, spacing)
+    for (let pass = 0; planted.count > TUFT_BUDGET && pass < 4; pass++) {
+      spacing *= Math.sqrt(planted.count / TUFT_BUDGET)
+      const wider = plantRows(model, spacing)
+      if (wider.count >= planted.count) break
+      planted = wider
     }
     return planted
   }, [model])
@@ -153,9 +160,11 @@ export default function Fields({
     }
     if (plots.instanceColor) plots.instanceColor.needsUpdate = true
 
-    for (let k = 0; k < CROP_KINDS.length; k++) {
-      const crops = cropRefs.current[k]
-      const list = tufts.byKind[k]
+    // `ci`, not `k` — `k` above is the easing factor, and shadowing it here
+    // would silently hand a crop index to anything that later needs to ease
+    for (let ci = 0; ci < CROP_KINDS.length; ci++) {
+      const crops = cropRefs.current[ci]
+      const list = tufts.byKind[ci]
       if (!crops || list.length === 0) continue
       for (let m = 0; m < list.length; m++) {
         const t = list[m]

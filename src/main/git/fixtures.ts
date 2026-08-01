@@ -33,12 +33,25 @@ function makeGit(cwd: string): (...args: string[]) => string {
     ).toString()
 }
 
+/**
+ * Repo-local config, so the code under test sees it too and not just the
+ * fixture's own commands (those carry it on the command line via makeGit).
+ *
+ * The identity matters on machines with no global git config — a bare CI
+ * runner — where anything the app itself commits would otherwise fail with
+ * "Please tell me who you are".
+ */
+function configureRepo(git: (...args: string[]) => string): void {
+  git('config', 'core.autocrlf', 'false')
+  git('config', 'user.name', 'Test')
+  git('config', 'user.email', 'test@example.com')
+}
+
 export function makeTempRepo(prefix = 'git-city-fix-'): FixtureRepo {
   const path = mkdtempSync(join(tmpdir(), prefix))
   const git = makeGit(path)
   git('init', '-b', 'main')
-  // repo-local, so the code under test sees it too (not just fixture commands)
-  git('config', 'core.autocrlf', 'false')
+  configureRepo(git)
   const write = (rel: string, content: string): void => {
     const abs = join(path, rel)
     mkdirSync(dirname(abs), { recursive: true })
@@ -78,7 +91,7 @@ export function makeRepoPair(prefix = 'git-city-pair-'): RepoPair {
     // -c on the clone itself so the very first checkout is not CRLF-dirtied
     execFileSync('git', ['-c', 'core.autocrlf=false', 'clone', origin, path], { stdio: 'pipe' })
     const git = makeGit(path)
-    git('config', 'core.autocrlf', 'false')
+    configureRepo(git)
     const write = (rel: string, content: string): void => {
       const abs = join(path, rel)
       mkdirSync(dirname(abs), { recursive: true })
@@ -120,7 +133,7 @@ export function makeCloneWithRemoteBranches(names: string[], prefix = 'git-city-
   const dest = join(base, 'clone')
   execFileSync('git', ['-c', 'core.autocrlf=false', 'clone', origin, dest], { stdio: 'pipe' })
   const git = makeGit(dest)
-  git('config', 'core.autocrlf', 'false')
+  configureRepo(git)
   const write = (rel: string, content: string): void => {
     const abs = join(dest, rel)
     mkdirSync(dirname(abs), { recursive: true })

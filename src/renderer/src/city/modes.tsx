@@ -5,8 +5,10 @@ import type { ColorMode } from './colorModes'
 import type { IconName } from '../lib/icons'
 import { buildCityModel, snapshotTargets, type CityModel } from './cityData'
 import { buildForestModel, forestTargets, type ForestModel } from '../layout/forest'
+import { buildFarmModel, farmTargets, type FarmModel } from '../layout/farm'
 import CityScene from './CityScene'
 import ForestScene from './ForestScene'
+import FarmScene from './FarmScene'
 
 /**
  * The registry of view modes.
@@ -20,7 +22,7 @@ import ForestScene from './ForestScene'
  * non-null assertions the old binary needed.
  */
 
-export type ViewMode = 'city' | 'forest'
+export type ViewMode = 'city' | 'forest' | 'farm'
 
 export interface MinimapDot {
   x: number
@@ -84,6 +86,7 @@ function commonRows(colorName: string): { icon: IconName; title: string; body: s
 // layout algorithms. Kept per mode so each owns its own memoisation.
 const cityCache = new WeakMap<RepoAnalysis, CityModel>()
 const forestCache = new WeakMap<RepoAnalysis, ForestModel>()
+const farmCache = new WeakMap<RepoAnalysis, FarmModel>()
 
 function cityModelFor(analysis: RepoAnalysis): CityModel {
   let m = cityCache.get(analysis)
@@ -99,6 +102,15 @@ function forestModelFor(analysis: RepoAnalysis): ForestModel {
   if (!m) {
     m = buildForestModel(analysis)
     forestCache.set(analysis, m)
+  }
+  return m
+}
+
+function farmModelFor(analysis: RepoAnalysis): FarmModel {
+  let m = farmCache.get(analysis)
+  if (!m) {
+    m = buildFarmModel(analysis)
+    farmCache.set(analysis, m)
   }
   return m
 }
@@ -184,8 +196,49 @@ const forestMode: ModeDef = {
   }
 }
 
+const farmMode: ModeDef = {
+  id: 'farm',
+  name: 'Farm',
+  glyph: '🚜',
+  icon: 'farm',
+  hint: 'Files as fields on a working farm',
+  noun: 'farm',
+  // the crop is foliage, not massing: AO just darkens it into mud
+  ao: false,
+  rows: (colorName) => [
+    { icon: 'farm', title: 'Fields are files', body: 'Taller crop = more lines of code.' },
+    {
+      icon: 'branch',
+      title: 'Parcels are folders',
+      body: 'Each fenced holding gathers one directory, with its own barn.'
+    },
+    ...commonRows(colorName)
+  ],
+  prepare(analysis, snapshot, colorMode) {
+    const model = farmModelFor(analysis)
+    const targets = farmTargets(model, snapshot, colorMode)
+    return {
+      worldSize: model.worldSize,
+      hud: model,
+      focus(path) {
+        const i = model.indexOf.get(path)
+        if (i === undefined) return null
+        return new Vector3(model.centers[i * 2], 3, model.centers[i * 2 + 1])
+      },
+      dots() {
+        return model.langColors.map((color, i) => ({
+          x: model.centers[i * 2],
+          z: model.centers[i * 2 + 1],
+          color
+        }))
+      },
+      render: (props) => <FarmScene model={model} targets={targets} {...props} />
+    }
+  }
+}
+
 /** Every mode, in the order the picker and the `V` key cycle through them. */
-export const MODES: ModeDef[] = [cityMode, forestMode]
+export const MODES: ModeDef[] = [cityMode, forestMode, farmMode]
 
 export const DEFAULT_MODE: ViewMode = 'city'
 

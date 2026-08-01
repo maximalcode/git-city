@@ -12,9 +12,10 @@ cherry-pick and tag without leaving the city.
 
 ![Git City replaying a repository's history](docs/media/demo.gif)
 
-Prefer something calmer? Press `V` and the same repository becomes a **forest**:
-every file a tree in its folder's grove, canopies growing and shrinking with
-the line count as you scrub through history.
+Prefer something calmer? Press `V` and the same repository becomes a **forest** —
+every file a tree in its folder's grove — or a **farm**, where files are fields
+of crop that rise and fall with the line count, folders are fenced parcels with
+their own barn and silo, and livestock work their way across the holding.
 
 ## Download
 
@@ -34,16 +35,19 @@ signing stays with gpg-agent / ssh-agent, and there is no telemetry.
 
 ## What it looks like
 
-|                                                           |                                                                |
-| --------------------------------------------------------- | -------------------------------------------------------------- |
-| ![Night, coloured by language](docs/media/city-night.jpg) | ![Neon, coloured by activity](docs/media/city-neon.jpg)        |
-| **Realistic Night**, coloured by language                 | **Neon**, coloured by how often files change                   |
-| ![Forest view](docs/media/forest.jpg)                     | ![Golden Hour, coloured by author](docs/media/city-author.jpg) |
-| **Forest view** — every file a tree in its folder's grove | **Golden Hour**, coloured by who touched each file last        |
+|                                                                     |                                                                |
+| ------------------------------------------------------------------- | -------------------------------------------------------------- |
+| ![Night, coloured by language](docs/media/city-night.jpg)           | ![Neon, coloured by activity](docs/media/city-neon.jpg)        |
+| **Realistic Night**, coloured by language                           | **Neon**, coloured by how often files change                   |
+| ![Forest view](docs/media/forest.jpg)                               | ![Golden Hour, coloured by author](docs/media/city-author.jpg) |
+| **Forest view** — every file a tree in its folder's grove           | **Golden Hour**, coloured by who touched each file last        |
+| ![Farm view](docs/media/farm.jpg)                                   |                                                                |
+| **Farm view** — fields of crop, fenced parcels, barns and livestock |                                                                |
 
 ## Features
 
-- **Two ways to see a repo** — the 3D **City** and the **Forest** (`V` to switch)
+- **Three ways to see a repo** — the 3D **City**, the **Forest** and the **Farm**
+  (`V` cycles between them)
 - **Scrub the whole history** — a full replay fits in ~10 seconds, and the sky
   tracks each commit's local hour as you go
 - **6 colour encodings** — language, activity, author, recency, size, file type,
@@ -64,8 +68,8 @@ signing stays with gpg-agent / ssh-agent, and there is no telemetry.
 
 **Visualization**
 
-- **Two view modes** (`V` to switch, persisted): the 3D **City** and the
-  **Forest**
+- **Three view modes** (`V` cycles, persisted): the 3D **City**, the **Forest**
+  and the **Farm**
 - City: districts per folder, buildings per file with **photo-real facades**
   (per-building window grids in three styles, ground-floor shopfronts, rooftop
   clutter — AC units, water tanks, antennas — and a contact-shadow base); real
@@ -175,7 +179,7 @@ signing stays with gpg-agent / ssh-agent, and there is no telemetry.
 | `G`              | Commit graph                   |
 | `U`              | Time machine (reflog undo)     |
 | `P`              | Pull requests                  |
-| `V`              | Toggle City / Forest view      |
+| `V`              | Cycle City / Forest / Farm     |
 | `/`              | Find a file (arrows + Enter)   |
 | `,`              | Settings                       |
 | `Space`          | Play/pause the timeline        |

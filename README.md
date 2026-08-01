@@ -1,18 +1,66 @@
 # Git City
 
+[![CI](https://github.com/maximalcode/git-city/actions/workflows/ci.yml/badge.svg)](https://github.com/maximalcode/git-city/actions/workflows/ci.yml)
+[![Latest release](https://img.shields.io/github/v/release/maximalcode/git-city?display_name=tag&sort=semver)](https://github.com/maximalcode/git-city/releases/latest)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 Watch your git repository come alive as a 3D city — and work in it. Folders
 become districts, files become buildings (height = lines of code), a timeline
 scrubs through history while the city grows, and a full git client lives on
 top: stage, commit, fetch, pull, push, branch, merge, rebase, stash,
 cherry-pick and tag without leaving the city.
 
+![Git City replaying a repository's history](docs/media/demo.gif)
+
 Prefer something calmer? Press `V` and the same repository becomes a **forest**:
 every file a tree in its folder's grove, canopies growing and shrinking with
 the line count as you scrub through history.
 
-![icon](build/icon.png)
+## Download
+
+Grab the latest build from **[Releases](https://github.com/maximalcode/git-city/releases/latest)**
+— a Windows installer and DMGs for both Apple Silicon and Intel Macs. Linux:
+build from source (see [Development](#development)).
+
+Git City shells out to `git`, so you need **git on your PATH**. It never asks
+for a token and stores nothing: pull requests go through the `gh` / `glab` CLI,
+signing stays with gpg-agent / ssh-agent, and there is no telemetry.
+
+> **The installers are unsigned.** Windows SmartScreen shows "unknown
+> publisher" — choose _More info → Run anyway_. macOS is blunter and calls the
+> app _"damaged"_: right-click the app → **Open**, or run
+> `xattr -d com.apple.quarantine "/Applications/Git City.app"`. Signing is on
+> the roadmap; it needs a paid certificate.
+
+## What it looks like
+
+|                                                           |                                                                |
+| --------------------------------------------------------- | -------------------------------------------------------------- |
+| ![Night, coloured by language](docs/media/city-night.jpg) | ![Neon, coloured by activity](docs/media/city-neon.jpg)        |
+| **Realistic Night**, coloured by language                 | **Neon**, coloured by how often files change                   |
+| ![Forest view](docs/media/forest.jpg)                     | ![Golden Hour, coloured by author](docs/media/city-author.jpg) |
+| **Forest view** — every file a tree in its folder's grove | **Golden Hour**, coloured by who touched each file last        |
 
 ## Features
+
+- **Two ways to see a repo** — the 3D **City** and the **Forest** (`V` to switch)
+- **Scrub the whole history** — a full replay fits in ~10 seconds, and the sky
+  tracks each commit's local hour as you go
+- **6 colour encodings** — language, activity, author, recency, size, file type,
+  each with a legend
+- **A real git client on top** — stage by file, hunk or individual line, commit,
+  sync, branch, merge, rebase, stash, cherry-pick, tag, and an interactive
+  rebase editor
+- **Time machine** — one-click undo of the last HEAD move, and a reflog panel to
+  rewind to any past position or recover a lost commit
+- **Pull requests without leaving** — GitHub via `gh`, GitLab via `glab`, with CI
+  status; light up a PR's changed files across the city to see its blast radius
+- **Command palette** (`Ctrl`/`Cmd`+`K`) — every action, plus `@` to search
+  commits and `:` to grep code
+- **Time-lapse export** — record the whole history growing as a WebM
+
+<details>
+<summary><b>The complete feature list</b></summary>
 
 **Visualization**
 
@@ -86,10 +134,11 @@ the line count as you scrub through history.
   **word-level intra-line highlighting** — plus file history (follows renames)
   and blame
 - Commit graph with branch topology, ref chips, checkout/cherry-pick actions
-- **Pull requests** (GitHub, via the `gh` CLI — no token setup): list open PRs
-  with rolled-up CI status, see the current branch's PR, check one out, open it
-  in the browser, or create a PR for the current branch. Falls back to a clear
-  hint when `gh` is missing or logged out
+- **Pull requests** (GitHub via the `gh` CLI, GitLab via `glab` — no token setup
+  either way): list open PRs/MRs with rolled-up CI status, see the current
+  branch's, check one out, open it in the browser, or create one for the current
+  branch. GitLab merge requests use the same model — only the wording follows
+  the host. Falls back to a clear hint when the CLI is missing or logged out
 - **Review a PR in the city**: pick any PR and its changed files light up with
   blue beacons across the city/forest — see a pull request's blast radius at a
   glance, then step the camera through each touched file. A banner names the PR
@@ -112,6 +161,8 @@ the line count as you scrub through history.
   while capturing the canvas to a **WebM video** you can share — your repo
   growing from first commit to now, in ~10 seconds. Uses the browser's own
   MediaRecorder, so no new dependency
+
+</details>
 
 **Keyboard shortcuts**
 
@@ -169,7 +220,7 @@ than drawing every file — is tracked as an open issue, not a solved problem.
 ```bash
 npm install
 npm run dev        # launch the Electron app with hot reload
-npm test           # vitest: git backend, parsers, layout, themes (~240 tests)
+npm test           # vitest: git backend, parsers, layout, themes (~380 tests)
 npm run typecheck
 npm run lint       # ESLint (typescript-eslint + react-hooks)
 npm run format     # Prettier
@@ -186,11 +237,21 @@ view modes fully explorable:
 npx vite -c vite.preview.config.ts
 ```
 
+Add a count to scale the synthetic repo — `?mock=20000` — which is how the
+scene gets measured against monorepo-sized input without cloning one.
+
+The README media is captured from that preview, so it is reproducible rather
+than hand-cropped (needs [gifski](https://gif.ski) for the hero animation):
+
+```bash
+node scripts/capture-media.mjs
+```
+
 ## Packaging
 
 ```bash
 npm run dist:win   # NSIS installer → dist/ (build on Windows)
-npm run dist:mac   # DMG → dist/ (must be built on a Mac)
+npm run dist:mac   # arm64 + x64 DMGs → dist/ (must be built on a Mac)
 ```
 
 The app icon is generated procedurally: `node scripts/make-icon.js`.
@@ -222,3 +283,16 @@ MapControls (see `city/CameraRig.tsx`), and drei's text stack embeds a
 base64 WASM blob that antivirus heuristics love to false-positive on. All
 vehicle and tree geometry is likewise built in-code from merged three.js
 primitives, no external models.
+
+## Contributing
+
+Development happens through GitHub issues — see [CONTRIBUTING.md](CONTRIBUTING.md)
+for the setup and the branch/PR flow. Bug reports and feature requests are
+welcome; there are issue templates for both.
+
+## License
+
+[MIT](LICENSE) © Nickel Christ
+
+Bundled textures are CC0 from [ambientCG](https://ambientcg.com) — see
+[ATTRIBUTION.md](src/renderer/src/assets/textures/ATTRIBUTION.md).

@@ -322,14 +322,22 @@ export interface ReflogEntry {
 
 export type ResetMode = 'soft' | 'mixed' | 'keep' | 'hard'
 
-/** GitHub CLI availability + auth state for this repo. */
-export interface GitHubAuth {
-  /** gh binary present on PATH */
+/** Which forge a repository's `origin` points at. */
+export type HostKind = 'github' | 'gitlab' | 'unknown'
+
+/**
+ * Forge CLI availability + auth state for this repo — `gh` for GitHub, `glab`
+ * for GitLab. Merge requests are surfaced as pull requests throughout; only the
+ * panel's wording follows the host.
+ */
+export interface HostAuth {
+  host: HostKind
+  /** the host's CLI is present on PATH */
   available: boolean
-  /** gh is logged in */
+  /** the CLI is logged in */
   authed: boolean
-  /** this repo is a GitHub repo gh recognizes */
-  isGitHub: boolean
+  /** the CLI recognizes this repo as one of its own */
+  isRepo: boolean
   login: string | null
   /** why unavailable, for the UI (null when fully usable) */
   reason: string | null
@@ -485,8 +493,8 @@ export interface GitCityApi {
   /** Full detail (header, signature, changed files) for one commit. */
   commitDetail(repoPath: string, hash: string): Promise<CommitDetail>
 
-  // --- GitHub (via gh CLI) ---
-  ghStatus(repoPath: string): Promise<GitHubAuth>
+  // --- Pull/merge requests (GitHub via gh, GitLab via glab) ---
+  hostStatus(repoPath: string): Promise<HostAuth>
   listPullRequests(repoPath: string): Promise<PullRequestInfo[]>
   currentBranchPr(repoPath: string): Promise<PullRequestInfo | null>
   checkoutPr(repoPath: string, number: number): Promise<OpResult>

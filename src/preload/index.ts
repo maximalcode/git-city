@@ -69,7 +69,7 @@ const api: GitCityApi = {
     ipcRenderer.invoke('git-city:search-commits', repoPath, query, scope),
   grepWorkingTree: (repoPath, query) => ipcRenderer.invoke('git-city:grep-tree', repoPath, query),
   commitDetail: (repoPath, hash) => ipcRenderer.invoke('git-city:commit-detail', repoPath, hash),
-  ghStatus: (repoPath) => ipcRenderer.invoke('git-city:gh-status', repoPath),
+  hostStatus: (repoPath) => ipcRenderer.invoke('git-city:host-status', repoPath),
   listPullRequests: (repoPath) => ipcRenderer.invoke('git-city:pr-list', repoPath),
   currentBranchPr: (repoPath) => ipcRenderer.invoke('git-city:pr-current', repoPath),
   checkoutPr: (repoPath, number) => ipcRenderer.invoke('git-city:pr-checkout', repoPath, number),

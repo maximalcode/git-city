@@ -31,14 +31,7 @@ import { getRebaseTodo, runInteractiveRebase } from './git/rebaseInteractive'
 import { createBranch, deleteBranch, listBranches, switchBranch } from './git/branches'
 import { commit, getLastCommitMessage } from './git/commit'
 import { getSigningConfig } from './git/signing'
-import {
-  checkoutPr,
-  createPr,
-  currentBranchPr,
-  ghStatus,
-  listPullRequests,
-  pullRequestFiles
-} from './git/github'
+import { providerFor, unknownHostAuth } from './git/host'
 import { listSubmodules, updateSubmodules } from './git/submodules'
 import { addWorktree, listWorktrees, removeWorktree } from './git/worktrees'
 import { checkForUpdate } from './updates'
@@ -130,10 +123,16 @@ export function registerOpsIpc(): void {
   readOnly('signing-config', (repo) => getSigningConfig(repo))
   readOnly('submodules', (repo) => listSubmodules(repo))
   readOnly('worktrees', (repo) => listWorktrees(repo))
-  readOnly('gh-status', (repo) => ghStatus(repo))
-  readOnly('pr-list', (repo) => listPullRequests(repo))
-  readOnly('pr-current', (repo) => currentBranchPr(repo))
-  readOnly('pr-files', (repo, number: number) => pullRequestFiles(repo, number))
+  readOnly(
+    'host-status',
+    async (repo) => (await providerFor(repo))?.status(repo) ?? unknownHostAuth()
+  )
+  readOnly('pr-list', async (repo) => (await providerFor(repo))?.listPullRequests(repo) ?? [])
+  readOnly('pr-current', async (repo) => (await providerFor(repo))?.currentBranchPr(repo) ?? null)
+  readOnly(
+    'pr-files',
+    async (repo, number: number) => (await providerFor(repo))?.pullRequestFiles(repo, number) ?? []
+  )
   ipcMain.handle('git-city:open-external', (_e, url: string) => {
     // only ever open https links (URLs come from gh's own JSON output)
     if (/^https:\/\//i.test(url)) void shell.openExternal(url)
@@ -144,8 +143,12 @@ export function registerOpsIpc(): void {
   // come back as OpResult, so a plain handle is enough
   ipcMain.handle(
     'git-city:pr-create',
-    (_e, repo: string, base: string, title: string, body: string) =>
-      createPr(repo, base, title, body)
+    async (_e, repo: string, base: string, title: string, body: string) => {
+      const provider = await providerFor(repo)
+      return provider
+        ? provider.createPr(repo, base, title, body)
+        : { ok: false, code: 'unknown', message: unknownHostAuth().reason }
+    }
   )
   readOnly('conflict-read', (repo, path: string) => readConflictFile(repo, path))
   readOnly('diff', (repo, path: string, rev?: string) =>
@@ -191,7 +194,12 @@ export function registerOpsIpc(): void {
   mutating('commit', (repo, message: string, amend: boolean, sign?: boolean) =>
     commit(repo, message, amend, sign)
   )
-  mutating('pr-checkout', (repo, number: number) => checkoutPr(repo, number))
+  mutating('pr-checkout', async (repo, number: number) => {
+    const provider = await providerFor(repo)
+    return provider
+      ? provider.checkoutPr(repo, number)
+      : { ok: false, code: 'unknown' as const, message: unknownHostAuth().reason ?? '' }
+  })
   mutating('submodule-update', (repo, path?: string) => updateSubmodules(repo, path))
   mutating('worktree-add', (repo, path: string, ref: string) => addWorktree(repo, path, ref))
   mutating('worktree-remove', (repo, path: string, force: boolean) =>

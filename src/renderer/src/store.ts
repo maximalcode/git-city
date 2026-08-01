@@ -18,6 +18,7 @@ import type {
   WorktreeInfo
 } from '../../shared/types'
 import { DEFAULT_THEME_ID } from './city/themes'
+import { repoWarning, type RepoWarning } from './lib/repoScale'
 import type { ColorMode } from './city/colorModes'
 
 export type { ColorMode }
@@ -249,6 +250,8 @@ export function statusFingerprint(s: WorkingStatus | null): string {
 
 interface GitCityState {
   screen: 'welcome' | 'loading' | 'city'
+  /** a repo big enough to be worth warning about, awaiting the user's go-ahead */
+  pendingRepo: { path: string; warning: RepoWarning } | null
   analysis: RepoAnalysis | null
   snapshotIndex: number
   playing: boolean
@@ -325,6 +328,8 @@ interface GitCityState {
   init(): void
   openLocal(): Promise<void>
   openPath(path: string): Promise<void>
+  confirmPendingRepo(): Promise<void>
+  cancelPendingRepo(): void
   openUrl(url: string): Promise<void>
   setSearchOpen(open: boolean): void
   clearRecent(): void
@@ -422,6 +427,7 @@ let lastFingerprint = ''
 
 export const useStore = create<GitCityState>((set, get) => ({
   screen: 'welcome',
+  pendingRepo: null,
   analysis: null,
   snapshotIndex: 0,
   playing: false,
@@ -510,8 +516,29 @@ export const useStore = create<GitCityState>((set, get) => ({
 
   openPath: async (path: string) => {
     if (!hasApi()) return
+    // Probe the size first: a monorepo can take minutes to replay, and a
+    // progress bar with no sense of scale reads as a hang (#12). Cheap enough
+    // (two counting calls) that the common case is unaffected.
+    try {
+      const warning = repoWarning(await window.gitCity.repoSize(path))
+      if (warning) {
+        set({ pendingRepo: { path, warning } })
+        return
+      }
+    } catch {
+      // if sizing fails, just open — never block on the advisory path
+    }
     await loadRepo(set, get, () => window.gitCity.analyzeRepo(path, 50), path)
   },
+
+  confirmPendingRepo: async () => {
+    const pending = get().pendingRepo
+    if (!pending) return
+    set({ pendingRepo: null })
+    await loadRepo(set, get, () => window.gitCity.analyzeRepo(pending.path, 50), pending.path)
+  },
+
+  cancelPendingRepo: () => set({ pendingRepo: null }),
 
   setSearchOpen: (searchOpen) => set({ searchOpen }),
 

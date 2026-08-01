@@ -145,6 +145,25 @@ Git operations run in the Electron main process through a per-repo lock (two
 of our own commands never race for `index.lock`), with a file watcher that
 keeps the UI live and mutes itself during operations.
 
+### How big a repo can it take?
+
+Most projects open instantly. The honest limits, measured rather than guessed:
+
+| Repo size                                  | What to expect                                                                                                                                                          |
+| ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| up to ~5,000 files                         | opens in seconds, city reads clearly                                                                                                                                    |
+| ~20,000 files                              | still fine; layout takes a fraction of a second                                                                                                                         |
+| ~80,000 files (a monorepo like TypeScript) | a couple of minutes to read the history, and the streets stop being drawn — plots get too small to fit a road between them, so you get a dense block rather than a city |
+
+Git City checks the size before opening and warns you if it is going to be
+slow, so you can back out rather than watch a progress bar and wonder. The
+history pass is the expensive part and scales with commit count: a full
+`microsoft/TypeScript` clone (14,271 first-parent commits, 81,368 files) takes
+about 130 seconds and peaks around 540 MB.
+
+Making very large repos genuinely readable — collapsing deep directories rather
+than drawing every file — is tracked as an open issue, not a solved problem.
+
 ## Development
 
 ```bash

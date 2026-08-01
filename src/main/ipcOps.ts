@@ -18,7 +18,7 @@ import {
   rebaseContinue,
   rebaseOnto
 } from './git/advanced'
-import { analyzeIncremental } from './git/analyze'
+import { analyzeIncremental, repoSize } from './git/analyze'
 import { getFileDiff } from './git/diff'
 import { imageDiff } from './git/images'
 import { applyHunk, applyLines, getFileHunks } from './git/hunks'
@@ -123,6 +123,7 @@ export function registerOpsIpc(): void {
   readOnly('signing-config', (repo) => getSigningConfig(repo))
   readOnly('submodules', (repo) => listSubmodules(repo))
   readOnly('worktrees', (repo) => listWorktrees(repo))
+  readOnly('repo-size', (repo) => repoSize(repo))
   readOnly(
     'host-status',
     async (repo) => (await providerFor(repo))?.status(repo) ?? unknownHostAuth()

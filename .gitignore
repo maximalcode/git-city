@@ -8,3 +8,6 @@ dist/
 # Playwright
 test-results/
 playwright-report/
+
+# Local Claude Code settings (per-machine, not shared)
+.claude/settings.local.json

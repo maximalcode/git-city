@@ -1,0 +1,34 @@
+name: Feature request
+description: Suggest a capability or an improvement
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What's the problem?
+      description: >
+        What are you trying to do that Git City makes hard or impossible?
+        Describe the situation rather than the solution.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you like instead?
+      description: Your idea for how it could work. Rough is fine.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you've considered
+      description: Other approaches, or how you work around it today.
+
+  - type: markdown
+    attributes:
+      value: >
+        Heads up on two standing constraints: Git City adds **no new runtime
+        dependencies**, and **force-push is deliberately not implemented**.
+        Proposals that need either are unlikely to land as-is.

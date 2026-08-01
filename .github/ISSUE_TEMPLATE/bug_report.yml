@@ -1,0 +1,57 @@
+name: Bug report
+description: Something in Git City behaves wrong or crashes
+labels: [bug]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What you expected, and what you got instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open a repository with ...
+        2. Press ...
+        3. See ...
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Git City version
+      description: Shown in Settings, or the installer filename.
+      placeholder: 0.5.0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Windows
+        - macOS
+        - Linux
+    validations:
+      required: true
+
+  - type: textarea
+    id: repo-shape
+    attributes:
+      label: Repository shape (if relevant)
+      description: >
+        Git City's behaviour depends a lot on the repo it is visualising.
+        Rough number of commits and files, whether it has submodules,
+        worktrees, or a very deep folder tree — whatever seems relevant.
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: Screenshots, console output, or notes.

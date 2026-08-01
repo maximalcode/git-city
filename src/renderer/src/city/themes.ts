@@ -47,6 +47,12 @@ export interface Theme {
   road: { surface: string; marking: string; markingEmissive: number; sidewalk: string }
   /** ground-floor shop windows + signage on tall buildings */
   shopfront: { enabled: boolean; color: string; intensity: number }
+  /**
+   * Ground tone for the non-city worlds — trees stand on green whatever the sky
+   * is doing. Lives here rather than in a per-mode map so a new world mode adds
+   * a theme knob instead of another parallel palette table.
+   */
+  grass: string
 }
 
 export const THEMES: Theme[] = [
@@ -74,7 +80,8 @@ export const THEMES: Theme[] = [
     label: 'rgba(255, 255, 255, 0.65)',
     particles: 'motes',
     road: { surface: '#2a3140', marking: '#c8cede', markingEmissive: 0, sidewalk: '#68718a' },
-    shopfront: { enabled: false, color: '#ffd9a0', intensity: 0 }
+    shopfront: { enabled: false, color: '#ffd9a0', intensity: 0 },
+    grass: '#3f6b30'
   },
   {
     id: 'realistic-night',
@@ -100,7 +107,8 @@ export const THEMES: Theme[] = [
     label: 'rgba(220, 230, 255, 0.5)',
     particles: 'motes',
     road: { surface: '#10141e', marking: '#8f97ad', markingEmissive: 0, sidewalk: '#2b3242' },
-    shopfront: { enabled: true, color: '#ffd9a0', intensity: 1.6 }
+    shopfront: { enabled: true, color: '#ffd9a0', intensity: 1.6 },
+    grass: '#16271a'
   },
   {
     id: 'neon',
@@ -126,7 +134,8 @@ export const THEMES: Theme[] = [
     label: 'rgba(120, 230, 255, 0.7)',
     particles: 'rain',
     road: { surface: '#0c0622', marking: '#4de1ff', markingEmissive: 1.6, sidewalk: '#241a4a' },
-    shopfront: { enabled: true, color: '#ff4da6', intensity: 2.6 }
+    shopfront: { enabled: true, color: '#ff4da6', intensity: 2.6 },
+    grass: '#122436'
   },
   {
     id: 'golden-hour',
@@ -152,7 +161,8 @@ export const THEMES: Theme[] = [
     label: 'rgba(255, 224, 190, 0.6)',
     particles: 'motes',
     road: { surface: '#2c2030', marking: '#e8c8a0', markingEmissive: 0, sidewalk: '#4c3b48' },
-    shopfront: { enabled: true, color: '#ffcf8a', intensity: 1.2 }
+    shopfront: { enabled: true, color: '#ffcf8a', intensity: 1.2 },
+    grass: '#4a5326'
   },
   {
     id: 'midnight-ink',
@@ -178,7 +188,8 @@ export const THEMES: Theme[] = [
     label: 'rgba(180, 195, 235, 0.55)',
     particles: 'motes',
     road: { surface: '#0c0f16', marking: '#7d8cb8', markingEmissive: 0.4, sidewalk: '#232838' },
-    shopfront: { enabled: true, color: '#8fb0ff', intensity: 1.4 }
+    shopfront: { enabled: true, color: '#8fb0ff', intensity: 1.4 },
+    grass: '#141f18'
   }
 ]
 

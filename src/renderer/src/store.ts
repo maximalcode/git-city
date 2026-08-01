@@ -18,6 +18,7 @@ import type {
   WorktreeInfo
 } from '../../shared/types'
 import { DEFAULT_THEME_ID } from './city/themes'
+import { DEFAULT_MODE, isViewMode, type ViewMode } from './city/modes'
 import { repoWarning, type RepoWarning } from './lib/repoScale'
 import type { ColorMode } from './city/colorModes'
 
@@ -39,14 +40,16 @@ function saveTheme(id: string): void {
   }
 }
 
-export type ViewMode = 'city' | 'forest'
+export type { ViewMode }
 const VIEW_KEY = 'gitcity.view'
 function loadViewMode(): ViewMode {
   try {
+    // validated against the registry, so a mode removed in a later version
+    // falls back instead of persisting a value nothing can render
     const v = localStorage.getItem(VIEW_KEY)
-    return v === 'forest' ? 'forest' : 'city'
+    return isViewMode(v) ? v : DEFAULT_MODE
   } catch {
-    return 'city'
+    return DEFAULT_MODE
   }
 }
 function saveViewMode(mode: ViewMode): void {

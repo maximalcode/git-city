@@ -11,15 +11,6 @@ import SkyDome from './SkyDome'
 import Trees from './Trees'
 import Hotspots from './Hotspots'
 
-/** Grass tone per theme (trees stand on green ground whatever the sky does). */
-const GRASS: Record<string, string> = {
-  'realistic-day': '#3f6b30',
-  'realistic-night': '#16271a',
-  neon: '#122436',
-  'golden-hour': '#4a5326',
-  'midnight-ink': '#141f18'
-}
-
 const dummy = new Object3D()
 
 /**
@@ -45,7 +36,7 @@ export default function ForestScene({
   const manualTimeOfDay = useStore((s) => s.timeOfDay)
   const sunFollowsCommit = useStore((s) => s.sunFollowsCommit)
   const size = model.worldSize
-  const grass = GRASS[theme.id] ?? '#2f5227'
+  const grass = theme.grass
   const timeOfDay = sunFollowsCommit ? timeOfDayFromCommit(snapshot.date) : manualTimeOfDay
   const sun = sunState(timeOfDay, size)
 

@@ -1,18 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { Bloom, EffectComposer, N8AO, Vignette } from '@react-three/postprocessing'
-import { Vector3 } from 'three'
 import CameraRig from './CameraRig'
 import SceneBoundary from '../lib/SceneBoundary'
 import { useStore } from '../store'
 import { playStepMs } from '../lib/playback'
 import { hotspots as computeHotspots } from '../lib/hotspots'
 import { getTheme } from './themes'
-import { buildCityModel, snapshotTargets, type CityModel } from './cityData'
-import { buildForestModel, forestTargets, type ForestModel } from '../layout/forest'
-import type { RepoAnalysis } from '../../../shared/types'
-import CityScene from './CityScene'
-import ForestScene from './ForestScene'
+import { getMode } from './modes'
 import Hud from './Hud'
 import ChangesPanel from '../panels/ChangesPanel'
 import BranchesPanel from '../panels/BranchesPanel'
@@ -32,35 +27,14 @@ import Onboarding from './Onboarding'
 import Minimap from './Minimap'
 import CommitDetailPanel from '../panels/CommitDetailPanel'
 
-// Per-analysis model caches: toggling the view mode back and forth must not
-// re-run the layout algorithms.
-const cityCache = new WeakMap<RepoAnalysis, CityModel>()
-const forestCache = new WeakMap<RepoAnalysis, ForestModel>()
 // stable empty array so "no PR under review" never churns scene props
 const EMPTY_PATHS: string[] = []
 
-function getCityModel(analysis: RepoAnalysis): CityModel {
-  let m = cityCache.get(analysis)
-  if (!m) {
-    m = buildCityModel(analysis)
-    cityCache.set(analysis, m)
-  }
-  return m
-}
-
-function getForestModel(analysis: RepoAnalysis): ForestModel {
-  let m = forestCache.get(analysis)
-  if (!m) {
-    m = buildForestModel(analysis)
-    forestCache.set(analysis, m)
-  }
-  return m
-}
-
 /**
  * Mode-agnostic scene shell: owns the Canvas, fog, playback ticker, camera
- * rig, postprocessing, HUD and panels. The view-mode-specific world (city or
- * forest) mounts as a subtree.
+ * rig, postprocessing, HUD and panels. The view-mode-specific world mounts as a
+ * subtree, looked up in the mode registry (see modes.tsx) — this shell contains
+ * no per-mode branching.
  */
 export default function SceneView(): React.JSX.Element {
   const analysis = useStore((s) => s.analysis)!
@@ -106,17 +80,11 @@ export default function SceneView(): React.JSX.Element {
 
   const reviewPaths = useStore((s) => s.review?.paths) ?? EMPTY_PATHS
 
-  // only the active mode's model is built (lazily, cached per analysis)
-  const cityModel = viewMode === 'city' ? getCityModel(analysis) : null
-  const forestModel = viewMode === 'forest' ? getForestModel(analysis) : null
-
-  const cityTargets = useMemo(
-    () => (cityModel ? snapshotTargets(cityModel, snapshot, colorMode) : null),
-    [cityModel, snapshot, colorMode]
-  )
-  const forestTgt = useMemo(
-    () => (forestModel ? forestTargets(forestModel, snapshot, colorMode) : null),
-    [forestModel, snapshot, colorMode]
+  // only the active mode is prepared; each entry caches its model per analysis
+  const mode = getMode(viewMode)
+  const scene = useMemo(
+    () => mode.prepare(analysis, snapshot, colorMode),
+    [mode, analysis, snapshot, colorMode]
   )
 
   const snapshotCount = analysis.snapshots.length
@@ -133,29 +101,11 @@ export default function SceneView(): React.JSX.Element {
     return () => clearInterval(id)
   }, [playing, snapshotCount])
 
-  const size = cityModel ? cityModel.citySize : forestModel!.worldSize
+  const size = scene.worldSize
   const bg = theme.background
-  const useAO = theme.ao && viewMode === 'city'
+  const useAO = theme.ao && mode.ao
 
-  // fly-to target: building plot center in the city, tree position in the forest
-  const resolveFocus = useMemo(
-    () =>
-      (path: string): Vector3 | null => {
-        if (cityModel) {
-          const i = cityModel.indexOf.get(path)
-          if (i === undefined) return null
-          const { rect } = cityModel.layout.plots[i]
-          return new Vector3(rect.x + rect.w / 2, 5, rect.y + rect.h / 2)
-        }
-        const m = forestModel!
-        const i = m.indexOf.get(path)
-        if (i === undefined) return null
-        return new Vector3(m.positions[i * 3], 4, m.positions[i * 3 + 2])
-      },
-    [cityModel, forestModel]
-  )
-
-  const hudModel = cityModel ?? forestModel!
+  const resolveFocus = useMemo(() => (path: string) => scene.focus(path), [scene])
 
   if (contextLost) {
     return (
@@ -192,28 +142,11 @@ export default function SceneView(): React.JSX.Element {
           <color attach="background" args={[bg]} />
           <fog attach="fog" args={[bg, size * theme.fog.near, size * theme.fog.far]} />
 
-          {cityModel && cityTargets && (
-            <CityScene
-              model={cityModel}
-              targets={cityTargets}
-              snapshot={snapshot}
-              hotspots={hotspotPaths}
-              reviewPaths={reviewPaths}
-            />
-          )}
-          {forestModel && forestTgt && (
-            <ForestScene
-              model={forestModel}
-              targets={forestTgt}
-              snapshot={snapshot}
-              hotspots={hotspotPaths}
-              reviewPaths={reviewPaths}
-            />
-          )}
+          {scene.render({ snapshot, hotspots: hotspotPaths, reviewPaths })}
 
           <CameraRig worldSize={size} resolveFocus={resolveFocus} maxPolarAngle={Math.PI * 0.47} />
 
-          {/* AO only exists in the city; its presence changes the composer's child
+          {/* Only some modes use AO; its presence changes the composer's child
             set. Rebuilding that chain in place freezes the render loop, so key the
             composer on the exact combination that alters its children — the change
             becomes a clean remount instead of an in-place mutation. */}
@@ -233,9 +166,9 @@ export default function SceneView(): React.JSX.Element {
         </Canvas>
       </SceneBoundary>
 
-      <Hud snapshot={snapshot} model={hudModel} />
-      <Minimap model={cityModel ?? forestModel!} viewMode={viewMode} />
-      <CommandPalette model={hudModel} />
+      <Hud snapshot={snapshot} model={scene.hud} />
+      <Minimap dots={scene.dots()} worldSize={size} />
+      <CommandPalette model={scene.hud} />
       <CommitDetailPanel />
       <Onboarding />
       <ChangesPanel />

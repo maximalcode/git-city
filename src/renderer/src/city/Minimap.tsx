@@ -1,36 +1,9 @@
-import { useEffect, useMemo, useRef } from 'react'
-import type { Color } from 'three'
+import { useEffect, useRef } from 'react'
 import { cameraHeading } from '../lib/cameraHeading'
-import type { CityModel } from './cityData'
-import type { ForestModel } from '../layout/forest'
+import type { MinimapDot } from './modes'
 
 const SIZE = 140 // logical px
 const PAD = 8
-
-interface Dot {
-  x: number
-  z: number
-  style: string
-}
-
-/** Extract map dots (world XZ centre + colour) from either scene model. */
-function dotsOf(model: CityModel | ForestModel, viewMode: 'city' | 'forest'): Dot[] {
-  const colors = model.langColors as Color[]
-  const out: Dot[] = []
-  if (viewMode === 'city') {
-    const plots = (model as CityModel).layout.plots
-    for (let i = 0; i < plots.length; i++) {
-      const r = plots[i].rect
-      out.push({ x: r.x + r.w / 2, z: r.y + r.h / 2, style: colors[i].getStyle() })
-    }
-  } else {
-    const pos = (model as ForestModel).positions
-    for (let i = 0; i < colors.length; i++) {
-      out.push({ x: pos[i * 3], z: pos[i * 3 + 2], style: colors[i].getStyle() })
-    }
-  }
-  return out
-}
 
 /**
  * Top-down orientation minimap (north = −Z, up). Files show as coloured dots; a
@@ -39,18 +12,14 @@ function dotsOf(model: CityModel | ForestModel, viewMode: 'city' | 'forest'): Do
  * each frame, off React's render path via the shared cameraHeading ref.
  */
 export default function Minimap({
-  model,
-  viewMode
+  dots,
+  worldSize
 }: {
-  model: CityModel | ForestModel
-  viewMode: 'city' | 'forest'
+  dots: MinimapDot[]
+  worldSize: number
 }): React.JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const baseRef = useRef<HTMLCanvasElement | null>(null)
-  const worldSize =
-    viewMode === 'city' ? (model as CityModel).citySize : (model as ForestModel).worldSize
-
-  const dots = useMemo(() => dotsOf(model, viewMode), [model, viewMode])
 
   // world XZ → canvas px (north up: +Z maps downward)
   const span = worldSize * 1.08
@@ -66,7 +35,7 @@ export default function Minimap({
     const ctx = base.getContext('2d')!
     ctx.scale(dpr, dpr)
     for (const d of dots) {
-      ctx.fillStyle = d.style
+      ctx.fillStyle = d.color.getStyle()
       ctx.globalAlpha = 0.72
       ctx.fillRect(toX(d.x) - 1, toY(d.z) - 1, 2.4, 2.4)
     }

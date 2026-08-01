@@ -1,5 +1,6 @@
 import { spawn } from 'child_process'
 import { createInterface } from 'readline'
+import { FriendlyError } from './result'
 
 /**
  * Shared git process runners. Every git child process gets:
@@ -18,6 +19,21 @@ export interface GitResult {
   code: number
   stdout: string
   stderr: string
+}
+
+/**
+ * Every git call goes through a spawn, so a machine without git on PATH fails
+ * with a bare `spawn git ENOENT` — which reaches the user as either a generic
+ * "could not load" or that raw string, neither of which says what to do. The
+ * packaged app is the case that matters: installing the .exe or .dmg does not
+ * install git.
+ */
+export function gitMissingError(err: unknown): FriendlyError | null {
+  return (err as NodeJS.ErrnoException)?.code === 'ENOENT'
+    ? new FriendlyError(
+        'Git is not installed, or not on your PATH. Install it from git-scm.com, then restart Git City.'
+      )
+    : null
 }
 
 /** Run git and always resolve with the exit code + streams; never throws on nonzero exit. */
@@ -48,7 +64,7 @@ export function runGitResult(
       if ((err as NodeJS.ErrnoException).code === 'ABORT_ERR') {
         resolve({ code: -1, stdout, stderr: stderr || 'Operation cancelled.' })
       } else {
-        reject(err)
+        reject(gitMissingError(err) ?? err)
       }
     })
     child.on('close', (code) => resolve({ code: code ?? -1, stdout, stderr }))
@@ -110,7 +126,7 @@ export function runGitLines(
     child.stderr.on('data', (d) => (err += d))
     const rl = createInterface({ input: child.stdout, crlfDelay: Infinity })
     rl.on('line', onLine)
-    child.on('error', reject)
+    child.on('error', (e) => reject(gitMissingError(e) ?? e))
     child.on('close', (code) => {
       if (code === 0) resolve()
       else reject(new Error(err.trim() || `git ${args.join(' ')} exited with ${code}`))

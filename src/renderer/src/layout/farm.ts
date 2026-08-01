@@ -78,7 +78,7 @@ export function buildFarmModel(analysis: RepoAnalysis): FarmModel {
     }
   }
   const files = Array.from(weights, ([path, weight]) => ({ path, weight }))
-  // a touch wider than the forest: fields need room to read as fields, and the
+  // wider than the city: fields need room to read as fields, and the
   // farm is meant to feel like it goes on
   const worldSize = Math.max(110, Math.min(340, Math.sqrt(files.length) * 12))
 

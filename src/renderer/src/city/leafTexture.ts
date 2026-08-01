@@ -7,7 +7,7 @@ import { CanvasTexture, LinearMipmapLinearFilter, NearestFilter } from 'three'
  * build, and cached because every tree layer shares one texture.
  *
  * The RGB channel is pure white — foliage color comes from the per-instance
- * color (fixed green in the city, colour-mode hue in the forest).
+ * color (fixed green for the city's street trees).
  */
 
 const SIZE = 128

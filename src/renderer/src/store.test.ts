@@ -62,7 +62,7 @@ describe('preferences', () => {
   it('resetPreferences returns every appearance/behaviour pref to its default', () => {
     useStore.setState({
       themeId: 'neon',
-      viewMode: 'forest',
+      viewMode: 'farm',
       timeOfDay: 0.12,
       showHotspots: false,
       diffSplit: true,

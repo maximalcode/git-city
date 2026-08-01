@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { DEFAULT_MODE, MODES, getMode, isViewMode, nextMode } from './modes'
 
 /**
- * The registry replaced a city-or-forest ternary repeated across the shell, so
+ * The registry replaced a per-mode ternary repeated across the shell, so
  * these guard the properties that made that removal safe: every mode is fully
  * specified, lookups never return undefined, and cycling covers all of them
  * rather than flipping between two.
@@ -41,7 +41,6 @@ describe('mode registry', () => {
   })
 
   it('resolves a known id and falls back for anything else', () => {
-    expect(getMode('forest').id).toBe('forest')
     expect(getMode('city').id).toBe('city')
     expect(getMode('farm').id).toBe('farm')
     // a mode removed in a later version must not strand the app
@@ -51,8 +50,9 @@ describe('mode registry', () => {
 
   it('validates persisted values against the registry', () => {
     expect(isViewMode('city')).toBe(true)
-    expect(isViewMode('forest')).toBe(true)
     expect(isViewMode('farm')).toBe(true)
+    // removed in a later version — must not validate
+    expect(isViewMode('forest')).toBe(false)
     expect(isViewMode('atlantis')).toBe(false)
     expect(isViewMode(null)).toBe(false)
     expect(isViewMode(2)).toBe(false)

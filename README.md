@@ -12,10 +12,10 @@ cherry-pick and tag without leaving the city.
 
 ![Git City replaying a repository's history](docs/media/demo.gif)
 
-Prefer something calmer? Press `V` and the same repository becomes a **forest** —
-every file a tree in its folder's grove — or a **farm**, where files are fields
-of crop that rise and fall with the line count, folders are fenced parcels with
-their own barn and silo, and livestock work their way across the holding.
+Prefer something calmer? Press `V` and the same repository becomes a **farm**:
+files are fields of crop that rise and fall with the line count, folders are
+fenced parcels with their own barn and silo, and livestock work their way across
+the holding.
 
 ## Download
 
@@ -35,19 +35,18 @@ signing stays with gpg-agent / ssh-agent, and there is no telemetry.
 
 ## What it looks like
 
-|                                                                     |                                                                |
-| ------------------------------------------------------------------- | -------------------------------------------------------------- |
-| ![Night, coloured by language](docs/media/city-night.jpg)           | ![Neon, coloured by activity](docs/media/city-neon.jpg)        |
-| **Realistic Night**, coloured by language                           | **Neon**, coloured by how often files change                   |
-| ![Forest view](docs/media/forest.jpg)                               | ![Golden Hour, coloured by author](docs/media/city-author.jpg) |
-| **Forest view** — every file a tree in its folder's grove           | **Golden Hour**, coloured by who touched each file last        |
-| ![Farm view](docs/media/farm.jpg)                                   |                                                                |
-| **Farm view** — fields of crop, fenced parcels, barns and livestock |                                                                |
+|                                                                     |                                                         |
+| ------------------------------------------------------------------- | ------------------------------------------------------- |
+| ![Night, coloured by language](docs/media/city-night.jpg)           | ![Neon, coloured by activity](docs/media/city-neon.jpg) |
+| **Realistic Night**, coloured by language                           | **Neon**, coloured by how often files change            |
+| ![Golden Hour, coloured by author](docs/media/city-author.jpg)      |                                                         |
+| **Golden Hour**, coloured by who touched each file last             |                                                         |
+| ![Farm view](docs/media/farm.jpg)                                   |                                                         |
+| **Farm view** — fields of crop, fenced parcels, barns and livestock |                                                         |
 
 ## Features
 
-- **Three ways to see a repo** — the 3D **City**, the **Forest** and the **Farm**
-  (`V` cycles between them)
+- **Two ways to see a repo** — the 3D **City** and the **Farm** (`V` switches)
 - **Scrub the whole history** — a full replay fits in ~10 seconds, and the sky
   tracks each commit's local hour as you go
 - **6 colour encodings** — language, activity, author, recency, size, file type,
@@ -68,8 +67,7 @@ signing stays with gpg-agent / ssh-agent, and there is no telemetry.
 
 **Visualization**
 
-- **Three view modes** (`V` cycles, persisted): the 3D **City**, the **Forest**
-  and the **Farm**
+- **Two view modes** (`V` switches, persisted): the 3D **City** and the **Farm**
 - City: districts per folder, buildings per file with **photo-real facades**
   (per-building window grids in three styles, ground-floor shopfronts, rooftop
   clutter — AC units, water tanks, antennas — and a contact-shadow base); real
@@ -78,10 +76,11 @@ signing stays with gpg-agent / ssh-agent, and there is no telemetry.
   traffic lights at big junctions; commit-weighted traffic in four body styles
   (sedan / wagon / van / bus, plus bikes — hover-craft in Neon) with head/tail
   lights; lamp posts and street trees along the roads
-- Forest: every file is a tree (bush / tree / ancient by size) standing in its
-  folder's grove; **cross-plane alpha-textured canopies** grow in and breathe
-  with the live line count and colour by the active colour mode; a vertex-shader
-  wind sway keeps the leaves alive
+- Farm: every file is a cultivated field whose crop rises and falls with the
+  live line count, and whose **crop class follows the file's size** — leafy rows
+  for small files, standing cereal for mid-size, orchards of fruit trees for the
+  largest. Folders are fenced parcels, each with a barn and silo (wind pumps on
+  the big ones), worked by grazing herds of cattle, sheep, pigs and chickens
 - Timeline playback: scrub or play the entire history (a full replay fits in
   ~10 seconds)
 - 5 themes (Realistic Day/Night, Neon, Golden Hour, Midnight Ink) with
@@ -144,7 +143,7 @@ signing stays with gpg-agent / ssh-agent, and there is no telemetry.
   branch. GitLab merge requests use the same model — only the wording follows
   the host. Falls back to a clear hint when the CLI is missing or logged out
 - **Review a PR in the city**: pick any PR and its changed files light up with
-  blue beacons across the city/forest — see a pull request's blast radius at a
+  blue beacons across the city/farm — see a pull request's blast radius at a
   glance, then step the camera through each touched file. A banner names the PR
   and counts the files; Escape (or Exit) ends the review
 - **Fresh repos welcome**: open a repository with no commits yet (a brand-new
@@ -179,7 +178,7 @@ signing stays with gpg-agent / ssh-agent, and there is no telemetry.
 | `G`              | Commit graph                   |
 | `U`              | Time machine (reflog undo)     |
 | `P`              | Pull requests                  |
-| `V`              | Cycle City / Forest / Farm     |
+| `V`              | Toggle City / Farm view        |
 | `/`              | Find a file (arrows + Enter)   |
 | `,`              | Settings                       |
 | `Space`          | Play/pause the timeline        |
@@ -276,7 +275,7 @@ signing cert / Apple Developer ID + notarization).
 - `src/preload/` — typed `window.gitCity` bridge.
 - `src/renderer/` — React + react-three-fiber UI. `layout/` holds the pure,
   unit-tested scene math: the squarified treemap, the street graph derived
-  from it, and the forest layout. `city/` renders both scenes (instanced
+  from it, and the farm layout. `city/` renders both scenes (instanced
   buildings, district plates, streets with sidewalks, traffic, street furniture,
   trees, effects) behind a mode-agnostic `SceneView` shell; `panels/` holds the
   git client UI; `store.ts` (zustand) is the single state funnel.

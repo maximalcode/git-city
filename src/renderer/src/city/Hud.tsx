@@ -9,6 +9,7 @@ import Icon from '../lib/icons'
 import { useStore, type ColorMode, type ViewMode } from '../store'
 import { THEMES, getTheme } from './themes'
 import { COLOR_MODES, type ColorContext } from './colorModes'
+import { MODES, getMode, nextMode } from './modes'
 import Legend from './Legend'
 import SearchBox from './SearchBox'
 import SideRail from './SideRail'
@@ -105,7 +106,7 @@ export default function Hud({ snapshot, model }: Props): React.JSX.Element {
       ',': () => useStore.getState().setSettingsOpen(!useStore.getState().settingsOpen),
       v: () => {
         const st = useStore.getState()
-        st.setViewMode(st.viewMode === 'city' ? 'forest' : 'city')
+        st.setViewMode(nextMode(st.viewMode).id)
       },
       '/': () => useStore.getState().setSearchOpen(true),
       space: () => {
@@ -446,11 +447,6 @@ function TimeOfDayControl({
   )
 }
 
-const VIEW_MODES: { id: ViewMode; glyph: string; name: string; hint: string }[] = [
-  { id: 'city', glyph: '🏙', name: 'City', hint: 'Files as buildings in districts' },
-  { id: 'forest', glyph: '🌲', name: 'Forest', hint: 'Files as trees in folder groves' }
-]
-
 function ViewPicker({
   viewMode,
   setViewMode
@@ -458,7 +454,7 @@ function ViewPicker({
   viewMode: ViewMode
   setViewMode: (m: ViewMode) => void
 }): React.JSX.Element {
-  const active = VIEW_MODES.find((m) => m.id === viewMode) ?? VIEW_MODES[0]
+  const active = getMode(viewMode)
   return (
     <Picker
       buttonLabel={
@@ -467,7 +463,7 @@ function ViewPicker({
         </>
       }
       title="View (V)"
-      items={VIEW_MODES.map((m) => ({
+      items={MODES.map((m) => ({
         id: m.id,
         label: (
           <>

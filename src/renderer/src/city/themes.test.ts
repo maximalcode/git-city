@@ -35,6 +35,7 @@ describe('theme registry', () => {
       expect(typeof t.shopfront.enabled).toBe('boolean')
       expect(t.shopfront.color).toMatch(/^#[0-9a-f]{6}$/i)
       expect(t.shopfront.intensity).toBeGreaterThanOrEqual(0)
+      expect(t.grass).toMatch(/^#[0-9a-f]{6}$/i)
     }
   })
 

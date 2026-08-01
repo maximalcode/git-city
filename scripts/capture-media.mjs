@@ -35,7 +35,8 @@ const STILLS = [
   // daylight, not golden-hour: the canopies read as near-black silhouettes
   // against a warm ground, and the whole shot turns to mud
   { name: 'forest', theme: 'realistic-day', view: 'forest', color: 'language' },
-  { name: 'city-author', theme: 'golden-hour', view: 'city', color: 'author' }
+  { name: 'city-author', theme: 'golden-hour', view: 'city', color: 'author' },
+  { name: 'farm', theme: 'realistic-day', view: 'farm', color: 'language' }
 ]
 
 const ONLY = process.argv.includes('--stills') ? 'stills' : null

@@ -43,15 +43,17 @@ describe('mode registry', () => {
   it('resolves a known id and falls back for anything else', () => {
     expect(getMode('forest').id).toBe('forest')
     expect(getMode('city').id).toBe('city')
+    expect(getMode('farm').id).toBe('farm')
     // a mode removed in a later version must not strand the app
-    expect(getMode('farm').id).toBe(MODES[0].id)
+    expect(getMode('atlantis').id).toBe(MODES[0].id)
     expect(getMode('').id).toBe(MODES[0].id)
   })
 
   it('validates persisted values against the registry', () => {
     expect(isViewMode('city')).toBe(true)
     expect(isViewMode('forest')).toBe(true)
-    expect(isViewMode('farm')).toBe(false)
+    expect(isViewMode('farm')).toBe(true)
+    expect(isViewMode('atlantis')).toBe(false)
     expect(isViewMode(null)).toBe(false)
     expect(isViewMode(2)).toBe(false)
   })

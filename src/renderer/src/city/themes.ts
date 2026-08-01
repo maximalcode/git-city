@@ -53,6 +53,8 @@ export interface Theme {
    * a theme knob instead of another parallel palette table.
    */
   grass: string
+  /** tilled earth under the crop in the farm view */
+  soil: string
 }
 
 export const THEMES: Theme[] = [
@@ -81,7 +83,8 @@ export const THEMES: Theme[] = [
     particles: 'motes',
     road: { surface: '#2a3140', marking: '#c8cede', markingEmissive: 0, sidewalk: '#68718a' },
     shopfront: { enabled: false, color: '#ffd9a0', intensity: 0 },
-    grass: '#3f6b30'
+    grass: '#3f6b30',
+    soil: '#5a4227'
   },
   {
     id: 'realistic-night',
@@ -108,7 +111,8 @@ export const THEMES: Theme[] = [
     particles: 'motes',
     road: { surface: '#10141e', marking: '#8f97ad', markingEmissive: 0, sidewalk: '#2b3242' },
     shopfront: { enabled: true, color: '#ffd9a0', intensity: 1.6 },
-    grass: '#16271a'
+    grass: '#16271a',
+    soil: '#2a2018'
   },
   {
     id: 'neon',
@@ -135,7 +139,8 @@ export const THEMES: Theme[] = [
     particles: 'rain',
     road: { surface: '#0c0622', marking: '#4de1ff', markingEmissive: 1.6, sidewalk: '#241a4a' },
     shopfront: { enabled: true, color: '#ff4da6', intensity: 2.6 },
-    grass: '#122436'
+    grass: '#122436',
+    soil: '#1d2233'
   },
   {
     id: 'golden-hour',
@@ -162,7 +167,8 @@ export const THEMES: Theme[] = [
     particles: 'motes',
     road: { surface: '#2c2030', marking: '#e8c8a0', markingEmissive: 0, sidewalk: '#4c3b48' },
     shopfront: { enabled: true, color: '#ffcf8a', intensity: 1.2 },
-    grass: '#4a5326'
+    grass: '#4a5326',
+    soil: '#5b3f1f'
   },
   {
     id: 'midnight-ink',
@@ -189,7 +195,8 @@ export const THEMES: Theme[] = [
     particles: 'motes',
     road: { surface: '#0c0f16', marking: '#7d8cb8', markingEmissive: 0.4, sidewalk: '#232838' },
     shopfront: { enabled: true, color: '#8fb0ff', intensity: 1.4 },
-    grass: '#141f18'
+    grass: '#141f18',
+    soil: '#221d1a'
   }
 ]
 

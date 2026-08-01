@@ -130,6 +130,13 @@ describe('countDiffLines', () => {
     expect(countDiffLines(diff)).toEqual({ additions: 2, deletions: 1 })
   })
 
+  it('counts content lines that begin with -- or ++', () => {
+    // a removed `-- comment` renders as `---` + the text, which a bare
+    // startsWith('---') would mistake for a file header and drop
+    const diff = ['@@ -1,2 +1,2 @@', '--- sql comment', '+++value', ' same'].join('\n')
+    expect(countDiffLines(diff)).toEqual({ additions: 1, deletions: 1 })
+  })
+
   it('handles an empty diff', () => {
     expect(countDiffLines('')).toEqual({ additions: 0, deletions: 0 })
   })

@@ -2,7 +2,8 @@
  * Browser-preview mock: lets the renderer run without Electron or git so the
  * city/forest can be verified visually (vite preview on :5199). Activated only
  * in DEV builds, only when the preload API is absent, and only with `?mock` in
- * the URL — the plain preview still boots to the welcome screen.
+ * the URL — the plain preview still boots to the welcome screen. `?mock=20000`
+ * scales the synthetic repo up for performance work.
  *
  * Deterministic on purpose: the same synthetic repo every load makes visual
  * regressions comparable across sessions.
@@ -25,8 +26,19 @@ const DIRS = [
 ]
 const EXTS = ['ts', 'tsx', 'ts', 'ts', 'css', 'md', 'json']
 
-const FILE_COUNT = 250
+const DEFAULT_FILE_COUNT = 250
 const SNAPSHOT_COUNT = 30
+
+/**
+ * `?mock` gives the standard 250-file repo; `?mock=20000` scales it up, which
+ * is how the scene gets measured against monorepo-sized inputs without cloning
+ * one (see the analysis-side probe in src/main/git/perf.test.ts).
+ */
+function mockFileCount(): number {
+  const raw = new URLSearchParams(window.location.search).get('mock')
+  const n = raw ? Number.parseInt(raw, 10) : NaN
+  return Number.isFinite(n) && n > 0 ? n : DEFAULT_FILE_COUNT
+}
 
 function mulberry32(seed: number): () => number {
   let s = seed
@@ -41,6 +53,7 @@ function mulberry32(seed: number): () => number {
 function buildAnalysis(): RepoAnalysis {
   const rand = mulberry32(20260718)
   const authors = ['Alice', 'Bob', 'Chen', 'Dana']
+  const fileCount = mockFileCount()
 
   interface SeedFile {
     path: string
@@ -48,7 +61,7 @@ function buildAnalysis(): RepoAnalysis {
     peak: number // LOC it grows toward
   }
   const seeds: SeedFile[] = []
-  for (let i = 0; i < FILE_COUNT; i++) {
+  for (let i = 0; i < fileCount; i++) {
     const dir = DIRS[Math.floor(rand() * DIRS.length)]
     const ext = EXTS[Math.floor(rand() * EXTS.length)]
     const name = `file${i.toString(36)}.${ext}`

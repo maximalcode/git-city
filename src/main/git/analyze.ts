@@ -1,6 +1,7 @@
 import { basename } from 'path'
 import type { FileState, ProgressInfo, RepoAnalysis, Snapshot } from '../../shared/types'
 import { runGit, runGitLines, runGitResult } from './exec'
+import { FriendlyError } from './result'
 
 /**
  * Repo analysis built from a single streaming pass of
@@ -187,7 +188,12 @@ export async function analyzeRepo(
   onProgress: (p: ProgressInfo) => void
 ): Promise<RepoAnalysis> {
   const inside = (
-    await runGit(repoPath, ['rev-parse', '--is-inside-work-tree']).catch(() => 'false')
+    await runGit(repoPath, ['rev-parse', '--is-inside-work-tree']).catch((err) => {
+      // "git isn't installed" must not be swallowed into "not a repository" —
+      // it is the one failure here the user can actually do something about
+      if (err instanceof FriendlyError) throw err
+      return 'false'
+    })
   ).trim()
   if (inside !== 'true') {
     throw new Error('The selected folder is not a git repository.')

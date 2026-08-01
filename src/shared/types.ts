@@ -35,6 +35,12 @@ export interface RepoAnalysis {
   snapshots: Snapshot[]
 }
 
+/** Cheap size probe, read before committing to a full history replay. */
+export interface RepoSize {
+  commits: number
+  files: number
+}
+
 export interface ProgressInfo {
   phase: 'counting' | 'reading-history' | 'cloning' | 'fetching' | 'pulling' | 'pushing'
   done: number
@@ -492,6 +498,9 @@ export interface GitCityApi {
   grepWorkingTree(repoPath: string, query: string): Promise<GrepResult>
   /** Full detail (header, signature, changed files) for one commit. */
   commitDetail(repoPath: string, hash: string): Promise<CommitDetail>
+
+  /** Commit + file counts without replaying history, to warn before a slow open. */
+  repoSize(repoPath: string): Promise<RepoSize>
 
   // --- Pull/merge requests (GitHub via gh, GitLab via glab) ---
   hostStatus(repoPath: string): Promise<HostAuth>

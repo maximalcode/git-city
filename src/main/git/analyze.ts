@@ -1,5 +1,5 @@
 import { basename } from 'path'
-import type { FileState, ProgressInfo, RepoAnalysis, Snapshot } from '../../shared/types'
+import type { FileState, ProgressInfo, RepoAnalysis, RepoSize, Snapshot } from '../../shared/types'
 import { runGit, runGitLines, runGitResult } from './exec'
 import { FriendlyError } from './result'
 
@@ -181,6 +181,35 @@ async function replayRange(
  * round-trip over IPC, so the renderer only ever asks by repoPath.
  */
 const analysisCache = new Map<string, RepoAnalysis>()
+
+/**
+ * Commit and file counts, cheaply — two counting calls, no history replay.
+ *
+ * The full analysis streams every commit's numstat, which on a monorepo runs
+ * for minutes (see #12). This is what lets the UI say so up front instead of
+ * leaving someone staring at a bar that looks stuck.
+ */
+export async function repoSize(repoPath: string): Promise<RepoSize> {
+  let commits = 0
+  try {
+    commits = parseInt(
+      (await runGit(repoPath, ['rev-list', '--count', '--first-parent', 'HEAD'])).trim(),
+      10
+    )
+  } catch {
+    commits = 0 // unborn HEAD
+  }
+  if (!Number.isFinite(commits)) commits = 0
+
+  let files = 0
+  try {
+    const out = await runGit(repoPath, ['ls-files'])
+    files = out.length === 0 ? 0 : out.trimEnd().split('\n').length
+  } catch {
+    files = 0
+  }
+  return { commits, files }
+}
 
 export async function analyzeRepo(
   repoPath: string,

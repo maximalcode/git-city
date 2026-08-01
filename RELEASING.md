@@ -1,12 +1,13 @@
 # Releasing Git City
 
-Windows installers are built in CI by the [`Release (Windows)`](.github/workflows/release.yml)
-workflow. macOS is not built yet (add a `macos-latest` job later — see the bottom of this file).
+Installers are built in CI by the [`Release`](.github/workflows/release.yml) workflow: an NSIS
+`.exe` on `windows-latest`, and two DMGs on `macos-latest` (arm64 and a cross-built x64, since
+Intel Macs are still common). Linux is not packaged — build from source.
 
 ## Cut a release
 
 1. **Bump the version** in [`package.json`](package.json) (e.g. `0.1.0` -> `1.0.0`). This is the
-   single source of truth; the installer is named after it (`git-city-1.0.0-setup.exe`).
+   single source of truth; the installers are named after it.
 2. Commit it: `git commit -am "release: v1.0.0"` and push to `main` (via PR as usual).
 3. **Tag and push the tag:**
 
@@ -15,24 +16,34 @@ workflow. macOS is not built yet (add a `macos-latest` job later — see the bot
    git push origin v1.0.0
    ```
 
-The workflow then: verifies the tag matches `package.json`, runs the tests, builds the NSIS
-installer, and publishes a **GitHub Release** at
-`https://github.com/maximalcode/git-city/releases` with the `.exe` attached and auto-generated
-notes. The download link is `.../releases/download/v1.0.0/git-city-1.0.0-setup.exe`.
+Each build job verifies the tag matches `package.json`, runs the tests and builds its installer.
+A third job then collects every artifact into one **GitHub Release** at
+`https://github.com/maximalcode/git-city/releases` with auto-generated notes. The build jobs
+never create the Release themselves, so the platforms cannot race each other for it.
+
+You get three files:
+
+| File                       | For                       |
+| -------------------------- | ------------------------- |
+| `git-city-1.0.0-setup.exe` | Windows                   |
+| `git-city-1.0.0-arm64.dmg` | Apple Silicon (M1 onward) |
+| `git-city-1.0.0-x64.dmg`   | Intel Macs                |
 
 > The tag must equal `v` + the `package.json` version, or the build fails on purpose.
 
 ### Dry run (build without releasing)
 
-Use the **Run workflow** button on the Actions tab (`workflow_dispatch`). It builds and tests,
-then uploads the `.exe` as a **run artifact** (Actions run page, 90-day retention) — no Release
-is created. Good for smoke-testing the packaged app before you commit to a version tag.
+Use the **Run workflow** button on the Actions tab (`workflow_dispatch`). It builds and tests on
+both platforms, then uploads the installers as **run artifacts** (Actions run page, 90-day
+retention) — no Release is created. Good for smoke-testing the packaged app before you commit to
+a version tag.
 
 ### Cost note (private repo)
 
-Windows runners bill at 2x minutes against the private-repo free tier (2,000 min/month). A build
-is a few minutes, so occasional releases are comfortably free. macOS, if added later, bills at
-**10x** — the reason we start Windows-only.
+Against the private-repo free tier (2,000 min/month), Windows runners bill at **2x** minutes and
+macOS at **10x** — so a macOS build is by far the expensive half, and dry runs are worth using
+sparingly while the repo is private. On a **public** repo, Actions minutes are free on standard
+runners, so this stops mattering the moment the repo goes public.
 
 ---
 
@@ -89,9 +100,14 @@ config change in `electron-builder.yml` needed. Verify by right-clicking the dow
 
 ---
 
-## Adding macOS later
+## macOS notarization (not yet configured)
 
-Add a second job to the workflow on `macos-latest` running `npm run dist:mac` (the `mac: dmg`
-target already exists in `electron-builder.yml`). macOS distribution additionally needs an **Apple
-Developer account ($99/yr)** for signing + notarization, or Gatekeeper blocks the app on other
-Macs. Same pattern: store `APPLE_ID` / `APPLE_APP_SPECIFIC_PASSWORD` / signing cert as secrets.
+The DMGs are built but **unsigned**, and macOS treats that harder than Windows does: Gatekeeper
+does not merely warn, it reports a downloaded unsigned app as _"damaged and can't be opened"_,
+which reads like a corrupt download rather than a security prompt. The workaround is right-click
+-> **Open** (or `xattr -d com.apple.quarantine`), and the README needs to say so plainly next to
+the download link, or Mac users will assume the build is broken.
+
+Fixing it properly needs an **Apple Developer account ($99/yr)** for signing + notarization. Same
+pattern as Windows: store `APPLE_ID` / `APPLE_APP_SPECIFIC_PASSWORD` / the signing certificate as
+repository secrets and reference them from the macOS build step.

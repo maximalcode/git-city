@@ -45,7 +45,7 @@ export default function CameraRig({
 
   // Create once. dispose() detaches the DOM listeners, so it must run ONLY on
   // unmount — never when worldSize changes (a view-mode switch changes it,
-  // since city citySize != forest worldSize). If it ran on every switch the
+  // since the modes size their worlds differently). If it ran on every switch the
   // memoized controls would be disposed and never reconnected, leaving the
   // camera dead. Size/angle limits live in the separate effect below.
   useEffect(() => {

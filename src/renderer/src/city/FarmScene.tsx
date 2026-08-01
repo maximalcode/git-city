@@ -18,7 +18,7 @@ import Hotspots from './Hotspots'
  * livestock working their way around it.
  *
  * Reuses the city's git-op effects — the farm sits on the ground just like the
- * city and forest, so pushes/pulls/commits read the same.
+ * city, so pushes/pulls/commits read the same.
  */
 export default function FarmScene({
   model,

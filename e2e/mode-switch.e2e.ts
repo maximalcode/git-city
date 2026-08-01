@@ -41,7 +41,7 @@ const drawsOver = async (page: Page, ms: number): Promise<number> => {
   return (await draws(page)) - before
 }
 
-const setMode = (page: Page, mode: 'city' | 'forest'): Promise<void> =>
+const setMode = (page: Page, mode: 'city' | 'farm'): Promise<void> =>
   page.evaluate((m) => {
     ;(
       window as unknown as {
@@ -103,7 +103,7 @@ const setTheme = (page: Page, id: string): Promise<void> =>
       .setTheme(t)
   }, id)
 
-test('city/forest switching never freezes the render loop or errors', async ({ page }) => {
+test('city/farm switching never freezes the render loop or errors', async ({ page }) => {
   const errors: string[] = []
   page.on('console', (m) => {
     if (m.type() === 'error') errors.push(m.text())
@@ -150,20 +150,20 @@ test('city/forest switching never freezes the render loop or errors', async ({ p
   for (const t of themes) {
     await setTheme(page, t)
     for (let i = 0; i < 3; i++) {
-      await setMode(page, i % 2 ? 'city' : 'forest')
+      await setMode(page, i % 2 ? 'city' : 'farm')
       await page.waitForTimeout(150)
     }
   }
 
   // no error boundary tripped, and the loop is STILL drawing (would be 0 if frozen)
   expect(await page.locator('.scene-error').count()).toBe(0)
-  await setMode(page, 'forest')
+  await setMode(page, 'farm')
   await page.waitForTimeout(400)
   expect(await drawsOver(page, 600)).toBeGreaterThan(0)
 
   // DETERMINISTIC regression guard: none of those view-mode switches tore down
   // the camera controls. If the rig ever disposes on a worldSize change again,
-  // this is non-zero and the camera would be dead (city citySize != forest
+  // this is non-zero and the camera would be dead (city citySize != farm
   // worldSize, so worldSize changes on every switch).
   expect(await rigDisposes(page), 'view-mode switches must not dispose the camera controls').toBe(0)
 

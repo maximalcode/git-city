@@ -1,19 +1,17 @@
 import { describe, expect, it } from 'vitest'
-import { foliageGeometry, TREE_KINDS, treeHeight, treeKindFor, trunkGeometry } from './treeShapes'
+import { foliageGeometry, trunkGeometry, type TreeKind } from './treeShapes'
 
-describe('treeKindFor', () => {
-  it('grows the tree class with the line count', () => {
-    expect(treeKindFor(10)).toBe('bush')
-    expect(treeKindFor(119)).toBe('bush')
-    expect(treeKindFor(120)).toBe('tree')
-    expect(treeKindFor(799)).toBe('tree')
-    expect(treeKindFor(800)).toBe('ancient')
-  })
-})
+/** Tallest point of a canopy, read off the geometry rather than a helper. */
+function canopyTop(kind: TreeKind): number {
+  const p = foliageGeometry(kind).getAttribute('position')
+  let max = -Infinity
+  for (let i = 0; i < p.count; i++) max = Math.max(max, p.getY(i))
+  return max
+}
 
 describe('tree geometry', () => {
   it('builds valid trunk + foliage for every kind, canopy above the trunk', () => {
-    for (const kind of TREE_KINDS) {
+    for (const kind of ['bush', 'tree', 'ancient'] as TreeKind[]) {
       const trunk = trunkGeometry(kind)
       const foliage = foliageGeometry(kind)
       expect(trunk.getAttribute('position').count).toBeGreaterThan(0)
@@ -23,7 +21,7 @@ describe('tree geometry', () => {
       let trunkMinY = Infinity
       for (let i = 0; i < tp.count; i++) trunkMinY = Math.min(trunkMinY, tp.getY(i))
       expect(trunkMinY).toBeGreaterThanOrEqual(-1e-6)
-      expect(treeHeight(kind)).toBeGreaterThan(0.5)
+      expect(canopyTop(kind)).toBeGreaterThan(0.5)
     }
   })
 
@@ -33,7 +31,7 @@ describe('tree geometry', () => {
   })
 
   it('canopy gets bigger from bush to ancient', () => {
-    expect(treeHeight('ancient')).toBeGreaterThan(treeHeight('tree'))
-    expect(treeHeight('tree')).toBeGreaterThan(treeHeight('bush'))
+    expect(canopyTop('ancient')).toBeGreaterThan(canopyTop('tree'))
+    expect(canopyTop('tree')).toBeGreaterThan(canopyTop('bush'))
   })
 })

@@ -14,7 +14,7 @@ import Legend from './Legend'
 import SearchBox from './SearchBox'
 import SideRail from './SideRail'
 
-/** The slice of a scene model the HUD needs — CityModel and ForestModel both satisfy it. */
+/** The slice of a scene model the HUD needs — every mode model satisfies it. */
 export type HudModel = ColorContext & { paths: string[] }
 
 interface Props {

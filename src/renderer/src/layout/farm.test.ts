@@ -96,7 +96,7 @@ describe('buildFarmModel', () => {
     const parcel = (p: string) => m.parcelOf[m.indexOf.get(p)!]
     expect(parcel('src/a.ts')).toBe(parcel('src/b.ts'))
     expect(parcel('src/a.ts')).not.toBe(parcel('docs/c.md'))
-    // a nested directory is its own parcel, like the forest's groves
+    // a nested directory is its own parcel
     expect(parcel('docs/deep/d.md')).not.toBe(parcel('docs/c.md'))
   })
 

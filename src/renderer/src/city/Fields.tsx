@@ -1,8 +1,8 @@
 import { useLayoutEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { Color, InstancedMesh, Object3D } from 'three'
-import type { FarmModel, FarmTargets } from '../layout/farm'
-import { cropTuftGeometry } from './farmShapes'
+import { CROP_KINDS, type FarmModel, type FarmTargets } from '../layout/farm'
+import { cropGeometry } from './farmShapes'
 import type { Theme } from './themes'
 
 const dummy = new Object3D()
@@ -28,11 +28,21 @@ const BASE_SPACING = 0.62
 // neglect rather than as scale
 const MAX_PER_FIELD = 400
 
+/**
+ * Row spacing per crop class, relative to BASE_SPACING. A fruit tree's canopy is
+ * roughly three times the width of a cereal stook, so planting all three on one
+ * pitch packs orchards into a solid mass of blobs — they need room to read as
+ * individual trees, and vegetables can sit closer than cereal.
+ */
+const SPACING_BY_KIND = [0.78, 1, 2.5]
+
 interface Tufts {
   field: Int32Array
   ox: Float32Array
   oz: Float32Array
   count: number
+  /** tuft indices grouped by their field's crop class */
+  byKind: number[][]
   /** how wide each tuft is drawn, so crops close ranks at any spacing */
   scale: number
 }
@@ -48,8 +58,9 @@ function plantRows(model: FarmModel, spacing: number): Tufts {
     const alongX = r.w >= r.h
     const major = (alongX ? r.w : r.h) * 0.86
     const minor = (alongX ? r.h : r.w) * 0.86
-    let rows = Math.max(1, Math.round(minor / spacing))
-    let perRow = Math.max(1, Math.round(major / spacing))
+    const pitch = spacing * (SPACING_BY_KIND[model.kinds[i]] ?? 1)
+    let rows = Math.max(1, Math.round(minor / pitch))
+    let perRow = Math.max(1, Math.round(major / pitch))
     // keep any single field from hogging the budget
     while (rows * perRow > MAX_PER_FIELD && (rows > 1 || perRow > 1)) {
       if (perRow >= rows) perRow--
@@ -68,11 +79,14 @@ function plantRows(model: FarmModel, spacing: number): Tufts {
       }
     }
   }
+  const byKind: number[][] = CROP_KINDS.map(() => [])
+  for (let t = 0; t < field.length; t++) byKind[model.kinds[field[t]]].push(t)
   return {
     field: Int32Array.from(field),
     ox: Float32Array.from(ox),
     oz: Float32Array.from(oz),
     count: field.length,
+    byKind,
     scale: spacing / BASE_SPACING
   }
 }
@@ -87,7 +101,9 @@ export default function Fields({
   theme: Theme
 }): React.JSX.Element {
   const plotRef = useRef<InstancedMesh>(null!)
-  const cropRef = useRef<InstancedMesh>(null!)
+  // one mesh per crop class, so a field's size changes what grows on it rather
+  // than only how tall the same crop stands
+  const cropRefs = useRef<(InstancedMesh | null)[]>([])
   const n = model.paths.length
 
   // Planted once per model: the rows never move, only the crop height changes.
@@ -123,8 +139,7 @@ export default function Fields({
 
   useFrame((_state, dt) => {
     const plots = plotRef.current
-    const crops = cropRef.current
-    if (!plots || !crops) return
+    if (!plots) return
     const k = 1 - Math.exp(-theme.lerpSpeed * Math.min(dt, 0.05))
     soil.set(theme.soil)
 
@@ -138,31 +153,37 @@ export default function Fields({
     }
     if (plots.instanceColor) plots.instanceColor.needsUpdate = true
 
-    for (let t = 0; t < tufts.count; t++) {
-      const i = tufts.field[t]
-      const grown = h[i]
-      dummy.position.set(
-        model.centers[i * 2] + tufts.ox[t],
-        0,
-        model.centers[i * 2 + 1] + tufts.oz[t]
-      )
-      // nothing standing on a field whose file does not exist yet
-      const w = grown <= 0.02 ? 0 : tufts.scale
-      dummy.scale.set(w, grown, w)
-      dummy.rotation.set(0, (i * 7 + t) * 0.9, 0)
-      dummy.updateMatrix()
-      crops.setMatrixAt(t, dummy.matrix)
-      scratch
-        .setRGB(targets.colors[i * 3], targets.colors[i * 3 + 1], targets.colors[i * 3 + 2])
-        .offsetHSL(0, 0.05, ((t % 3) - 1) * 0.035)
-      crops.setColorAt(t, scratch)
+    for (let k = 0; k < CROP_KINDS.length; k++) {
+      const crops = cropRefs.current[k]
+      const list = tufts.byKind[k]
+      if (!crops || list.length === 0) continue
+      for (let m = 0; m < list.length; m++) {
+        const t = list[m]
+        const i = tufts.field[t]
+        const grown = h[i]
+        dummy.position.set(
+          model.centers[i * 2] + tufts.ox[t],
+          0,
+          model.centers[i * 2 + 1] + tufts.oz[t]
+        )
+        // nothing standing on a field whose file does not exist yet
+        const w = grown <= 0.02 ? 0 : tufts.scale
+        dummy.scale.set(w, grown, w)
+        dummy.rotation.set(0, (i * 7 + t) * 0.9, 0)
+        dummy.updateMatrix()
+        crops.setMatrixAt(m, dummy.matrix)
+        scratch
+          .setRGB(targets.colors[i * 3], targets.colors[i * 3 + 1], targets.colors[i * 3 + 2])
+          .offsetHSL(0, 0.05, ((t % 3) - 1) * 0.035)
+        crops.setColorAt(m, scratch)
+      }
+      crops.instanceMatrix.needsUpdate = true
+      if (crops.instanceColor) crops.instanceColor.needsUpdate = true
     }
-    crops.instanceMatrix.needsUpdate = true
-    if (crops.instanceColor) crops.instanceColor.needsUpdate = true
   })
 
-  const tuftGeo = useMemo(() => cropTuftGeometry(), [])
-  useLayoutEffect(() => () => tuftGeo.dispose(), [tuftGeo])
+  const cropGeos = useMemo(() => CROP_KINDS.map((k) => cropGeometry(k)), [])
+  useLayoutEffect(() => () => cropGeos.forEach((g) => g.dispose()), [cropGeos])
 
   return (
     <group>
@@ -170,14 +191,21 @@ export default function Fields({
         <planeGeometry args={[1, 1]} />
         <meshStandardMaterial roughness={1} />
       </instancedMesh>
-      <instancedMesh
-        ref={cropRef}
-        args={[tuftGeo, undefined, Math.max(1, tufts.count)]}
-        castShadow
-        receiveShadow
-      >
-        <meshStandardMaterial roughness={0.85} />
-      </instancedMesh>
+      {CROP_KINDS.map((kind, k) =>
+        tufts.byKind[k].length === 0 ? null : (
+          <instancedMesh
+            key={kind}
+            ref={(m) => {
+              cropRefs.current[k] = m
+            }}
+            args={[cropGeos[k], undefined, tufts.byKind[k].length]}
+            castShadow
+            receiveShadow
+          >
+            <meshStandardMaterial roughness={0.85} />
+          </instancedMesh>
+        )
+      )}
     </group>
   )
 }

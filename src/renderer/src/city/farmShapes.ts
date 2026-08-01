@@ -124,10 +124,40 @@ export function windPumpGeometry(): BufferGeometry {
 }
 
 /**
- * A stook of standing crop — a few tapered blades. Painted white so the field's
- * colour-mode hue comes through per instance.
+ * What grows on a field, by crop class. All three are modelled to a unit height
+ * so the instance's Y scale is the live line count, and left unpainted so the
+ * field's colour-mode hue comes through per instance.
+ *
+ * The three read differently on purpose: a big file should look like a
+ * different kind of agriculture from a small one, not the same crop taller.
  */
-export function cropTuftGeometry(): BufferGeometry {
+export function cropGeometry(kind: CropShape): BufferGeometry {
+  if (kind === 'furrow') return furrowGeometry()
+  if (kind === 'orchard') return orchardGeometry()
+  return rowGeometry()
+}
+
+export type CropShape = 'furrow' | 'row' | 'orchard'
+
+/** Low leafy vegetable mounds — small files sit close to the ground. */
+function furrowGeometry(): BufferGeometry {
+  const parts: BufferGeometry[] = []
+  for (const [x, z, r] of [
+    [0, 0, 0.19],
+    [0.2, 0.12, 0.14],
+    [-0.17, -0.1, 0.13]
+  ] as [number, number, number][]) {
+    const leaf = new SphereGeometry(r, 7, 5)
+    // squashed: a cabbage sits wide and low, and unit height keeps Y as the scale
+    leaf.scale(1.5, 0.9, 1.5)
+    leaf.translate(x, r * 0.75, z)
+    parts.push(leaf)
+  }
+  return merge(parts)
+}
+
+/** Standing cereal — a stook of tapered blades, the mid-size default. */
+function rowGeometry(): BufferGeometry {
   const parts: BufferGeometry[] = []
   const blades: [number, number, number, number][] = [
     [0, 0, 1, 0],
@@ -143,6 +173,18 @@ export function cropTuftGeometry(): BufferGeometry {
     parts.push(blade)
   }
   return merge(parts)
+}
+
+/** A fruit tree — the big files become orchards rather than very tall wheat. */
+function orchardGeometry(): BufferGeometry {
+  const trunk = new CylinderGeometry(0.05, 0.075, 0.42, 6)
+  trunk.translate(0, 0.21, 0)
+  const canopy = new SphereGeometry(0.3, 8, 6)
+  canopy.scale(1, 0.88, 1)
+  canopy.translate(0, 0.68, 0)
+  const side = new SphereGeometry(0.19, 7, 5)
+  side.translate(0.19, 0.55, 0.06)
+  return merge([trunk, canopy, side])
 }
 
 /* ---------------------------------------------------------------- animals */

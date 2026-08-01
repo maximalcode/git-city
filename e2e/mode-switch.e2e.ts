@@ -44,15 +44,20 @@ const drawsOver = async (page: Page, ms: number): Promise<number> => {
 const setMode = (page: Page, mode: 'city' | 'forest'): Promise<void> =>
   page.evaluate((m) => {
     ;(
-      window as unknown as { __gitCityMock: { store: { getState(): { setViewMode(x: string): void } } } }
-    ).__gitCityMock.store.getState().setViewMode(m)
+      window as unknown as {
+        __gitCityMock: { store: { getState(): { setViewMode(x: string): void } } }
+      }
+    ).__gitCityMock.store
+      .getState()
+      .setViewMode(m)
   }, mode)
 
 /** the r3f camera position via the DEV probe CameraRig exposes, or null */
 const camPos = (page: Page): Promise<[number, number, number] | null> =>
   page.evaluate(() => {
-    const c = (window as unknown as { __gitCityCam?: { position: { x: number; y: number; z: number } } })
-      .__gitCityCam
+    const c = (
+      window as unknown as { __gitCityCam?: { position: { x: number; y: number; z: number } } }
+    ).__gitCityCam
     return c ? [c.position.x, c.position.y, c.position.z] : null
   })
 
@@ -90,8 +95,12 @@ const resetRigDisposes = (page: Page): Promise<void> =>
 const setTheme = (page: Page, id: string): Promise<void> =>
   page.evaluate((t) => {
     ;(
-      window as unknown as { __gitCityMock: { store: { getState(): { setTheme(x: string): void } } } }
-    ).__gitCityMock.store.getState().setTheme(t)
+      window as unknown as {
+        __gitCityMock: { store: { getState(): { setTheme(x: string): void } } }
+      }
+    ).__gitCityMock.store
+      .getState()
+      .setTheme(t)
   }, id)
 
 test('city/forest switching never freezes the render loop or errors', async ({ page }) => {
@@ -120,7 +129,9 @@ test('city/forest switching never freezes the render loop or errors', async ({ p
       window as unknown as {
         __gitCityMock: { store: { getState(): { dismissOnboarding(): void } } }
       }
-    ).__gitCityMock.store.getState().dismissOnboarding()
+    ).__gitCityMock.store
+      .getState()
+      .dismissOnboarding()
   )
 
   // the render loop is alive at rest
@@ -154,10 +165,7 @@ test('city/forest switching never freezes the render loop or errors', async ({ p
   // the camera controls. If the rig ever disposes on a worldSize change again,
   // this is non-zero and the camera would be dead (city citySize != forest
   // worldSize, so worldSize changes on every switch).
-  expect(
-    await rigDisposes(page),
-    'view-mode switches must not dispose the camera controls'
-  ).toBe(0)
+  expect(await rigDisposes(page), 'view-mode switches must not dispose the camera controls').toBe(0)
 
   // End-to-end sanity: the camera still responds to a drag after all the
   // switching (intro orbit was cancelled up front, so movement == input).

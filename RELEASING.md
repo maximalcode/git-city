@@ -51,11 +51,11 @@ only add GitHub **secrets** and reference them in the workflow.
 Since June 2023, code-signing private keys **must live on FIPS hardware** (a USB token or a cloud
 HSM) — you can no longer just email yourself a `.pfx`. Practical options:
 
-| Option | Cost | SmartScreen | Notes |
-|---|---|---|---|
-| **Azure Trusted Signing** | ~$10/month | Builds reputation over time | Cheapest; needs a verified org **or** a 3+ year-old identity. Integrates cleanly with CI. |
-| **OV certificate** (Sectigo, SSL.com, DigiCert) | ~$200–400/yr | Builds reputation over time | Key on a cloud-signing service (eSigner / KeyLocker) so CI can use it. |
-| **EV certificate** | ~$300–500/yr | **Instant** trust, no warning | Highest bar to obtain; hardware token or cloud HSM. |
+| Option                                          | Cost         | SmartScreen                   | Notes                                                                                     |
+| ----------------------------------------------- | ------------ | ----------------------------- | ----------------------------------------------------------------------------------------- |
+| **Azure Trusted Signing**                       | ~$10/month   | Builds reputation over time   | Cheapest; needs a verified org **or** a 3+ year-old identity. Integrates cleanly with CI. |
+| **OV certificate** (Sectigo, SSL.com, DigiCert) | ~$200–400/yr | Builds reputation over time   | Key on a cloud-signing service (eSigner / KeyLocker) so CI can use it.                    |
+| **EV certificate**                              | ~$300–500/yr | **Instant** trust, no warning | Highest bar to obtain; hardware token or cloud HSM.                                       |
 
 For a solo/indie launch, **Azure Trusted Signing** is usually the best value if you're eligible;
 otherwise an **OV cert via a cloud-signing provider** (so it works in headless CI).
@@ -76,11 +76,11 @@ use a custom sign step / dedicated action rather than `CSC_LINK`.
 In [`release.yml`](.github/workflows/release.yml), add them to the "Build Windows installer" step:
 
 ```yaml
-      - name: Build Windows installer
-        env:
-          CSC_LINK: ${{ secrets.CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
-        run: npm run dist:win
+- name: Build Windows installer
+  env:
+    CSC_LINK: ${{ secrets.CSC_LINK }}
+    CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+  run: npm run dist:win
 ```
 
 `electron-builder` auto-detects `CSC_LINK` / `CSC_KEY_PASSWORD` and signs the installer — no

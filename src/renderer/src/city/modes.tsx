@@ -85,6 +85,25 @@ function commonRows(colorName: string): { icon: IconName; title: string; body: s
 const cityCache = new WeakMap<RepoAnalysis, CityModel>()
 const farmCache = new WeakMap<RepoAnalysis, FarmModel>()
 
+/**
+ * Minimap dots, cached per model.
+ *
+ * The minimap builds its static base layer once per dot array, so this must
+ * hand back the *same* array every time or that base is redrawn on every
+ * render. Dots come from the model's language colours alone — neither the
+ * snapshot nor the colour mode moves them — so the model is the whole key.
+ */
+const dotsCache = new WeakMap<object, MinimapDot[]>()
+
+function cachedDots(model: object, build: () => MinimapDot[]): MinimapDot[] {
+  let dots = dotsCache.get(model)
+  if (!dots) {
+    dots = build()
+    dotsCache.set(model, dots)
+  }
+  return dots
+}
+
 function cityModelFor(analysis: RepoAnalysis): CityModel {
   let m = cityCache.get(analysis)
   if (!m) {
@@ -133,11 +152,13 @@ const cityMode: ModeDef = {
         return new Vector3(rect.x + rect.w / 2, 5, rect.y + rect.h / 2)
       },
       dots() {
-        return model.layout.plots.map((p, i) => ({
-          x: p.rect.x + p.rect.w / 2,
-          z: p.rect.y + p.rect.h / 2,
-          color: model.langColors[i]
-        }))
+        return cachedDots(model, () =>
+          model.layout.plots.map((p, i) => ({
+            x: p.rect.x + p.rect.w / 2,
+            z: p.rect.y + p.rect.h / 2,
+            color: model.langColors[i]
+          }))
+        )
       },
       render: (props) => <CityScene model={model} targets={targets} {...props} />
     }
@@ -174,11 +195,13 @@ const farmMode: ModeDef = {
         return new Vector3(model.centers[i * 2], 3, model.centers[i * 2 + 1])
       },
       dots() {
-        return model.langColors.map((color, i) => ({
-          x: model.centers[i * 2],
-          z: model.centers[i * 2 + 1],
-          color
-        }))
+        return cachedDots(model, () =>
+          model.langColors.map((color, i) => ({
+            x: model.centers[i * 2],
+            z: model.centers[i * 2 + 1],
+            color
+          }))
+        )
       },
       render: (props) => <FarmScene model={model} targets={targets} {...props} />
     }

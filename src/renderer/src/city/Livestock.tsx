@@ -1,4 +1,4 @@
-import { useMemo, useRef } from 'react'
+import { useLayoutEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { InstancedMesh, Object3D } from 'three'
 import type { FarmModel } from '../layout/farm'
@@ -55,7 +55,9 @@ export default function Livestock({ model }: { model: FarmModel }): React.JSX.El
 
 function Herd({ kind, model }: { kind: AnimalKind; model: FarmModel }): React.JSX.Element | null {
   const ref = useRef<InstancedMesh>(null!)
+  // passed as a prop (not JSX-created), so R3F won't dispose it for us
   const geo = useMemo(() => animalGeometry(kind), [kind])
+  useLayoutEffect(() => () => geo.dispose(), [geo])
 
   const herd = useMemo(() => {
     // graze on the parcels, falling back to the whole holding for a tiny repo

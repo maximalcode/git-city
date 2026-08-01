@@ -114,13 +114,20 @@ export function parseMrList(stdout: string): PullRequestInfo[] {
 /**
  * Count added/removed lines in a unified diff. GitLab's changes endpoint ships
  * the diff text but no per-file counts, unlike GitHub — so we count them here.
- * `+++`/`---` are the file headers, not content. Exported for tests.
+ *
+ * The payload starts at the first `@@` hunk and carries no file headers, but we
+ * skip them anyway in case that changes. Matching the path that follows matters:
+ * a bare `startsWith('---')` also swallows a *removed* line whose own text
+ * begins with `--` (a SQL comment, a flag in a shell snippet), which renders as
+ * `---` + the text and would go uncounted. Exported for tests.
  */
+const FILE_HEADER = /^(?:--- (?:a\/|\/dev\/null)|\+\+\+ (?:b\/|\/dev\/null))/
+
 export function countDiffLines(diff: string): { additions: number; deletions: number } {
   let additions = 0
   let deletions = 0
   for (const line of diff.split('\n')) {
-    if (line.startsWith('+++') || line.startsWith('---')) continue
+    if (FILE_HEADER.test(line)) continue
     if (line.startsWith('+')) additions++
     else if (line.startsWith('-')) deletions++
   }

@@ -1,5 +1,6 @@
 import { spawn } from 'child_process'
-import type { GitHubAuth, OpResult, PrFileChange, PullRequestInfo } from '../../shared/types'
+import type { HostAuth, OpResult, PrFileChange, PullRequestInfo } from '../../shared/types'
+import type { HostProvider } from './host'
 
 /**
  * GitHub integration via the `gh` CLI — zero extra auth setup: gh already holds
@@ -89,35 +90,38 @@ function mapPr(p: RawPr): PullRequestInfo {
 const PR_FIELDS = 'number,title,headRefName,baseRefName,isDraft,url,author,statusCheckRollup,state'
 
 /** gh availability + auth + whether this repo is a GitHub repo. */
-export async function ghStatus(repoPath: string): Promise<GitHubAuth> {
+export async function ghStatus(repoPath: string): Promise<HostAuth> {
   const auth = await runGh(repoPath, ['auth', 'status'])
   if (auth.missing) {
     return {
+      host: 'github',
       available: false,
       authed: false,
-      isGitHub: false,
+      isRepo: false,
       login: null,
       reason: 'GitHub CLI (gh) is not installed.'
     }
   }
   if (auth.code !== 0) {
     return {
+      host: 'github',
       available: true,
       authed: false,
-      isGitHub: false,
+      isRepo: false,
       login: null,
       reason: 'Not logged in to GitHub — run: gh auth login'
     }
   }
   const login = /account (\S+)/.exec(auth.stderr + auth.stdout)?.[1] ?? null
   const repo = await runGh(repoPath, ['repo', 'view', '--json', 'nameWithOwner'])
-  const isGitHub = repo.code === 0
+  const isRepo = repo.code === 0
   return {
+    host: 'github',
     available: true,
     authed: true,
-    isGitHub,
+    isRepo,
     login,
-    reason: isGitHub ? null : 'This repository has no GitHub remote.'
+    reason: isRepo ? null : 'This repository has no GitHub remote.'
   }
 }
 
@@ -206,4 +210,14 @@ export async function createPr(
   if (base) args.push('--base', base)
   const res = await runGh(repoPath, args)
   return res.code === 0 ? { ok: true } : fail(res, 'Could not create the pull request.')
+}
+
+export const githubProvider: HostProvider = {
+  kind: 'github',
+  status: ghStatus,
+  listPullRequests,
+  currentBranchPr,
+  pullRequestFiles,
+  checkoutPr,
+  createPr
 }

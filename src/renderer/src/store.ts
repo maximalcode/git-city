@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import type {
   BranchInfo,
-  GitHubAuth,
+  HostAuth,
   OpResult,
   ProgressInfo,
   HunkMode,
@@ -215,7 +215,7 @@ const REPO_STATE_RESET: Partial<GitCityState> = {
   tags: [],
   submodules: [],
   worktrees: [],
-  githubAuth: null,
+  hostAuth: null,
   pullRequests: [],
   currentPr: null,
   prPanelOpen: false,
@@ -271,7 +271,7 @@ interface GitCityState {
   tags: TagInfo[]
   submodules: SubmoduleInfo[]
   worktrees: WorktreeInfo[]
-  githubAuth: GitHubAuth | null
+  hostAuth: HostAuth | null
   pullRequests: PullRequestInfo[]
   currentPr: PullRequestInfo | null
   prPanelOpen: boolean
@@ -364,7 +364,7 @@ interface GitCityState {
   addWorktree(path: string, ref: string): Promise<void>
   removeWorktree(path: string, force: boolean): Promise<void>
   setPrPanelOpen(open: boolean): void
-  refreshGitHub(): Promise<void>
+  refreshHost(): Promise<void>
   checkoutPr(number: number): Promise<void>
   createPr(base: string, title: string, body: string): Promise<void>
   reviewPrInCity(number: number, title: string): Promise<void>
@@ -443,7 +443,7 @@ export const useStore = create<GitCityState>((set, get) => ({
   tags: [],
   submodules: [],
   worktrees: [],
-  githubAuth: null,
+  hostAuth: null,
   pullRequests: [],
   currentPr: null,
   prPanelOpen: false,
@@ -720,23 +720,23 @@ export const useStore = create<GitCityState>((set, get) => ({
 
   setPrPanelOpen: (prPanelOpen) => {
     set({ prPanelOpen })
-    if (prPanelOpen) void get().refreshGitHub()
+    if (prPanelOpen) void get().refreshHost()
   },
-  refreshGitHub: async () => {
+  refreshHost: async () => {
     const { repoPath } = get()
     if (!hasApi() || !repoPath) return
     set({ prLoading: true })
     try {
-      const auth = await window.gitCity.ghStatus(repoPath)
-      if (!auth.authed || !auth.isGitHub) {
-        set({ githubAuth: auth, pullRequests: [], currentPr: null })
+      const auth = await window.gitCity.hostStatus(repoPath)
+      if (!auth.authed || !auth.isRepo) {
+        set({ hostAuth: auth, pullRequests: [], currentPr: null })
         return
       }
       const [pullRequests, currentPr] = await Promise.all([
         window.gitCity.listPullRequests(repoPath),
         window.gitCity.currentBranchPr(repoPath)
       ])
-      set({ githubAuth: auth, pullRequests, currentPr })
+      set({ hostAuth: auth, pullRequests, currentPr })
     } catch {
       /* leave prior state; gh hiccup */
     } finally {
@@ -757,7 +757,7 @@ export const useStore = create<GitCityState>((set, get) => ({
     await runOp(set, get, 'Creating pull request…', (repo) =>
       window.gitCity.createPr(repo, base, title, body)
     )
-    if (!get().opError) await get().refreshGitHub()
+    if (!get().opError) await get().refreshHost()
   },
   reviewPrInCity: async (number, title) => {
     const { repoPath } = get()
@@ -1117,7 +1117,7 @@ async function loadRepo(
       await get().refreshSubmodules()
       await get().refreshWorktrees()
       // GitHub is a network call — populate the PR/CI state in the background
-      void get().refreshGitHub()
+      void get().refreshHost()
     }
   } catch (err) {
     set({ screen: 'welcome', error: cleanError(err) })

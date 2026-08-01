@@ -4,10 +4,8 @@ import type { RepoAnalysis, Snapshot } from '../../../shared/types'
 import type { ColorMode } from './colorModes'
 import type { IconName } from '../lib/icons'
 import { buildCityModel, snapshotTargets, type CityModel } from './cityData'
-import { buildForestModel, forestTargets, type ForestModel } from '../layout/forest'
 import { buildFarmModel, farmTargets, type FarmModel } from '../layout/farm'
 import CityScene from './CityScene'
-import ForestScene from './ForestScene'
 import FarmScene from './FarmScene'
 
 /**
@@ -22,7 +20,7 @@ import FarmScene from './FarmScene'
  * non-null assertions the old binary needed.
  */
 
-export type ViewMode = 'city' | 'forest' | 'farm'
+export type ViewMode = 'city' | 'farm'
 
 export interface MinimapDot {
   x: number
@@ -85,7 +83,6 @@ function commonRows(colorName: string): { icon: IconName; title: string; body: s
 // Per-analysis model caches: switching modes back and forth must not re-run the
 // layout algorithms. Kept per mode so each owns its own memoisation.
 const cityCache = new WeakMap<RepoAnalysis, CityModel>()
-const forestCache = new WeakMap<RepoAnalysis, ForestModel>()
 const farmCache = new WeakMap<RepoAnalysis, FarmModel>()
 
 function cityModelFor(analysis: RepoAnalysis): CityModel {
@@ -93,15 +90,6 @@ function cityModelFor(analysis: RepoAnalysis): CityModel {
   if (!m) {
     m = buildCityModel(analysis)
     cityCache.set(analysis, m)
-  }
-  return m
-}
-
-function forestModelFor(analysis: RepoAnalysis): ForestModel {
-  let m = forestCache.get(analysis)
-  if (!m) {
-    m = buildForestModel(analysis)
-    forestCache.set(analysis, m)
   }
   return m
 }
@@ -156,46 +144,6 @@ const cityMode: ModeDef = {
   }
 }
 
-const forestMode: ModeDef = {
-  id: 'forest',
-  name: 'Forest',
-  glyph: '🌲',
-  icon: 'forest',
-  hint: 'Files as trees in folder groves',
-  noun: 'forest',
-  ao: false,
-  rows: (colorName) => [
-    { icon: 'forest', title: 'Trees are files', body: 'Bigger canopy = more lines of code.' },
-    {
-      icon: 'branch',
-      title: 'Groves are folders',
-      body: 'Each clearing gathers one directory’s files.'
-    },
-    ...commonRows(colorName)
-  ],
-  prepare(analysis, snapshot, colorMode) {
-    const model = forestModelFor(analysis)
-    const targets = forestTargets(model, snapshot, colorMode)
-    return {
-      worldSize: model.worldSize,
-      hud: model,
-      focus(path) {
-        const i = model.indexOf.get(path)
-        if (i === undefined) return null
-        return new Vector3(model.positions[i * 3], 4, model.positions[i * 3 + 2])
-      },
-      dots() {
-        return model.langColors.map((color, i) => ({
-          x: model.positions[i * 3],
-          z: model.positions[i * 3 + 2],
-          color
-        }))
-      },
-      render: (props) => <ForestScene model={model} targets={targets} {...props} />
-    }
-  }
-}
-
 const farmMode: ModeDef = {
   id: 'farm',
   name: 'Farm',
@@ -238,7 +186,7 @@ const farmMode: ModeDef = {
 }
 
 /** Every mode, in the order the picker and the `V` key cycle through them. */
-export const MODES: ModeDef[] = [cityMode, forestMode, farmMode]
+export const MODES: ModeDef[] = [cityMode, farmMode]
 
 export const DEFAULT_MODE: ViewMode = 'city'
 

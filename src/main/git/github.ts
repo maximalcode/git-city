@@ -182,7 +182,7 @@ export function parsePrFiles(stdout: string): PrFileChange[] {
   }
 }
 
-/** The files a PR changes, for lighting them up in the city/forest. */
+/** The files a PR changes, for lighting them up in the scene. */
 export async function pullRequestFiles(repoPath: string, number: number): Promise<PrFileChange[]> {
   const res = await runGh(repoPath, ['pr', 'view', String(number), '--json', 'files'])
   if (res.code !== 0) return []

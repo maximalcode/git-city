@@ -17,7 +17,6 @@ export type IconName =
   | 'pull'
   | 'push'
   | 'city'
-  | 'forest'
   | 'farm'
   | 'color'
   | 'theme'
@@ -110,12 +109,6 @@ const PATHS: Record<IconName, JSX.Element> = {
     <>
       <path d="M3 20h18M5 20V9l5-3v14M14 20V4l5 3v13" />
       <path d="M7.4 11h0M7.4 14h0M16.4 9h0M16.4 12h0" />
-    </>
-  ),
-  forest: (
-    <>
-      <path d="M12 3.5 6.5 12h3L5 18.5h14L14.5 12h3L12 3.5Z" />
-      <path d="M12 18.5V22" />
     </>
   ),
   color: (

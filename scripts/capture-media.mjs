@@ -32,9 +32,6 @@ const JPEG_QUALITY = 88
 const STILLS = [
   { name: 'city-night', theme: 'realistic-night', view: 'city', color: 'language' },
   { name: 'city-neon', theme: 'neon', view: 'city', color: 'activity' },
-  // daylight, not golden-hour: the canopies read as near-black silhouettes
-  // against a warm ground, and the whole shot turns to mud
-  { name: 'forest', theme: 'realistic-day', view: 'forest', color: 'language' },
   { name: 'city-author', theme: 'golden-hour', view: 'city', color: 'author' },
   { name: 'farm', theme: 'realistic-day', view: 'farm', color: 'language' }
 ]

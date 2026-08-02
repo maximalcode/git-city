@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { useStore } from '../store'
+import { getMode } from '../city/modes'
 import { DENSE_FILE_COUNT } from '../lib/repoScale'
 
 /**
@@ -13,6 +14,7 @@ export default function LargeRepoDialog(): React.JSX.Element | null {
   const pending = useStore((s) => s.pendingRepo)
   const confirmOpen = useStore((s) => s.confirmPendingRepo)
   const cancel = useStore((s) => s.cancelPendingRepo)
+  const noun = getMode(useStore((s) => s.viewMode)).noun
   const openRef = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
@@ -51,8 +53,8 @@ export default function LargeRepoDialog(): React.JSX.Element | null {
         {dense && (
           <p>
             {streetless
-              ? 'At this size the streets stop being drawn entirely — the plots are too small to fit a road between them, so expect a dense block of buildings rather than a city.'
-              : `Above about ${DENSE_FILE_COUNT.toLocaleString()} files the city gets dense and the streets start to thin out.`}
+              ? `At this size the roads stop being drawn entirely — the plots are too small to fit one between them, so expect a dense block rather than a laid-out ${noun}.`
+              : `Above about ${DENSE_FILE_COUNT.toLocaleString()} files the ${noun} gets dense and the roads start to thin out.`}
           </p>
         )}
         <div className="modal-actions">

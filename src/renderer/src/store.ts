@@ -128,9 +128,16 @@ function saveDiffSplit(on: boolean): void {
 }
 
 const REDUCEMOTION_KEY = 'gitcity.reducemotion'
+/**
+ * Defaults to the OS setting until the user says otherwise. Someone who has
+ * asked their whole system for less motion should not have to find a checkbox
+ * in here as well — and once they do touch it, their choice is what persists.
+ */
 function loadReduceMotion(): boolean {
   try {
-    return localStorage.getItem(REDUCEMOTION_KEY) === 'on'
+    const stored = localStorage.getItem(REDUCEMOTION_KEY)
+    if (stored !== null) return stored === 'on'
+    return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
   } catch {
     return false
   }
@@ -882,11 +889,24 @@ export const useStore = create<GitCityState>((set, get) => ({
   refreshAnalysis: async () => {
     const { repoPath } = get()
     if (!hasApi() || !repoPath) return
+    // Decided up front, and from the timeline alone.
+    //
+    // isLiveState() also compares the working tree's headHash against the newest
+    // snapshot, which is right for its other callers and guaranteed wrong here:
+    // runOp refreshes the status before it reanalyses, so by this point headHash
+    // is already the commit we are about to add. Asked afterwards it answered
+    // "not live" for every commit, and left the user one snapshot in the past —
+    // timeline a notch short, "Viewing history" banner up, live working-tree
+    // layer switched off, immediately after committing.
+    const before = get()
+    const wasLive =
+      !before.analysis ||
+      before.analysis.snapshots.length === 0 ||
+      before.snapshotIndex === before.analysis.snapshots.length - 1
     set({ reanalyzing: true, historyStale: false })
     try {
       let analysis = await window.gitCity.analyzeIncremental(repoPath)
       if (!analysis) analysis = await window.gitCity.analyzeRepo(repoPath, 50)
-      const wasLive = isLiveState(get())
       set((s) => ({
         analysis,
         // if the user was watching the latest state, keep them there

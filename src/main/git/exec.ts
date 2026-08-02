@@ -1,6 +1,40 @@
 import { spawn } from 'child_process'
+import { existsSync } from 'fs'
 import { createInterface } from 'readline'
 import { FriendlyError } from './result'
+
+/**
+ * Shared git process runners.
+ *
+ * A GUI app launched from Finder or the Dock inherits launchd's PATH —
+ * `/usr/bin:/bin:/usr/sbin:/sbin` — not the one from your shell profile. git
+ * lives at /usr/bin/git and survives that; almost nothing installed by a
+ * package manager does. So `gh`, installed by Homebrew into /opt/homebrew/bin,
+ * is invisible to the packaged app while `gh auth status` works perfectly in
+ * the user's terminal — and we then tell them to install the thing they have
+ * already installed.
+ *
+ * Appended, never prepended: a binary the user has deliberately put earlier on
+ * their own PATH still wins.
+ */
+const EXTRA_BIN_DIRS =
+  process.platform === 'win32'
+    ? []
+    : ['/opt/homebrew/bin', '/usr/local/bin', '/opt/local/bin', '/snap/bin']
+
+export function searchPath(): string {
+  const current = process.env.PATH ?? ''
+  // Augment a PATH; never invent one. An empty PATH is a deliberate statement —
+  // it is how the missing-git tests say "nothing is reachable" — and quietly
+  // handing it four directories back would answer a question nobody asked.
+  if (current === '') return ''
+  const have = new Set(current.split(':').filter(Boolean))
+  const home = process.env.HOME
+  const candidates = home ? [...EXTRA_BIN_DIRS, `${home}/.local/bin`] : EXTRA_BIN_DIRS
+  // only real directories: a bogus entry is just something for every exec to stat
+  const extra = candidates.filter((d) => !have.has(d) && existsSync(d))
+  return extra.length === 0 ? current : [current, ...extra].join(':')
+}
 
 /**
  * Shared git process runners. Every git child process gets:
@@ -12,7 +46,8 @@ const GIT_ENV = {
   ...process.env,
   GIT_TERMINAL_PROMPT: '0',
   GIT_EDITOR: 'true',
-  GIT_SEQUENCE_EDITOR: 'true'
+  GIT_SEQUENCE_EDITOR: 'true',
+  PATH: searchPath()
 }
 
 export interface GitResult {
@@ -28,12 +63,19 @@ export interface GitResult {
  * packaged app is the case that matters: installing the .exe or .dmg does not
  * install git.
  */
-export function gitMissingError(err: unknown): FriendlyError | null {
-  return (err as NodeJS.ErrnoException)?.code === 'ENOENT'
-    ? new FriendlyError(
-        'Git is not installed, or not on your PATH. Install it from git-scm.com, then restart Git City.'
-      )
-    : null
+export function gitMissingError(err: unknown, cwd?: string): FriendlyError | null {
+  if ((err as NodeJS.ErrnoException)?.code !== 'ENOENT') return null
+  // spawn reports ENOENT for a missing *cwd* as well as a missing binary, so a
+  // repo folder that was renamed, deleted or unmounted since it was opened used
+  // to send the user off to install the git they already have.
+  if (cwd !== undefined && !existsSync(cwd)) {
+    return new FriendlyError(
+      `That folder is no longer there: ${cwd}. It may have been moved, renamed, or be on a drive that is not mounted.`
+    )
+  }
+  return new FriendlyError(
+    'Git is not installed, or not on your PATH. Install it from git-scm.com, then restart Git City.'
+  )
 }
 
 /** Run git and always resolve with the exit code + streams; never throws on nonzero exit. */
@@ -64,7 +106,7 @@ export function runGitResult(
       if ((err as NodeJS.ErrnoException).code === 'ABORT_ERR') {
         resolve({ code: -1, stdout, stderr: stderr || 'Operation cancelled.' })
       } else {
-        reject(gitMissingError(err) ?? err)
+        reject(gitMissingError(err, cwd) ?? err)
       }
     })
     child.on('close', (code) => resolve({ code: code ?? -1, stdout, stderr }))
@@ -126,7 +168,7 @@ export function runGitLines(
     child.stderr.on('data', (d) => (err += d))
     const rl = createInterface({ input: child.stdout, crlfDelay: Infinity })
     rl.on('line', onLine)
-    child.on('error', (e) => reject(gitMissingError(e) ?? e))
+    child.on('error', (e) => reject(gitMissingError(e, cwd) ?? e))
     child.on('close', (code) => {
       if (code === 0) resolve()
       else reject(new Error(err.trim() || `git ${args.join(' ')} exited with ${code}`))

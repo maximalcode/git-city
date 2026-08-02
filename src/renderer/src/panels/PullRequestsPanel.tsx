@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { PullRequestInfo } from '../../../shared/types'
 import { useStore } from '../store'
+import { getMode } from '../city/modes'
 
 const CI_LABEL: Record<PullRequestInfo['ci'], string> = {
   passing: 'checks passing',
@@ -95,10 +96,18 @@ export default function PullRequestsPanel(): React.JSX.Element | null {
         {!loading && auth && (!auth.authed || !auth.isRepo) && (
           <div className="pr-unavailable">
             <p>{auth.reason}</p>
-            {!auth.available && (
+            {/* only name a CLI once we know which forge this is — an unknown
+                host means no GitHub or GitLab remote, and installing gh does
+                not give a repo one */}
+            {!auth.available && auth.host !== 'unknown' && (
               <p className="pr-hint">
                 Install it from <span className="mono">{words.install}</span>, then run{' '}
                 <span className="mono">{words.login}</span>.
+              </p>
+            )}
+            {auth.host === 'unknown' && (
+              <p className="pr-hint">
+                Pull requests appear here for repositories hosted on GitHub or GitLab.
               </p>
             )}
             {auth.available && !auth.authed && (
@@ -211,6 +220,8 @@ function PrRow({
   onReview: (n: number, title: string) => void
   busy: boolean
 }): React.JSX.Element {
+  // "Review in city" was still the label with a farm on screen
+  const noun = getMode(useStore((s) => s.viewMode)).noun
   return (
     <div className={`pr-row ${current ? 'current' : ''}`}>
       <div className="pr-main">
@@ -230,9 +241,9 @@ function PrRow({
       <div className="pr-actions">
         <button
           onClick={() => onReview(pr.number, pr.title)}
-          title="Light up this PR's files in the city"
+          title={`Light up this PR's files in the ${noun}`}
         >
-          Review in city
+          Review in {noun}
         </button>
         {!current && (
           <button disabled={busy} onClick={() => onCheckout(pr.number)}>

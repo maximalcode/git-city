@@ -119,7 +119,7 @@ export default function SettingsPanel(): React.JSX.Element | null {
           <label className="settings-row toggle">
             <span>
               Reduce motion
-              <small>Skip the cinematic intro orbit</small>
+              <small>No intro orbit, no traffic, no wandering livestock</small>
             </span>
             <input type="checkbox" checked={reduceMotion} onChange={toggleReduceMotion} />
           </label>

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { WorkingStatus } from '../../shared/types'
-import { statusFingerprint, useStore } from './store'
+import { isLiveState, statusFingerprint, useStore } from './store'
 
 function baseStatus(): WorkingStatus {
   return {
@@ -77,5 +77,35 @@ describe('preferences', () => {
     expect(s.diffSplit).toBe(false)
     expect(s.reduceMotion).toBe(false)
     expect(s.onboarded).toBe(false)
+  })
+})
+
+/**
+ * The window refreshAnalysis used to ask "is the user watching the newest
+ * commit?" in — and why it must not ask isLiveState there.
+ */
+describe('isLiveState during a reanalyse', () => {
+  function stateWith(snapshotHashes: string[], index: number, headHash: string) {
+    return {
+      analysis: { snapshots: snapshotHashes.map((hash) => ({ hash })) },
+      snapshotIndex: index,
+      workingStatus: { ...baseStatus(), headHash }
+    } as unknown as Parameters<typeof isLiveState>[0]
+  }
+
+  it('reports "not live" once the status is refreshed but the analysis is not', () => {
+    // runOp refreshes the working status before it reanalyses, so headHash is
+    // already the commit just made while the analysis still ends at the previous
+    // one. Reading that as "the user is browsing history" left them one snapshot
+    // in the past after every single commit.
+    expect(isLiveState(stateWith(['old111', 'old222'], 1, 'new333'))).toBe(false)
+  })
+
+  it('reports "live" once the analysis has caught up', () => {
+    expect(isLiveState(stateWith(['old111', 'new333'], 1, 'new333abc'))).toBe(true)
+  })
+
+  it('reports "not live" when the user really is browsing history', () => {
+    expect(isLiveState(stateWith(['old111', 'old222'], 0, 'old222'))).toBe(false)
   })
 })

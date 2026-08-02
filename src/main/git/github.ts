@@ -1,5 +1,7 @@
 import { spawn } from 'child_process'
-import type { GitHubAuth, OpResult, PrFileChange, PullRequestInfo } from '../../shared/types'
+import { searchPath } from './exec'
+import type { HostAuth, OpResult, PrFileChange, PullRequestInfo } from '../../shared/types'
+import type { HostProvider } from './host'
 
 /**
  * GitHub integration via the `gh` CLI — zero extra auth setup: gh already holds
@@ -22,6 +24,8 @@ function runGh(cwd: string, args: string[]): Promise<GhResult> {
       cwd,
       env: {
         ...process.env,
+        // Finder-launched apps do not see Homebrew's bin — see exec.ts
+        PATH: searchPath(),
         GH_PAGER: '',
         GH_PROMPT_DISABLED: '1',
         GIT_TERMINAL_PROMPT: '0',
@@ -88,36 +92,47 @@ function mapPr(p: RawPr): PullRequestInfo {
 
 const PR_FIELDS = 'number,title,headRefName,baseRefName,isDraft,url,author,statusCheckRollup,state'
 
+/**
+ * Deliberately not "gh is not installed". A Finder-launched app cannot see
+ * Homebrew's bin without the PATH repair in exec.ts, and telling someone to
+ * install what they already have is a dead end they cannot act their way out of.
+ */
+const GH_MISSING =
+  "GitHub CLI (gh) not found. If it is installed, Git City cannot see it on this app's PATH."
+
 /** gh availability + auth + whether this repo is a GitHub repo. */
-export async function ghStatus(repoPath: string): Promise<GitHubAuth> {
+export async function ghStatus(repoPath: string): Promise<HostAuth> {
   const auth = await runGh(repoPath, ['auth', 'status'])
   if (auth.missing) {
     return {
+      host: 'github',
       available: false,
       authed: false,
-      isGitHub: false,
+      isRepo: false,
       login: null,
-      reason: 'GitHub CLI (gh) is not installed.'
+      reason: GH_MISSING
     }
   }
   if (auth.code !== 0) {
     return {
+      host: 'github',
       available: true,
       authed: false,
-      isGitHub: false,
+      isRepo: false,
       login: null,
       reason: 'Not logged in to GitHub — run: gh auth login'
     }
   }
   const login = /account (\S+)/.exec(auth.stderr + auth.stdout)?.[1] ?? null
   const repo = await runGh(repoPath, ['repo', 'view', '--json', 'nameWithOwner'])
-  const isGitHub = repo.code === 0
+  const isRepo = repo.code === 0
   return {
+    host: 'github',
     available: true,
     authed: true,
-    isGitHub,
+    isRepo,
     login,
-    reason: isGitHub ? null : 'This repository has no GitHub remote.'
+    reason: isRepo ? null : 'This repository has no GitHub remote.'
   }
 }
 
@@ -178,7 +193,7 @@ export function parsePrFiles(stdout: string): PrFileChange[] {
   }
 }
 
-/** The files a PR changes, for lighting them up in the city/forest. */
+/** The files a PR changes, for lighting them up in the scene. */
 export async function pullRequestFiles(repoPath: string, number: number): Promise<PrFileChange[]> {
   const res = await runGh(repoPath, ['pr', 'view', String(number), '--json', 'files'])
   if (res.code !== 0) return []
@@ -186,7 +201,7 @@ export async function pullRequestFiles(repoPath: string, number: number): Promis
 }
 
 function fail(res: GhResult, fallback: string): OpResult {
-  const message = res.missing ? 'GitHub CLI (gh) is not installed.' : res.stderr.trim() || fallback
+  const message = res.missing ? GH_MISSING : res.stderr.trim() || fallback
   return { ok: false, code: 'unknown', message }
 }
 
@@ -206,4 +221,14 @@ export async function createPr(
   if (base) args.push('--base', base)
   const res = await runGh(repoPath, args)
   return res.code === 0 ? { ok: true } : fail(res, 'Could not create the pull request.')
+}
+
+export const githubProvider: HostProvider = {
+  kind: 'github',
+  status: ghStatus,
+  listPullRequests,
+  currentBranchPr,
+  pullRequestFiles,
+  checkoutPr,
+  createPr
 }

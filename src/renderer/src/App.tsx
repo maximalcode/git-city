@@ -5,6 +5,7 @@ import Loading from './screens/Loading'
 import EmptyRepoView from './screens/EmptyRepoView'
 import SceneView from './city/SceneView'
 import ConfirmDialog from './panels/ConfirmDialog'
+import LargeRepoDialog from './panels/LargeRepoDialog'
 import OpErrorToast from './panels/OpErrorToast'
 import UpdateBanner from './panels/UpdateBanner'
 
@@ -23,6 +24,7 @@ export default function App(): React.JSX.Element {
       {screen === 'city' && (hasScene ? <SceneView /> : <EmptyRepoView />)}
       {/* root-level overlays available from any screen */}
       <ConfirmDialog />
+      <LargeRepoDialog />
       <OpErrorToast />
       <UpdateBanner />
     </>

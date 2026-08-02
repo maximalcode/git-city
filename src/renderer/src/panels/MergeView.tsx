@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { ConflictFile, ConflictSegment } from '../../../shared/types'
+import { sameConflict } from '../../../shared/conflictFile'
 import { hasApi, useStore } from '../store'
 
 export type Choice = 'ours' | 'theirs' | 'both' | 'edit'
@@ -43,25 +44,78 @@ export default function MergeView(): React.JSX.Element | null {
   const active = mergeView?.active ?? conflicted[0] ?? null
 
   const [file, setFile] = useState<ConflictFile | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
   const [choices, setChoices] = useState<Map<number, Choice>>(new Map())
   const [edits, setEdits] = useState<Map<number, string>>(new Map())
+
+  /**
+   * The buffer only counts while it *is* the file the rail says is selected.
+   *
+   * Between clicking a second conflict and its read landing — or forever, if
+   * that read fails — `file` still holds the previous path's segments. Both
+   * the panes below and "Mark resolved" used it regardless, which rendered one
+   * file's hunks under another file's name and wrote them into it (#26).
+   */
+  const shown = file && file.path === active ? file : null
 
   useEffect(() => {
     if (!mergeView || !active || !repoPath || !hasApi()) {
       setFile(null)
+      setLoadError(null)
       return
     }
     let cancelled = false
-    void window.gitCity.conflictRead(repoPath, active).then((f) => {
-      if (cancelled) return
-      setFile(f)
-      setChoices(new Map())
-      setEdits(new Map())
-    })
+    setLoadError(null)
+    setNotice(null)
+    void window.gitCity
+      .conflictRead(repoPath, active)
+      .then((f) => {
+        if (cancelled) return
+        setFile(f)
+        setChoices(new Map())
+        setEdits(new Map())
+      })
+      .catch(() => {
+        if (cancelled) return
+        setFile(null)
+        setLoadError(
+          `Could not read ${active} from the working tree. It may have been deleted on one side of the merge, or renamed. Open it in an external editor, or abort and start over.`
+        )
+      })
     return () => {
       cancelled = true
     }
   }, [mergeView, active, repoPath])
+
+  /**
+   * "Open in external editor" is a one-way door as far as the app can see: git
+   * leaves the file conflicted until it is staged, so resolving it elsewhere
+   * changes nothing in `git status` and nothing tells us to re-read. The app
+   * would keep its pre-edit buffer and write that back over the work.
+   *
+   * Regaining focus is exactly the moment the user comes back from the editor,
+   * so re-read then — keeping their in-app choices when the file is unchanged,
+   * since alt-tabbing away and back must not throw those away.
+   */
+  useEffect(() => {
+    if (!mergeView || !active || !repoPath || !hasApi()) return
+    const onFocus = (): void => {
+      void window.gitCity
+        .conflictRead(repoPath, active)
+        .then((f) => {
+          if (file && file.path === f.path && sameConflict(file, f)) return
+          setFile(f)
+          setChoices(new Map())
+          setEdits(new Map())
+        })
+        // a failed refresh is not worth a message here: markResolved re-reads
+        // before it writes anything, and reports it there
+        .catch(() => {})
+    }
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
+  }, [mergeView, active, repoPath, file])
 
   if (!mergeView) return null
 
@@ -69,8 +123,8 @@ export default function MergeView(): React.JSX.Element | null {
     setChoices((prev) => new Map(prev).set(id, c))
     // Seed the edit buffer with what the textarea will display, so an
     // untouched "Edit" resolves to exactly the text the user saw.
-    if (c === 'edit' && file) {
-      const seg = file.segments.find(
+    if (c === 'edit' && shown) {
+      const seg = shown.segments.find(
         (s): s is Extract<ConflictSegment, { kind: 'conflict' }> =>
           s.kind === 'conflict' && s.id === id
       )
@@ -82,10 +136,32 @@ export default function MergeView(): React.JSX.Element | null {
   const setEdit = (id: number, text: string): void =>
     setEdits((prev) => new Map(prev).set(id, text))
 
-  const markResolved = (): void => {
-    if (!file || !active) return
-    if (file.binary) return
-    void resolveConflict(active, assemble(file.segments, choices, edits))
+  /**
+   * Write the resolved text — but only after checking the buffer still matches
+   * what is on disk. Everything this panel does is unrecoverable: the file is
+   * overwritten and staged, and none of it has ever been committed.
+   */
+  const markResolved = async (): Promise<void> => {
+    if (!shown || shown.binary || !active || !repoPath || !hasApi()) return
+    let fresh: ConflictFile
+    try {
+      fresh = await window.gitCity.conflictRead(repoPath, active)
+    } catch {
+      setFile(null)
+      setLoadError(`Could not re-read ${active}, so nothing was written to it.`)
+      return
+    }
+    if (!sameConflict(shown, fresh)) {
+      setFile(fresh)
+      setChoices(new Map())
+      setEdits(new Map())
+      setNotice(
+        `${active} changed on disk since you opened it, so nothing was overwritten. Check it over, then mark it resolved again.`
+      )
+      return
+    }
+    setNotice(null)
+    void resolveConflict(active, assemble(shown.segments, choices, edits))
   }
 
   const allResolved = conflicted.length === 0
@@ -137,7 +213,10 @@ export default function MergeView(): React.JSX.Element | null {
 
         <div className="merge-main">
           {!active && <div className="empty">Select a file to resolve.</div>}
-          {active && file?.binary && (
+          {active && loadError && <div className="merge-error">{loadError}</div>}
+          {active && !shown && !loadError && <div className="empty">Reading {active}…</div>}
+          {notice && <div className="merge-notice">{notice}</div>}
+          {active && shown?.binary && (
             <div className="binary-resolve">
               <p>
                 <code>{active}</code> is a binary file and can't be merged line by line.
@@ -152,10 +231,10 @@ export default function MergeView(): React.JSX.Element | null {
               </div>
             </div>
           )}
-          {active && file && !file.binary && (
+          {active && shown && !shown.binary && (
             <>
               <div className="merge-segments">
-                {file.segments.map((seg, i) =>
+                {shown.segments.map((seg, i) =>
                   seg.kind === 'text' ? (
                     <pre key={i} className="seg-text">
                       {seg.text}
@@ -181,7 +260,7 @@ export default function MergeView(): React.JSX.Element | null {
                 >
                   Open in external editor
                 </button>
-                <button className="primary" disabled={busy} onClick={markResolved}>
+                <button className="primary" disabled={busy} onClick={() => void markResolved()}>
                   Mark resolved
                 </button>
               </div>

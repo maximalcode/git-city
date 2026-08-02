@@ -1,0 +1,110 @@
+import { describe, expect, it } from 'vitest'
+import type { RepoAnalysis, Snapshot } from '../../../shared/types'
+import { DEFAULT_MODE, MODES, getMode, isViewMode, nextMode } from './modes'
+
+function analysis(): RepoAnalysis {
+  const files = ['a.ts', 'b/c.ts', 'b/d.css'].map((path) => ({
+    path,
+    loc: 100,
+    commits: 1,
+    lastTouched: 0,
+    lastAuthor: 'a',
+    binary: false
+  }))
+  return {
+    info: { name: 'r', path: '/r', branch: 'main', commitCount: 1 },
+    snapshots: [
+      { hash: 'h0', date: 1_700_000_000_000, author: 'a', message: 'c0', index: 0, files }
+    ] as Snapshot[]
+  }
+}
+
+/**
+ * The registry replaced a per-mode ternary repeated across the shell, so
+ * these guard the properties that made that removal safe: every mode is fully
+ * specified, lookups never return undefined, and cycling covers all of them
+ * rather than flipping between two.
+ */
+
+describe('mode registry', () => {
+  it('fully specifies every mode', () => {
+    expect(MODES.length).toBeGreaterThanOrEqual(2)
+    for (const m of MODES) {
+      expect(m.id).toBeTruthy()
+      expect(m.name).toBeTruthy()
+      expect(m.glyph).toBeTruthy()
+      expect(m.hint).toBeTruthy()
+      expect(m.noun).toBeTruthy()
+      expect(typeof m.ao).toBe('boolean')
+      expect(typeof m.prepare).toBe('function')
+    }
+  })
+
+  it('has unique ids', () => {
+    expect(new Set(MODES.map((m) => m.id)).size).toBe(MODES.length)
+  })
+
+  it('gives every mode first-run rows including the colour legend', () => {
+    for (const m of MODES) {
+      const rows = m.rows('Activity')
+      expect(rows.length).toBeGreaterThanOrEqual(3)
+      expect(rows.some((r) => r.title.toLowerCase().includes('activity'))).toBe(true)
+      // every row must render: icon + copy
+      for (const r of rows) {
+        expect(r.icon).toBeTruthy()
+        expect(r.title).toBeTruthy()
+        expect(r.body).toBeTruthy()
+      }
+    }
+  })
+
+  it('resolves a known id and falls back for anything else', () => {
+    expect(getMode('city').id).toBe('city')
+    expect(getMode('farm').id).toBe('farm')
+    // a mode removed in a later version must not strand the app
+    expect(getMode('atlantis').id).toBe(MODES[0].id)
+    expect(getMode('').id).toBe(MODES[0].id)
+  })
+
+  it('validates persisted values against the registry', () => {
+    expect(isViewMode('city')).toBe(true)
+    expect(isViewMode('farm')).toBe(true)
+    // removed in a later version — must not validate
+    expect(isViewMode('forest')).toBe(false)
+    expect(isViewMode('atlantis')).toBe(false)
+    expect(isViewMode(null)).toBe(false)
+    expect(isViewMode(2)).toBe(false)
+  })
+
+  it('cycles through every mode and wraps', () => {
+    let id = DEFAULT_MODE
+    const seen = [id]
+    for (let i = 0; i < MODES.length - 1; i++) {
+      id = nextMode(id).id
+      seen.push(id)
+    }
+    expect(new Set(seen).size).toBe(MODES.length)
+    // one more step returns to the start
+    expect(nextMode(id).id).toBe(DEFAULT_MODE)
+  })
+
+  it('defaults to a mode the registry knows', () => {
+    expect(isViewMode(DEFAULT_MODE)).toBe(true)
+  })
+
+  /**
+   * The minimap rebuilds its static base layer whenever the dot array changes
+   * identity, so dots must be the same array across snapshots and colour modes —
+   * they are positions and language colours, neither of which those affect.
+   */
+  it('hands back the same dot array for one analysis', () => {
+    const a = analysis()
+    const snapshot = a.snapshots[0]
+    for (const mode of MODES) {
+      const first = mode.prepare(a, snapshot, 'language').dots()
+      const again = mode.prepare(a, snapshot, 'activity').dots()
+      expect(first.length).toBeGreaterThan(0)
+      expect(again).toBe(first)
+    }
+  })
+})

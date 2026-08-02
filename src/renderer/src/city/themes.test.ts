@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_THEME_ID, getTheme, THEMES } from './themes'
+import {
+  DEFAULT_THEME_ID,
+  UNLIT_WORLD_FLOOR,
+  getTheme,
+  lightBoost,
+  lightBudget,
+  THEMES
+} from './themes'
 
 describe('theme registry', () => {
   it('exposes the four aesthetics + realistic day/night', () => {
@@ -35,6 +42,8 @@ describe('theme registry', () => {
       expect(typeof t.shopfront.enabled).toBe('boolean')
       expect(t.shopfront.color).toMatch(/^#[0-9a-f]{6}$/i)
       expect(t.shopfront.intensity).toBeGreaterThanOrEqual(0)
+      expect(t.grass).toMatch(/^#[0-9a-f]{6}$/i)
+      expect(t.soil).toMatch(/^#[0-9a-f]{6}$/i)
     }
   })
 
@@ -46,5 +55,35 @@ describe('theme registry', () => {
 
   it('default theme id exists in the registry', () => {
     expect(THEMES.some((t) => t.id === DEFAULT_THEME_ID)).toBe(true)
+  })
+
+  /**
+   * The farm has no lit windows to carry a dark theme, so it boosts dim themes
+   * to a floor. These pin the property that made that necessary — and catch a
+   * new theme that is too dark for a world without emissive geometry.
+   */
+  describe('light budget', () => {
+    it('lifts every theme to the floor for a world that does not glow', () => {
+      for (const t of THEMES) {
+        const boosted = lightBudget(t) * lightBoost(t, UNLIT_WORLD_FLOOR)
+        expect(boosted).toBeGreaterThanOrEqual(UNLIT_WORLD_FLOOR - 1e-9)
+      }
+    })
+
+    it('leaves a theme that is already bright enough untouched', () => {
+      // Daylight carries the farm on its own; boosting it would blow it out
+      expect(lightBoost(getTheme('realistic-day'), UNLIT_WORLD_FLOOR)).toBe(1)
+      // Night is the default, and is the one that went black
+      expect(lightBoost(getTheme('realistic-night'), UNLIT_WORLD_FLOOR)).toBeGreaterThan(2)
+    })
+
+    it('keeps night dimmer than day after boosting', () => {
+      // the floor must not flatten the themes into each other
+      const day = lightBudget(getTheme('realistic-day'))
+      const night =
+        lightBudget(getTheme('realistic-night')) *
+        lightBoost(getTheme('realistic-night'), UNLIT_WORLD_FLOOR)
+      expect(night).toBeLessThan(day)
+    })
   })
 })

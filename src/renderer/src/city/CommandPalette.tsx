@@ -5,6 +5,7 @@ import { formatDate } from '../lib/format'
 import Icon, { type IconName } from '../lib/icons'
 import { THEMES } from './themes'
 import { COLOR_MODES } from './colorModes'
+import { nextMode } from './modes'
 import type { CommitHit, GrepHit } from '../../../shared/types'
 
 interface Command {
@@ -76,13 +77,13 @@ export default function CommandPalette({
     }
     const list: Command[] = []
 
-    const otherView = s.viewMode === 'city' ? 'forest' : 'city'
+    const other = nextMode(s.viewMode)
     list.push({
       id: 'view',
       group: 'View',
-      icon: otherView === 'forest' ? 'forest' : 'city',
-      label: `Switch to ${otherView === 'forest' ? 'Forest' : 'City'} view`,
-      run: act(() => s.setViewMode(otherView))
+      icon: other.icon,
+      label: `Switch to ${other.name} view`,
+      run: act(() => s.setViewMode(other.id))
     })
     list.push({
       id: 'play',

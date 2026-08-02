@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { PullRequestInfo } from '../../../shared/types'
 import { useStore } from '../store'
+import { getMode } from '../city/modes'
 
 const CI_LABEL: Record<PullRequestInfo['ci'], string> = {
   passing: 'checks passing',
@@ -10,27 +11,54 @@ const CI_LABEL: Record<PullRequestInfo['ci'], string> = {
 }
 
 /**
- * GitHub pull requests for the repo, via the `gh` CLI (no token setup — gh owns
- * the auth). Lists open PRs with rolled-up CI state, highlights the current
- * branch's PR, and lets you check one out, open it in the browser, or create a
- * PR for the current branch.
+ * Pull requests for the repo, via the host's own CLI (no token setup — `gh` and
+ * `glab` own the auth). Lists open PRs with rolled-up CI state, highlights the
+ * current branch's PR, and lets you check one out, open it in the browser, or
+ * create a PR for the current branch.
+ *
+ * GitLab merge requests come through the same model; only the wording below
+ * follows the host, so nothing downstream learns a second vocabulary.
  */
+
+/** Host-specific wording — the model stays PR-shaped either way. */
+const VOCAB = {
+  github: {
+    plural: 'Pull Requests',
+    lower: 'pull requests',
+    one: 'pull request',
+    short: 'PR',
+    cli: 'gh',
+    install: 'cli.github.com',
+    login: 'gh auth login'
+  },
+  gitlab: {
+    plural: 'Merge Requests',
+    lower: 'merge requests',
+    one: 'merge request',
+    short: 'MR',
+    cli: 'glab',
+    install: 'gitlab.com/gitlab-org/cli',
+    login: 'glab auth login'
+  }
+} as const
+
 export default function PullRequestsPanel(): React.JSX.Element | null {
   const open = useStore((s) => s.prPanelOpen)
   const setOpen = useStore((s) => s.setPrPanelOpen)
-  const auth = useStore((s) => s.githubAuth)
+  const auth = useStore((s) => s.hostAuth)
   const prs = useStore((s) => s.pullRequests)
   const currentPr = useStore((s) => s.currentPr)
   const loading = useStore((s) => s.prLoading)
   const status = useStore((s) => s.workingStatus)
   const busy = useStore((s) => s.opInProgress !== null)
-  const refreshGitHub = useStore((s) => s.refreshGitHub)
+  const refreshHost = useStore((s) => s.refreshHost)
   const checkoutPr = useStore((s) => s.checkoutPr)
   const createPr = useStore((s) => s.createPr)
   const openExternal = useStore((s) => s.openExternal)
   const reviewPrInCity = useStore((s) => s.reviewPrInCity)
 
   const branch = status?.branch ?? null
+  const words = VOCAB[auth?.host === 'gitlab' ? 'gitlab' : 'github']
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
   const [base, setBase] = useState('main')
@@ -38,7 +66,7 @@ export default function PullRequestsPanel(): React.JSX.Element | null {
   if (!open) return null
 
   const canCreate =
-    !!auth?.authed && auth.isGitHub && !currentPr && !!branch && status?.upstream != null && !busy
+    !!auth?.authed && auth.isRepo && !currentPr && !!branch && status?.upstream != null && !busy
 
   const submitCreate = (): void => {
     const t = title.trim() || (branch ?? '')
@@ -51,9 +79,9 @@ export default function PullRequestsPanel(): React.JSX.Element | null {
   return (
     <div className="side-panel pr-panel">
       <div className="panel-head">
-        <span>Pull Requests</span>
+        <span>{words.plural}</span>
         <div className="pr-head-actions">
-          <button className="pr-refresh" disabled={loading} onClick={() => void refreshGitHub()}>
+          <button className="pr-refresh" disabled={loading} onClick={() => void refreshHost()}>
             ↻
           </button>
           <button className="close" aria-label="Close" onClick={() => setOpen(false)}>
@@ -63,26 +91,34 @@ export default function PullRequestsPanel(): React.JSX.Element | null {
       </div>
 
       <div className="panel-scroll">
-        {loading && prs.length === 0 && <div className="empty">Loading pull requests…</div>}
+        {loading && prs.length === 0 && <div className="empty">{`Loading ${words.lower}…`}</div>}
 
-        {!loading && auth && (!auth.authed || !auth.isGitHub) && (
+        {!loading && auth && (!auth.authed || !auth.isRepo) && (
           <div className="pr-unavailable">
             <p>{auth.reason}</p>
-            {!auth.available && (
+            {/* only name a CLI once we know which forge this is — an unknown
+                host means no GitHub or GitLab remote, and installing gh does
+                not give a repo one */}
+            {!auth.available && auth.host !== 'unknown' && (
               <p className="pr-hint">
-                Install it from <span className="mono">cli.github.com</span>, then run{' '}
-                <span className="mono">gh auth login</span>.
+                Install it from <span className="mono">{words.install}</span>, then run{' '}
+                <span className="mono">{words.login}</span>.
+              </p>
+            )}
+            {auth.host === 'unknown' && (
+              <p className="pr-hint">
+                Pull requests appear here for repositories hosted on GitHub or GitLab.
               </p>
             )}
             {auth.available && !auth.authed && (
               <p className="pr-hint">
-                Run <span className="mono">gh auth login</span> in a terminal, then refresh.
+                Run <span className="mono">{words.login}</span> in a terminal, then refresh.
               </p>
             )}
           </div>
         )}
 
-        {auth?.authed && auth.isGitHub && (
+        {auth?.authed && auth.isRepo && (
           <>
             {currentPr && (
               <section>
@@ -103,7 +139,9 @@ export default function PullRequestsPanel(): React.JSX.Element | null {
             {canCreate && (
               <section className="pr-create">
                 <div className="section-head">
-                  <span>Create PR from {branch}</span>
+                  <span>
+                    Create {words.short} from {branch}
+                  </span>
                 </div>
                 <input
                   type="text"
@@ -127,7 +165,7 @@ export default function PullRequestsPanel(): React.JSX.Element | null {
                     />
                   </label>
                   <button className="primary" disabled={busy} onClick={submitCreate}>
-                    Create pull request
+                    {`Create ${words.one}`}
                   </button>
                 </div>
               </section>
@@ -135,7 +173,7 @@ export default function PullRequestsPanel(): React.JSX.Element | null {
 
             {!currentPr && !canCreate && branch && status?.upstream == null && (
               <div className="pr-hint pr-pad">
-                Publish this branch (push) to open a pull request for it.
+                {`Publish this branch (push) to open a ${words.one} for it.`}
               </div>
             )}
 
@@ -143,7 +181,9 @@ export default function PullRequestsPanel(): React.JSX.Element | null {
               <div className="section-head">
                 <span>Open ({prs.length})</span>
               </div>
-              {prs.length === 0 && !loading && <div className="empty">No open pull requests</div>}
+              {prs.length === 0 && !loading && (
+                <div className="empty">{`No open ${words.lower}`}</div>
+              )}
               {prs
                 .filter((pr) => pr.number !== currentPr?.number)
                 .map((pr) => (
@@ -180,6 +220,8 @@ function PrRow({
   onReview: (n: number, title: string) => void
   busy: boolean
 }): React.JSX.Element {
+  // "Review in city" was still the label with a farm on screen
+  const noun = getMode(useStore((s) => s.viewMode)).noun
   return (
     <div className={`pr-row ${current ? 'current' : ''}`}>
       <div className="pr-main">
@@ -199,9 +241,9 @@ function PrRow({
       <div className="pr-actions">
         <button
           onClick={() => onReview(pr.number, pr.title)}
-          title="Light up this PR's files in the city"
+          title={`Light up this PR's files in the ${noun}`}
         >
-          Review in city
+          Review in {noun}
         </button>
         {!current && (
           <button disabled={busy} onClick={() => onCheckout(pr.number)}>

@@ -1,5 +1,6 @@
 import { useStore } from '../store'
 import { COLOR_MODES } from './colorModes'
+import { getMode } from './modes'
 import Icon from '../lib/icons'
 
 /**
@@ -20,64 +21,20 @@ export default function Onboarding(): React.JSX.Element | null {
   if (!visible) return null
 
   const colorName = COLOR_MODES.find((m) => m.id === colorMode)?.name ?? 'language'
-  const isCity = viewMode === 'city'
+  const mode = getMode(viewMode)
 
   const close = (): void => {
     if (helpOpen) setHelpOpen(false)
     else dismiss()
   }
 
-  const rows = isCity
-    ? [
-        {
-          icon: 'city' as const,
-          title: 'Buildings are files',
-          body: 'Taller = more lines of code.'
-        },
-        {
-          icon: 'branch' as const,
-          title: 'Districts are folders',
-          body: 'Nested plots mirror your directory tree.'
-        },
-        {
-          icon: 'color' as const,
-          title: `Colour = ${colorName.toLowerCase()}`,
-          body: 'See the legend (bottom-right) for what each colour means.'
-        },
-        {
-          icon: 'flame' as const,
-          title: 'Glowing beacons are hotspots',
-          body: 'The files changing most this week.'
-        }
-      ]
-    : [
-        {
-          icon: 'forest' as const,
-          title: 'Trees are files',
-          body: 'Bigger canopy = more lines of code.'
-        },
-        {
-          icon: 'branch' as const,
-          title: 'Groves are folders',
-          body: 'Each clearing gathers one directory’s files.'
-        },
-        {
-          icon: 'color' as const,
-          title: `Colour = ${colorName.toLowerCase()}`,
-          body: 'See the legend (bottom-right) for what each colour means.'
-        },
-        {
-          icon: 'flame' as const,
-          title: 'Glowing beacons are hotspots',
-          body: 'The files changing most this week.'
-        }
-      ]
+  const rows = mode.rows(colorName)
 
   return (
     <div className="onboard-backdrop" onMouseDown={close}>
       <div className="onboard-card" onMouseDown={(e) => e.stopPropagation()}>
         <div className="onboard-head">
-          <h2>Reading the {isCity ? 'city' : 'forest'}</h2>
+          <h2>Reading the {mode.noun}</h2>
           <p>Your repository, rendered in 3D. Here’s the key:</p>
         </div>
         <div className="onboard-rows">

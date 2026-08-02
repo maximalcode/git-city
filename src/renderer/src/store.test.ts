@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { WorkingStatus } from '../../shared/types'
-import { statusFingerprint, useStore } from './store'
+import { isLiveState, shouldSurfaceError, statusFingerprint, useStore } from './store'
 
 function baseStatus(): WorkingStatus {
   return {
@@ -50,6 +50,25 @@ describe('statusFingerprint', () => {
   })
 })
 
+describe('shouldSurfaceError', () => {
+  it('stays quiet only when the merge view takes the conflict', () => {
+    expect(shouldSurfaceError('conflict', true)).toBe(false)
+  })
+
+  it('reports a conflict-coded failure the merge view will not handle', () => {
+    // this is Commit: a spinner that appeared, disappeared and changed
+    // nothing, and "Stash & switch" promising a stash it never made
+    expect(shouldSurfaceError('conflict', false)).toBe(true)
+  })
+
+  it('reports every other failure regardless', () => {
+    for (const code of ['auth', 'rejected', 'dirty', 'unknown', undefined] as const) {
+      expect(shouldSurfaceError(code, true)).toBe(true)
+      expect(shouldSurfaceError(code, false)).toBe(true)
+    }
+  })
+})
+
 describe('preferences', () => {
   it('toggleReduceMotion flips the flag', () => {
     const start = useStore.getState().reduceMotion
@@ -62,7 +81,7 @@ describe('preferences', () => {
   it('resetPreferences returns every appearance/behaviour pref to its default', () => {
     useStore.setState({
       themeId: 'neon',
-      viewMode: 'forest',
+      viewMode: 'farm',
       timeOfDay: 0.12,
       showHotspots: false,
       diffSplit: true,
@@ -77,5 +96,47 @@ describe('preferences', () => {
     expect(s.diffSplit).toBe(false)
     expect(s.reduceMotion).toBe(false)
     expect(s.onboarded).toBe(false)
+  })
+})
+
+/**
+ * The window refreshAnalysis used to ask "is the user watching the newest
+ * commit?" in — and why it must not ask isLiveState there.
+ */
+describe('isLiveState during a reanalyse', () => {
+  function stateWith(snapshotHashes: string[], index: number, headHash: string) {
+    return {
+      analysis: { snapshots: snapshotHashes.map((hash) => ({ hash })) },
+      snapshotIndex: index,
+      workingStatus: { ...baseStatus(), headHash }
+    } as unknown as Parameters<typeof isLiveState>[0]
+  }
+
+  it('reports "not live" once the status is refreshed but the analysis is not', () => {
+    // runOp refreshes the working status before it reanalyses, so headHash is
+    // already the commit just made while the analysis still ends at the previous
+    // one. Reading that as "the user is browsing history" left them one snapshot
+    // in the past after every single commit.
+    expect(isLiveState(stateWith(['old111', 'old222'], 1, 'new333'))).toBe(false)
+  })
+
+  it('reports "live" once the analysis has caught up', () => {
+    expect(isLiveState(stateWith(['old111', 'new333'], 1, 'new333abc'))).toBe(true)
+  })
+
+  it('reports "not live" when the user really is browsing history', () => {
+    expect(isLiveState(stateWith(['old111', 'old222'], 0, 'old222'))).toBe(false)
+  })
+
+  it('reports "live" for a repository with no commits', () => {
+    // there is no history to browse, so the Changes panel must not offer to
+    // "jump to now" from a snapshot that does not exist
+    expect(isLiveState(stateWith([], 0, ''))).toBe(true)
+  })
+
+  it('reports "not live" with no repository open at all', () => {
+    expect(isLiveState({ analysis: null } as unknown as Parameters<typeof isLiveState>[0])).toBe(
+      false
+    )
   })
 })

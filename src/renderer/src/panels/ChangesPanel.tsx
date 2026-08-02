@@ -112,6 +112,20 @@ export default function ChangesPanel(): React.JSX.Element | null {
     }
   }
 
+  /**
+   * Clears the message only once the commit has actually landed. Clearing it
+   * up front threw away whatever the user had written every time the commit
+   * failed — a carefully worded multi-paragraph message, unrecoverable, next
+   * to a toast explaining the failure (#26).
+   */
+  const runCommit = async (): Promise<void> => {
+    const before = useStore.getState().opError
+    await commitAction(message, amend, sign)
+    if (useStore.getState().opError !== before) return
+    setMessage('')
+    setAmend(false)
+  }
+
   const doCommit = (): void => {
     const pushed = status && status.upstream && status.ahead === 0
     if (amend && pushed) {
@@ -120,17 +134,11 @@ export default function ChangesPanel(): React.JSX.Element | null {
         body: 'This commit was already pushed. Amending rewrites it, so you will not be able to push the change without a force-push (which Git City does not do). Continue?',
         confirmLabel: 'Amend anyway',
         danger: true,
-        onConfirm: () => {
-          void commitAction(message, amend, sign)
-          setMessage('')
-          setAmend(false)
-        }
+        onConfirm: () => void runCommit()
       })
       return
     }
-    void commitAction(message, amend, sign)
-    setMessage('')
-    setAmend(false)
+    void runCommit()
   }
 
   return (

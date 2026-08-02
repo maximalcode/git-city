@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import type {
   BranchInfo,
-  GitHubAuth,
+  HostAuth,
   OpResult,
   ProgressInfo,
   HunkMode,
@@ -18,6 +18,8 @@ import type {
   WorktreeInfo
 } from '../../shared/types'
 import { DEFAULT_THEME_ID } from './city/themes'
+import { DEFAULT_MODE, isViewMode, type ViewMode } from './city/modes'
+import { repoWarning, type RepoWarning } from './lib/repoScale'
 import type { ColorMode } from './city/colorModes'
 
 export type { ColorMode }
@@ -38,14 +40,16 @@ function saveTheme(id: string): void {
   }
 }
 
-export type ViewMode = 'city' | 'forest'
+export type { ViewMode }
 const VIEW_KEY = 'gitcity.view'
 function loadViewMode(): ViewMode {
   try {
+    // validated against the registry, so a mode removed in a later version
+    // falls back instead of persisting a value nothing can render
     const v = localStorage.getItem(VIEW_KEY)
-    return v === 'forest' ? 'forest' : 'city'
+    return isViewMode(v) ? v : DEFAULT_MODE
   } catch {
-    return 'city'
+    return DEFAULT_MODE
   }
 }
 function saveViewMode(mode: ViewMode): void {
@@ -124,9 +128,16 @@ function saveDiffSplit(on: boolean): void {
 }
 
 const REDUCEMOTION_KEY = 'gitcity.reducemotion'
+/**
+ * Defaults to the OS setting until the user says otherwise. Someone who has
+ * asked their whole system for less motion should not have to find a checkbox
+ * in here as well — and once they do touch it, their choice is what persists.
+ */
 function loadReduceMotion(): boolean {
   try {
-    return localStorage.getItem(REDUCEMOTION_KEY) === 'on'
+    const stored = localStorage.getItem(REDUCEMOTION_KEY)
+    if (stored !== null) return stored === 'on'
+    return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
   } catch {
     return false
   }
@@ -215,7 +226,7 @@ const REPO_STATE_RESET: Partial<GitCityState> = {
   tags: [],
   submodules: [],
   worktrees: [],
-  githubAuth: null,
+  hostAuth: null,
   pullRequests: [],
   currentPr: null,
   prPanelOpen: false,
@@ -249,6 +260,8 @@ export function statusFingerprint(s: WorkingStatus | null): string {
 
 interface GitCityState {
   screen: 'welcome' | 'loading' | 'city'
+  /** a repo big enough to be worth warning about, awaiting the user's go-ahead */
+  pendingRepo: { path: string; warning: RepoWarning } | null
   analysis: RepoAnalysis | null
   snapshotIndex: number
   playing: boolean
@@ -271,7 +284,7 @@ interface GitCityState {
   tags: TagInfo[]
   submodules: SubmoduleInfo[]
   worktrees: WorktreeInfo[]
-  githubAuth: GitHubAuth | null
+  hostAuth: HostAuth | null
   pullRequests: PullRequestInfo[]
   currentPr: PullRequestInfo | null
   prPanelOpen: boolean
@@ -325,6 +338,8 @@ interface GitCityState {
   init(): void
   openLocal(): Promise<void>
   openPath(path: string): Promise<void>
+  confirmPendingRepo(): Promise<void>
+  cancelPendingRepo(): void
   openUrl(url: string): Promise<void>
   setSearchOpen(open: boolean): void
   clearRecent(): void
@@ -364,7 +379,7 @@ interface GitCityState {
   addWorktree(path: string, ref: string): Promise<void>
   removeWorktree(path: string, force: boolean): Promise<void>
   setPrPanelOpen(open: boolean): void
-  refreshGitHub(): Promise<void>
+  refreshHost(): Promise<void>
   checkoutPr(number: number): Promise<void>
   createPr(base: string, title: string, body: string): Promise<void>
   reviewPrInCity(number: number, title: string): Promise<void>
@@ -422,6 +437,7 @@ let lastFingerprint = ''
 
 export const useStore = create<GitCityState>((set, get) => ({
   screen: 'welcome',
+  pendingRepo: null,
   analysis: null,
   snapshotIndex: 0,
   playing: false,
@@ -443,7 +459,7 @@ export const useStore = create<GitCityState>((set, get) => ({
   tags: [],
   submodules: [],
   worktrees: [],
-  githubAuth: null,
+  hostAuth: null,
   pullRequests: [],
   currentPr: null,
   prPanelOpen: false,
@@ -510,8 +526,29 @@ export const useStore = create<GitCityState>((set, get) => ({
 
   openPath: async (path: string) => {
     if (!hasApi()) return
+    // Probe the size first: a monorepo can take minutes to replay, and a
+    // progress bar with no sense of scale reads as a hang (#12). Cheap enough
+    // (two counting calls) that the common case is unaffected.
+    try {
+      const warning = repoWarning(await window.gitCity.repoSize(path))
+      if (warning) {
+        set({ pendingRepo: { path, warning } })
+        return
+      }
+    } catch {
+      // if sizing fails, just open — never block on the advisory path
+    }
     await loadRepo(set, get, () => window.gitCity.analyzeRepo(path, 50), path)
   },
+
+  confirmPendingRepo: async () => {
+    const pending = get().pendingRepo
+    if (!pending) return
+    set({ pendingRepo: null })
+    await loadRepo(set, get, () => window.gitCity.analyzeRepo(pending.path, 50), pending.path)
+  },
+
+  cancelPendingRepo: () => set({ pendingRepo: null }),
 
   setSearchOpen: (searchOpen) => set({ searchOpen }),
 
@@ -720,23 +757,23 @@ export const useStore = create<GitCityState>((set, get) => ({
 
   setPrPanelOpen: (prPanelOpen) => {
     set({ prPanelOpen })
-    if (prPanelOpen) void get().refreshGitHub()
+    if (prPanelOpen) void get().refreshHost()
   },
-  refreshGitHub: async () => {
+  refreshHost: async () => {
     const { repoPath } = get()
     if (!hasApi() || !repoPath) return
     set({ prLoading: true })
     try {
-      const auth = await window.gitCity.ghStatus(repoPath)
-      if (!auth.authed || !auth.isGitHub) {
-        set({ githubAuth: auth, pullRequests: [], currentPr: null })
+      const auth = await window.gitCity.hostStatus(repoPath)
+      if (!auth.authed || !auth.isRepo) {
+        set({ hostAuth: auth, pullRequests: [], currentPr: null })
         return
       }
       const [pullRequests, currentPr] = await Promise.all([
         window.gitCity.listPullRequests(repoPath),
         window.gitCity.currentBranchPr(repoPath)
       ])
-      set({ githubAuth: auth, pullRequests, currentPr })
+      set({ hostAuth: auth, pullRequests, currentPr })
     } catch {
       /* leave prior state; gh hiccup */
     } finally {
@@ -757,7 +794,7 @@ export const useStore = create<GitCityState>((set, get) => ({
     await runOp(set, get, 'Creating pull request…', (repo) =>
       window.gitCity.createPr(repo, base, title, body)
     )
-    if (!get().opError) await get().refreshGitHub()
+    if (!get().opError) await get().refreshHost()
   },
   reviewPrInCity: async (number, title) => {
     const { repoPath } = get()
@@ -852,11 +889,24 @@ export const useStore = create<GitCityState>((set, get) => ({
   refreshAnalysis: async () => {
     const { repoPath } = get()
     if (!hasApi() || !repoPath) return
+    // Decided up front, and from the timeline alone.
+    //
+    // isLiveState() also compares the working tree's headHash against the newest
+    // snapshot, which is right for its other callers and guaranteed wrong here:
+    // runOp refreshes the status before it reanalyses, so by this point headHash
+    // is already the commit we are about to add. Asked afterwards it answered
+    // "not live" for every commit, and left the user one snapshot in the past —
+    // timeline a notch short, "Viewing history" banner up, live working-tree
+    // layer switched off, immediately after committing.
+    const before = get()
+    const wasLive =
+      !before.analysis ||
+      before.analysis.snapshots.length === 0 ||
+      before.snapshotIndex === before.analysis.snapshots.length - 1
     set({ reanalyzing: true, historyStale: false })
     try {
       let analysis = await window.gitCity.analyzeIncremental(repoPath)
       if (!analysis) analysis = await window.gitCity.analyzeRepo(repoPath, 50)
-      const wasLive = isLiveState(get())
       set((s) => ({
         analysis,
         // if the user was watching the latest state, keep them there
@@ -1062,7 +1112,7 @@ async function runOp(
       const src = get().workingStatus?.opState ?? 'merge'
       set({ mergeView: { active: result.conflicts?.[0] ?? null, source: src } })
     }
-    if (result.code !== 'conflict') {
+    if (shouldSurfaceError(result.code, opts.conflictsOpenMerge === true)) {
       set({
         opError: { message: result.message ?? 'Operation failed.', gitOutput: result.gitOutput }
       })
@@ -1117,17 +1167,34 @@ async function loadRepo(
       await get().refreshSubmodules()
       await get().refreshWorktrees()
       // GitHub is a network call — populate the PR/CI state in the background
-      void get().refreshGitHub()
+      void get().refreshHost()
     }
   } catch (err) {
     set({ screen: 'welcome', error: cleanError(err) })
   }
 }
 
+/**
+ * Should a failed operation put a message on screen?
+ *
+ * A 'conflict' failure is only *handled* when the merge view opens to deal
+ * with it. Swallowing every conflict-coded failure made Commit a spinner that
+ * appeared, disappeared and changed nothing, and let "Stash & switch" promise
+ * a stash it had never made (#26).
+ */
+export function shouldSurfaceError(code: OpResult['code'], conflictsOpenMerge: boolean): boolean {
+  return !(code === 'conflict' && conflictsOpenMerge)
+}
+
 /** Derived: are we viewing HEAD with a status that matches the analyzed head? */
 export function isLiveState(s: GitCityState): boolean {
   const { analysis, snapshotIndex, workingStatus } = s
-  if (!analysis || analysis.snapshots.length === 0) return false
+  if (!analysis) return false
+  // A repository with no commits has no history to browse, so it is always at
+  // "now" — answering false put a "Viewing history — Jump to now" banner on the
+  // Changes panel of a fresh `git init`, offering to jump to a snapshot that
+  // does not exist (#27).
+  if (analysis.snapshots.length === 0) return true
   if (snapshotIndex !== analysis.snapshots.length - 1) return false
   const headSnap = analysis.snapshots[analysis.snapshots.length - 1]
   if (!workingStatus) return true

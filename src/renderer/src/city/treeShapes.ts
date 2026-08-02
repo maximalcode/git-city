@@ -8,15 +8,16 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
  *  - `trunkGeometry(kind)`   a tapered bark cylinder (rendered with one brown
  *                            material, no per-instance colour).
  *  - `foliageGeometry(kind)` a cluster of overlapping spheres forming a full
- *                            canopy (rendered per-instance-coloured: fixed green
- *                            for street trees, the colour-mode hue in the forest).
+ *                            canopy (rendered per-instance-coloured; fixed green
+ *                            for the city's street trees).
  *
  * Modelled with the base of the trunk at the origin, growing +Y. Three size
  * classes give the skyline variety; per-instance scale adds the rest.
  */
 
 export type TreeKind = 'bush' | 'tree' | 'ancient'
-export const TREE_KINDS: TreeKind[] = ['bush', 'tree', 'ancient']
+// Only 'tree' is planted now that the street trees are the sole user; the other
+// two specs stay because they define the shared trunk/canopy proportions.
 
 interface Spec {
   trunkH: number
@@ -63,19 +64,6 @@ const SPECS: Record<TreeKind, Spec> = {
 
 const trunkCache = new Map<TreeKind, BufferGeometry>()
 const foliageCache = new Map<TreeKind, BufferGeometry>()
-
-/** Approx model-space height of a tree kind (trunk base → top of the canopy). */
-export function treeHeight(kind: TreeKind): number {
-  const s = SPECS[kind]
-  return Math.max(...s.blobs.map((b) => b[1] + b[3]))
-}
-
-/** Pick a size class from a line count (used by the forest layout). */
-export function treeKindFor(loc: number): TreeKind {
-  if (loc >= 800) return 'ancient'
-  if (loc >= 120) return 'tree'
-  return 'bush'
-}
 
 export function trunkGeometry(kind: TreeKind): BufferGeometry {
   const cached = trunkCache.get(kind)

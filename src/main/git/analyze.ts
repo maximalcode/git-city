@@ -1,6 +1,7 @@
 import { basename } from 'path'
-import type { FileState, ProgressInfo, RepoAnalysis, Snapshot } from '../../shared/types'
+import type { FileState, ProgressInfo, RepoAnalysis, RepoSize, Snapshot } from '../../shared/types'
 import { runGit, runGitLines, runGitResult } from './exec'
+import { FriendlyError } from './result'
 
 /**
  * Repo analysis built from a single streaming pass of
@@ -181,13 +182,47 @@ async function replayRange(
  */
 const analysisCache = new Map<string, RepoAnalysis>()
 
+/**
+ * Commit and file counts, cheaply — two counting calls, no history replay.
+ *
+ * The full analysis streams every commit's numstat, which on a monorepo runs
+ * for minutes (see #12). This is what lets the UI say so up front instead of
+ * leaving someone staring at a bar that looks stuck.
+ */
+export async function repoSize(repoPath: string): Promise<RepoSize> {
+  let commits = 0
+  try {
+    commits = parseInt(
+      (await runGit(repoPath, ['rev-list', '--count', '--first-parent', 'HEAD'])).trim(),
+      10
+    )
+  } catch {
+    commits = 0 // unborn HEAD
+  }
+  if (!Number.isFinite(commits)) commits = 0
+
+  let files = 0
+  try {
+    const out = await runGit(repoPath, ['ls-files'])
+    files = out.length === 0 ? 0 : out.trimEnd().split('\n').length
+  } catch {
+    files = 0
+  }
+  return { commits, files }
+}
+
 export async function analyzeRepo(
   repoPath: string,
   sampleTarget: number,
   onProgress: (p: ProgressInfo) => void
 ): Promise<RepoAnalysis> {
   const inside = (
-    await runGit(repoPath, ['rev-parse', '--is-inside-work-tree']).catch(() => 'false')
+    await runGit(repoPath, ['rev-parse', '--is-inside-work-tree']).catch((err) => {
+      // "git isn't installed" must not be swallowed into "not a repository" —
+      // it is the one failure here the user can actually do something about
+      if (err instanceof FriendlyError) throw err
+      return 'false'
+    })
   ).trim()
   if (inside !== 'true') {
     throw new Error('The selected folder is not a git repository.')

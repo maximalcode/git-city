@@ -703,6 +703,25 @@
   flex-direction: column;
   overflow: hidden;
 }
+/* the conflicted file could not be read, or changed under us before a write */
+.merge-error,
+.merge-notice {
+  margin: 14px 18px;
+  padding: 10px 14px;
+  border-radius: 9px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.merge-error {
+  border: 1px solid rgba(255, 107, 107, 0.4);
+  background: rgba(255, 107, 107, 0.08);
+  color: var(--text);
+}
+.merge-notice {
+  border: 1px solid rgba(110, 200, 255, 0.35);
+  background: rgba(110, 200, 255, 0.08);
+  color: var(--text);
+}
 .merge-segments {
   flex: 1;
   overflow-y: auto;
@@ -1458,9 +1477,15 @@
   font-size: 9.5px;
   letter-spacing: 0.01em;
 }
-.rail-btn:hover {
+.rail-btn:hover:not(.off) {
   background: rgba(255, 255, 255, 0.06);
   color: var(--text);
+}
+/* a tool that needs a history, on a repo that has none: dim and inert, but
+   still hoverable so its tooltip can say why */
+.rail-btn.off {
+  opacity: 0.35;
+  cursor: not-allowed;
 }
 .rail-btn.active {
   background: rgba(255, 179, 71, 0.14);
@@ -2307,8 +2332,18 @@
   font-family: Consolas, monospace;
   color: var(--accent-2);
 }
-.empty-repo-card .primary {
+.empty-repo-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
   margin-top: 6px;
+}
+.empty-repo-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
 }
 
 /* ---------- v14: settings panel ---------- */

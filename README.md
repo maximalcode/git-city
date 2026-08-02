@@ -1,23 +1,73 @@
 # Git City
 
+[![CI](https://github.com/maximalcode/git-city/actions/workflows/ci.yml/badge.svg)](https://github.com/maximalcode/git-city/actions/workflows/ci.yml)
+[![Latest release](https://img.shields.io/github/v/release/maximalcode/git-city?display_name=tag&sort=semver)](https://github.com/maximalcode/git-city/releases/latest)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 Watch your git repository come alive as a 3D city — and work in it. Folders
 become districts, files become buildings (height = lines of code), a timeline
 scrubs through history while the city grows, and a full git client lives on
 top: stage, commit, fetch, pull, push, branch, merge, rebase, stash,
 cherry-pick and tag without leaving the city.
 
-Prefer something calmer? Press `V` and the same repository becomes a **forest**:
-every file a tree in its folder's grove, canopies growing and shrinking with
-the line count as you scrub through history.
+![Git City replaying a repository's history](docs/media/demo.gif)
 
-![icon](build/icon.png)
+Prefer something calmer? Press `V` and the same repository becomes a **farm**:
+files are fields of crop that rise and fall with the line count, folders are
+fenced parcels with their own barn and silo, and livestock work their way across
+the holding.
+
+## Download
+
+Grab the latest build from **[Releases](https://github.com/maximalcode/git-city/releases/latest)**
+— a Windows installer and DMGs for both Apple Silicon and Intel Macs. Linux:
+build from source (see [Development](#development)).
+
+Git City shells out to `git`, so you need **git on your PATH**. It never asks
+for a token and stores nothing: pull requests go through the `gh` / `glab` CLI,
+signing stays with gpg-agent / ssh-agent, and there is no telemetry.
+
+> **The installers are unsigned.** Windows SmartScreen shows "unknown
+> publisher" — choose _More info → Run anyway_. macOS is blunter and calls the
+> app _"damaged"_: right-click the app → **Open**, or run
+> `xattr -d com.apple.quarantine "/Applications/Git City.app"`. Signing is on
+> the roadmap; it needs a paid certificate.
+
+## What it looks like
+
+|                                                                     |                                                         |
+| ------------------------------------------------------------------- | ------------------------------------------------------- |
+| ![Night, coloured by language](docs/media/city-night.jpg)           | ![Neon, coloured by activity](docs/media/city-neon.jpg) |
+| **Realistic Night**, coloured by language                           | **Neon**, coloured by how often files change            |
+| ![Golden Hour, coloured by author](docs/media/city-author.jpg)      |                                                         |
+| **Golden Hour**, coloured by who touched each file last             |                                                         |
+| ![Farm view](docs/media/farm.jpg)                                   |                                                         |
+| **Farm view** — fields of crop, fenced parcels, barns and livestock |                                                         |
 
 ## Features
 
+- **Two ways to see a repo** — the 3D **City** and the **Farm** (`V` switches)
+- **Scrub the whole history** — a full replay fits in ~10 seconds, and the sky
+  tracks each commit's local hour as you go
+- **6 colour encodings** — language, activity, author, recency, size, file type,
+  each with a legend
+- **A real git client on top** — stage by file, hunk or individual line, commit,
+  sync, branch, merge, rebase, stash, cherry-pick, tag, and an interactive
+  rebase editor
+- **Time machine** — one-click undo of the last HEAD move, and a reflog panel to
+  rewind to any past position or recover a lost commit
+- **Pull requests without leaving** — GitHub via `gh`, GitLab via `glab`, with CI
+  status; light up a PR's changed files across the city to see its blast radius
+- **Command palette** (`Ctrl`/`Cmd`+`K`) — every action, plus `@` to search
+  commits and `:` to grep code
+- **Time-lapse export** — record the whole history growing as a WebM
+
+<details>
+<summary><b>The complete feature list</b></summary>
+
 **Visualization**
 
-- **Two view modes** (`V` to switch, persisted): the 3D **City** and the
-  **Forest**
+- **Two view modes** (`V` switches, persisted): the 3D **City** and the **Farm**
 - City: districts per folder, buildings per file with **photo-real facades**
   (per-building window grids in three styles, ground-floor shopfronts, rooftop
   clutter — AC units, water tanks, antennas — and a contact-shadow base); real
@@ -26,10 +76,11 @@ the line count as you scrub through history.
   traffic lights at big junctions; commit-weighted traffic in four body styles
   (sedan / wagon / van / bus, plus bikes — hover-craft in Neon) with head/tail
   lights; lamp posts and street trees along the roads
-- Forest: every file is a tree (bush / tree / ancient by size) standing in its
-  folder's grove; **cross-plane alpha-textured canopies** grow in and breathe
-  with the live line count and colour by the active colour mode; a vertex-shader
-  wind sway keeps the leaves alive
+- Farm: every file is a cultivated field whose crop rises and falls with the
+  live line count, and whose **crop class follows the file's size** — leafy rows
+  for small files, standing cereal for mid-size, orchards of fruit trees for the
+  largest. Folders are fenced parcels, each with a barn and silo (wind pumps on
+  the big ones), worked by grazing herds of cattle, sheep, pigs and chickens
 - Timeline playback: scrub or play the entire history (a full replay fits in
   ~10 seconds)
 - 5 themes (Realistic Day/Night, Neon, Golden Hour, Midnight Ink) with
@@ -86,12 +137,13 @@ the line count as you scrub through history.
   **word-level intra-line highlighting** — plus file history (follows renames)
   and blame
 - Commit graph with branch topology, ref chips, checkout/cherry-pick actions
-- **Pull requests** (GitHub, via the `gh` CLI — no token setup): list open PRs
-  with rolled-up CI status, see the current branch's PR, check one out, open it
-  in the browser, or create a PR for the current branch. Falls back to a clear
-  hint when `gh` is missing or logged out
+- **Pull requests** (GitHub via the `gh` CLI, GitLab via `glab` — no token setup
+  either way): list open PRs/MRs with rolled-up CI status, see the current
+  branch's, check one out, open it in the browser, or create one for the current
+  branch. GitLab merge requests use the same model — only the wording follows
+  the host. Falls back to a clear hint when the CLI is missing or logged out
 - **Review a PR in the city**: pick any PR and its changed files light up with
-  blue beacons across the city/forest — see a pull request's blast radius at a
+  blue beacons across the city/farm — see a pull request's blast radius at a
   glance, then step the camera through each touched file. A banner names the PR
   and counts the files; Escape (or Exit) ends the review
 - **Fresh repos welcome**: open a repository with no commits yet (a brand-new
@@ -113,6 +165,8 @@ the line count as you scrub through history.
   growing from first commit to now, in ~10 seconds. Uses the browser's own
   MediaRecorder, so no new dependency
 
+</details>
+
 **Keyboard shortcuts**
 
 | Key              | Action                         |
@@ -124,7 +178,7 @@ the line count as you scrub through history.
 | `G`              | Commit graph                   |
 | `U`              | Time machine (reflog undo)     |
 | `P`              | Pull requests                  |
-| `V`              | Toggle City / Forest view      |
+| `V`              | Toggle City / Farm view        |
 | `/`              | Find a file (arrows + Enter)   |
 | `,`              | Settings                       |
 | `Space`          | Play/pause the timeline        |
@@ -145,12 +199,31 @@ Git operations run in the Electron main process through a per-repo lock (two
 of our own commands never race for `index.lock`), with a file watcher that
 keeps the UI live and mutes itself during operations.
 
+### How big a repo can it take?
+
+Most projects open instantly. The honest limits, measured rather than guessed:
+
+| Repo size                                  | What to expect                                                                                                                                                          |
+| ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| up to ~5,000 files                         | opens in seconds, city reads clearly                                                                                                                                    |
+| ~20,000 files                              | still fine; layout takes a fraction of a second                                                                                                                         |
+| ~80,000 files (a monorepo like TypeScript) | a couple of minutes to read the history, and the streets stop being drawn — plots get too small to fit a road between them, so you get a dense block rather than a city |
+
+Git City checks the size before opening and warns you if it is going to be
+slow, so you can back out rather than watch a progress bar and wonder. The
+history pass is the expensive part and scales with commit count: a full
+`microsoft/TypeScript` clone (14,271 first-parent commits, 81,368 files) takes
+about 130 seconds and peaks around 540 MB.
+
+Making very large repos genuinely readable — collapsing deep directories rather
+than drawing every file — is tracked as an open issue, not a solved problem.
+
 ## Development
 
 ```bash
 npm install
 npm run dev        # launch the Electron app with hot reload
-npm test           # vitest: git backend, parsers, layout, themes (~240 tests)
+npm test           # vitest: git backend, parsers, layout, themes (~380 tests)
 npm run typecheck
 npm run lint       # ESLint (typescript-eslint + react-hooks)
 npm run format     # Prettier
@@ -167,11 +240,21 @@ view modes fully explorable:
 npx vite -c vite.preview.config.ts
 ```
 
+Add a count to scale the synthetic repo — `?mock=20000` — which is how the
+scene gets measured against monorepo-sized input without cloning one.
+
+The README media is captured from that preview, so it is reproducible rather
+than hand-cropped (needs [gifski](https://gif.ski) for the hero animation):
+
+```bash
+node scripts/capture-media.mjs
+```
+
 ## Packaging
 
 ```bash
 npm run dist:win   # NSIS installer → dist/ (build on Windows)
-npm run dist:mac   # DMG → dist/ (must be built on a Mac)
+npm run dist:mac   # arm64 + x64 DMGs → dist/ (must be built on a Mac)
 ```
 
 The app icon is generated procedurally: `node scripts/make-icon.js`.
@@ -192,7 +275,7 @@ signing cert / Apple Developer ID + notarization).
 - `src/preload/` — typed `window.gitCity` bridge.
 - `src/renderer/` — React + react-three-fiber UI. `layout/` holds the pure,
   unit-tested scene math: the squarified treemap, the street graph derived
-  from it, and the forest layout. `city/` renders both scenes (instanced
+  from it, and the farm layout. `city/` renders both scenes (instanced
   buildings, district plates, streets with sidewalks, traffic, street furniture,
   trees, effects) behind a mode-agnostic `SceneView` shell; `panels/` holds the
   git client UI; `store.ts` (zustand) is the single state funnel.
@@ -203,3 +286,16 @@ MapControls (see `city/CameraRig.tsx`), and drei's text stack embeds a
 base64 WASM blob that antivirus heuristics love to false-positive on. All
 vehicle and tree geometry is likewise built in-code from merged three.js
 primitives, no external models.
+
+## Contributing
+
+Development happens through GitHub issues — see [CONTRIBUTING.md](CONTRIBUTING.md)
+for the setup and the branch/PR flow. Bug reports and feature requests are
+welcome; there are issue templates for both.
+
+## License
+
+[MIT](LICENSE) © Nickel Christ
+
+Bundled textures are CC0 from [ambientCG](https://ambientcg.com) — see
+[ATTRIBUTION.md](src/renderer/src/assets/textures/ATTRIBUTION.md).

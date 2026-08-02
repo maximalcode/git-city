@@ -29,6 +29,11 @@ mac:
   category: public.app-category.developer-tools
   icon: build/icon.png
   target:
-    - dmg
+    - target: dmg
+      # Intel Macs are still common; arm64 alone would strand them. The x64
+      # DMG is a cross-build from the Apple Silicon runner.
+      arch:
+        - arm64
+        - x64
 dmg:
-  artifactName: ${name}-${version}.${ext}
+  artifactName: ${name}-${version}-${arch}.${ext}

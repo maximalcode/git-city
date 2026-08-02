@@ -1,5 +1,6 @@
 import { useStore } from '../store'
 import { THEMES } from '../city/themes'
+import { MODES } from '../city/modes'
 
 /**
  * One home for every persisted preference. Most are also reachable from the top
@@ -75,18 +76,15 @@ export default function SettingsPanel(): React.JSX.Element | null {
           <div className="settings-row">
             <span>View</span>
             <div className="seg">
-              <button
-                className={viewMode === 'city' ? 'active' : ''}
-                onClick={() => setViewMode('city')}
-              >
-                City
-              </button>
-              <button
-                className={viewMode === 'forest' ? 'active' : ''}
-                onClick={() => setViewMode('forest')}
-              >
-                Forest
-              </button>
+              {MODES.map((m) => (
+                <button
+                  key={m.id}
+                  className={viewMode === m.id ? 'active' : ''}
+                  onClick={() => setViewMode(m.id)}
+                >
+                  {m.name}
+                </button>
+              ))}
             </div>
           </div>
 
@@ -121,7 +119,7 @@ export default function SettingsPanel(): React.JSX.Element | null {
           <label className="settings-row toggle">
             <span>
               Reduce motion
-              <small>Skip the cinematic intro orbit</small>
+              <small>No intro orbit, no traffic, no wandering livestock</small>
             </span>
             <input type="checkbox" checked={reduceMotion} onChange={toggleReduceMotion} />
           </label>

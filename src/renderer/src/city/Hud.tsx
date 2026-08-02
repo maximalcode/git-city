@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Snapshot } from '../../../shared/types'
 import { languageOf } from '../lib/languages'
 import { useHotkeys } from '../lib/useHotkeys'
+import { REPO_HOTKEYS } from '../lib/repoHotkeys'
 import { AheadBehind, formatDate } from '../lib/format'
 import { commitTimeLabel } from '../lib/daytime'
 import Picker from '../lib/Picker'
@@ -9,11 +10,12 @@ import Icon from '../lib/icons'
 import { useStore, type ColorMode, type ViewMode } from '../store'
 import { THEMES, getTheme } from './themes'
 import { COLOR_MODES, type ColorContext } from './colorModes'
+import { MODES, getMode, nextMode } from './modes'
 import Legend from './Legend'
 import SearchBox from './SearchBox'
 import SideRail from './SideRail'
 
-/** The slice of a scene model the HUD needs — CityModel and ForestModel both satisfy it. */
+/** The slice of a scene model the HUD needs — every mode model satisfies it. */
 export type HudModel = ColorContext & { paths: string[] }
 
 interface Props {
@@ -94,39 +96,22 @@ export default function Hud({ snapshot, model }: Props): React.JSX.Element {
     return () => window.removeEventListener('pointermove', onMove)
   }, [])
 
+  // the working-tree keys are shared with the empty-repo screen; these are the
+  // ones that only make sense in front of a scene
   const hotkeys = useMemo(
     () => ({
-      c: () => useStore.getState().setPanel('changes'),
-      b: () => useStore.getState().setPanel('branches'),
-      s: () => useStore.getState().setPanel('stashes'),
+      ...REPO_HOTKEYS,
       g: () => useStore.getState().setGraphOpen(!useStore.getState().graphOpen),
       u: () => useStore.getState().setReflogOpen(!useStore.getState().reflogOpen),
       p: () => useStore.getState().setPrPanelOpen(!useStore.getState().prPanelOpen),
-      ',': () => useStore.getState().setSettingsOpen(!useStore.getState().settingsOpen),
       v: () => {
         const st = useStore.getState()
-        st.setViewMode(st.viewMode === 'city' ? 'forest' : 'city')
+        st.setViewMode(nextMode(st.viewMode).id)
       },
       '/': () => useStore.getState().setSearchOpen(true),
       space: () => {
         const st = useStore.getState()
         st.setPlaying(!st.playing)
-      },
-      escape: () => {
-        const st = useStore.getState()
-        st.setPaletteOpen(false)
-        st.setHelpOpen(false)
-        st.setSearchOpen(false)
-        st.setPrPanelOpen(false)
-        st.setSettingsOpen(false)
-        st.clearReview()
-        st.setPanel('none')
-        st.setDiffOpen(false)
-        st.setFileView('none')
-        st.setGraphOpen(false)
-        st.setRebaseOpen(false)
-        st.setReflogOpen(false)
-        st.setSelected(null)
       }
     }),
     []
@@ -221,7 +206,7 @@ export default function Hud({ snapshot, model }: Props): React.JSX.Element {
 
         <div className="hud-zone hud-right">
           <ViewPicker viewMode={viewMode} setViewMode={setViewMode} />
-          <ColorModePicker colorMode={colorMode} setColorMode={setColorMode} />
+          <ColorModePicker colorMode={colorMode} setColorMode={setColorMode} viewMode={viewMode} />
           <ThemePicker themeId={themeId} setTheme={setTheme} />
           <TimeOfDayControl timeOfDay={timeOfDay} setTimeOfDay={setTimeOfDay} />
           <button
@@ -446,11 +431,6 @@ function TimeOfDayControl({
   )
 }
 
-const VIEW_MODES: { id: ViewMode; glyph: string; name: string; hint: string }[] = [
-  { id: 'city', glyph: '🏙', name: 'City', hint: 'Files as buildings in districts' },
-  { id: 'forest', glyph: '🌲', name: 'Forest', hint: 'Files as trees in folder groves' }
-]
-
 function ViewPicker({
   viewMode,
   setViewMode
@@ -458,7 +438,7 @@ function ViewPicker({
   viewMode: ViewMode
   setViewMode: (m: ViewMode) => void
 }): React.JSX.Element {
-  const active = VIEW_MODES.find((m) => m.id === viewMode) ?? VIEW_MODES[0]
+  const active = getMode(viewMode)
   return (
     <Picker
       buttonLabel={
@@ -467,7 +447,7 @@ function ViewPicker({
         </>
       }
       title="View (V)"
-      items={VIEW_MODES.map((m) => ({
+      items={MODES.map((m) => ({
         id: m.id,
         label: (
           <>
@@ -484,16 +464,20 @@ function ViewPicker({
 
 function ColorModePicker({
   colorMode,
-  setColorMode
+  setColorMode,
+  viewMode
 }: {
   colorMode: ColorMode
   setColorMode: (m: ColorMode) => void
+  viewMode: ViewMode
 }): React.JSX.Element {
   const active = COLOR_MODES.find((m) => m.id === colorMode) ?? COLOR_MODES[0]
   return (
     <Picker
       buttonLabel={<>◑ {active.name}</>}
-      title="Color the city by…"
+      // the registry already names each world; saying "city" in the farm was
+      // the kind of drift a second mode makes easy
+      title={`Color the ${getMode(viewMode).noun} by…`}
       items={COLOR_MODES.map((m) => ({ id: m.id, label: m.name, hint: m.hint }))}
       activeId={colorMode}
       onPick={(id) => setColorMode(id as ColorMode)}

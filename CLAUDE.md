@@ -1,6 +1,6 @@
 # Git City — working notes
 
-Electron desktop app that renders a git repository as a 3D city (or forest) and
+Electron desktop app that renders a git repository as a 3D city (or farm) and
 puts a full git client on top of it. React 19 + react-three-fiber for the scene,
 zustand for state, git driven by raw `spawn` in the Electron main process.
 
@@ -63,10 +63,11 @@ view modes fully explorable with deterministic mock data.
 - **`src/preload/`** — the typed `window.gitCity` bridge.
 - **`src/renderer/src/`**
   - `layout/` — pure, unit-tested scene math: `treemap.ts` (squarified treemap →
-    plots, districts, roads), `roads.ts` (street graph), `forest.ts` (forest model).
+    plots, districts, roads), `roads.ts` (street graph), `farm.ts` (farm model).
     No three.js imports here. This is the abstraction a new view mode reuses.
   - `city/` — the 3D scene. `SceneView.tsx` is the mode-agnostic shell (canvas,
-    camera rig, effects, HUD) that mounts `CityScene` or `ForestScene`.
+    camera rig, effects, HUD) that mounts the active mode from the `modes.tsx`
+    registry — adding a view mode is one entry there plus its scene.
     `themes.ts` is a data-driven registry — "adding a look = adding an entry".
     `colorModes.ts` handles the six colour encodings.
   - `panels/` — the git client UI. `screens/` — welcome and repo-open flows.

@@ -1,7 +1,8 @@
 import { useLayoutEffect, useMemo, useRef } from 'react'
-import { useFrame } from '@react-three/fiber'
+import { useFrame, type ThreeEvent } from '@react-three/fiber'
 import { Color, InstancedMesh, Object3D } from 'three'
 import { CROP_KINDS, type FarmModel, type FarmTargets } from '../layout/farm'
+import { useStore } from '../store'
 import { cropGeometry } from './farmShapes'
 import type { Theme } from './themes'
 
@@ -105,6 +106,9 @@ export default function Fields({
   // than only how tall the same crop stands
   const cropRefs = useRef<(InstancedMesh | null)[]>([])
   const n = model.paths.length
+  const setHovered = useStore((s) => s.setHovered)
+  const setSelected = useStore((s) => s.setSelected)
+  const setDiffOpen = useStore((s) => s.setDiffOpen)
 
   // Planted once per model: the rows never move, only the crop height changes.
   const tufts = useMemo(() => {
@@ -194,9 +198,56 @@ export default function Fields({
   const cropGeos = useMemo(() => CROP_KINDS.map((k) => cropGeometry(k)), [])
   useLayoutEffect(() => () => cropGeos.forEach((g) => g.dispose()), [cropGeos])
 
+  /**
+   * The plot is what you point at, not the crop.
+   *
+   * One plot instance per file means `instanceId` IS the field index, while the
+   * crop meshes are grouped by class and their instance ids index into a tuft
+   * list. The plot also covers the whole rectangle, so a field with a low crop
+   * is no harder to hit than a full one.
+   *
+   * A field whose file does not exist at this snapshot is bare soil, and stays
+   * inert — matching the city, where an absent file has no building to click,
+   * and keeping the tooltip from naming a file this commit has never seen.
+   */
+  const fieldAt = (e: ThreeEvent<PointerEvent | MouseEvent>): string | null => {
+    const id = e.instanceId
+    if (id === undefined || id >= n) return null
+    return targets.heights[id] > 0 ? model.paths[id] : null
+  }
+
+  const onMove = (e: ThreeEvent<PointerEvent>): void => {
+    e.stopPropagation()
+    setHovered(fieldAt(e))
+  }
+
+  const onClick = (e: ThreeEvent<MouseEvent>): void => {
+    e.stopPropagation()
+    const path = fieldAt(e)
+    if (path) setSelected(path)
+  }
+
+  // double-click opens the diff, exactly as double-clicking a building does
+  const onDoubleClick = (e: ThreeEvent<MouseEvent>): void => {
+    e.stopPropagation()
+    const path = fieldAt(e)
+    if (!path) return
+    setSelected(path)
+    setDiffOpen(true)
+  }
+
   return (
     <group>
-      <instancedMesh ref={plotRef} args={[undefined, undefined, Math.max(1, n)]} receiveShadow>
+      <instancedMesh
+        ref={plotRef}
+        args={[undefined, undefined, Math.max(1, n)]}
+        receiveShadow
+        frustumCulled={false}
+        onPointerMove={onMove}
+        onPointerOut={() => setHovered(null)}
+        onClick={onClick}
+        onDoubleClick={onDoubleClick}
+      >
         <planeGeometry args={[1, 1]} />
         <meshStandardMaterial roughness={1} />
       </instancedMesh>

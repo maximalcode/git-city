@@ -3,7 +3,7 @@ import { useFrame } from '@react-three/fiber'
 import { Color, InstancedMesh, Object3D } from 'three'
 import type { FileStatus } from '../../../shared/types'
 import { isLiveState, useStore } from '../store'
-import type { CityModel, Targets } from './cityData'
+import type { HeightSource, PlotSource } from './plots'
 
 const dummy = new Object3D()
 const colorScratch = new Color()
@@ -42,16 +42,20 @@ interface Overlay {
 }
 
 /**
- * Translucent, bloom-lit boxes around buildings whose files have uncommitted
- * changes. Only rendered in "live" mode (viewing HEAD with a matching status);
- * scrubbing the timeline hides the whole layer. Conflicted buildings pulse.
+ * Translucent, bloom-lit boxes around the files with uncommitted changes —
+ * buildings in the city, fields on the farm. Only rendered in "live" mode
+ * (viewing HEAD with a matching status); scrubbing the timeline hides the whole
+ * layer. Conflicted files pulse.
  */
 export default function StatusOverlay({
   model,
-  targets
+  targets,
+  floor = 0.6
 }: {
-  model: CityModel
-  targets: Targets
+  model: PlotSource
+  targets: HeightSource
+  /** shortest the box may be, so a low crop still reads as marked */
+  floor?: number
 }): React.JSX.Element | null {
   const workingStatus = useStore((s) => s.workingStatus)
   const live = useStore(isLiveState)
@@ -78,7 +82,7 @@ export default function StatusOverlay({
     const breathe = 1 + 0.03 * Math.sin(t * 4)
     for (let i = 0; i < n; i++) {
       const o = overlays[i]
-      const h = Math.max(targets.heights[o.index], 0.6)
+      const h = Math.max(targets.heights[o.index], floor)
       const { rect } = model.layout.plots[o.index]
       const m = 0.3
       const s = o.kind === 'conflict' ? breathe : 1

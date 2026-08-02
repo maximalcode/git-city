@@ -107,7 +107,7 @@ export default function CityScene({
       <RoofClutter model={model} targets={targets} />
       <Highlight model={model} targets={targets} />
       <StatusOverlay model={model} targets={targets} />
-      <ConstructionSites model={model} />
+      <ConstructionSites model={model} size={size} />
       <Traffic model={model} snapshot={snapshot} />
       <Hotspots anchors={beacons} />
       <Hotspots anchors={reviewBeacons} color="#6ec8ff" />

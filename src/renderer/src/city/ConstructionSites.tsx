@@ -2,19 +2,25 @@ import { useMemo, useRef } from 'react'
 import { useFrame, type ThreeEvent } from '@react-three/fiber'
 import { InstancedMesh, Object3D } from 'three'
 import { isLiveState, useStore } from '../store'
-import type { CityModel } from './cityData'
 
 const dummy = new Object3D()
 
 /**
- * Untracked/added files that don't yet have a building in the (stable) layout
- * appear as low blue "construction sites" on a grid strip along the city's
- * +Z edge — so brand-new files are visible without triggering a relayout.
+ * Untracked/added files that don't yet have a plot in the (stable) layout appear
+ * as low blue wireframe boxes on a grid strip past the world's +Z edge — so
+ * brand-new files are visible without triggering a relayout.
+ *
+ * A marked-out plot with nothing on it yet reads the same on a farm as in a
+ * city, so both worlds use this; all it needs is the world's extent to know
+ * where its edge is.
  */
 export default function ConstructionSites({
-  model
+  model,
+  size
 }: {
-  model: CityModel
+  model: { indexOf: Map<string, number> }
+  /** world extent — citySize in the city, worldSize on the farm */
+  size: number
 }): React.JSX.Element | null {
   const workingStatus = useStore((s) => s.workingStatus)
   const live = useStore(isLiveState)
@@ -41,7 +47,7 @@ export default function ConstructionSites({
     const pulse = 0.35 + 0.1 * Math.sin(state.clock.elapsedTime * 2)
     const cols = Math.max(1, Math.ceil(Math.sqrt(n)))
     const gap = 3
-    const z0 = model.citySize / 2 + 6
+    const z0 = size / 2 + 6
     const x0 = -((cols - 1) * gap) / 2
     for (let i = 0; i < n; i++) {
       const r = Math.floor(i / cols)

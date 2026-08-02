@@ -1112,7 +1112,7 @@ async function runOp(
       const src = get().workingStatus?.opState ?? 'merge'
       set({ mergeView: { active: result.conflicts?.[0] ?? null, source: src } })
     }
-    if (result.code !== 'conflict') {
+    if (shouldSurfaceError(result.code, opts.conflictsOpenMerge === true)) {
       set({
         opError: { message: result.message ?? 'Operation failed.', gitOutput: result.gitOutput }
       })
@@ -1172,6 +1172,18 @@ async function loadRepo(
   } catch (err) {
     set({ screen: 'welcome', error: cleanError(err) })
   }
+}
+
+/**
+ * Should a failed operation put a message on screen?
+ *
+ * A 'conflict' failure is only *handled* when the merge view opens to deal
+ * with it. Swallowing every conflict-coded failure made Commit a spinner that
+ * appeared, disappeared and changed nothing, and let "Stash & switch" promise
+ * a stash it had never made (#26).
+ */
+export function shouldSurfaceError(code: OpResult['code'], conflictsOpenMerge: boolean): boolean {
+  return !(code === 'conflict' && conflictsOpenMerge)
 }
 
 /** Derived: are we viewing HEAD with a status that matches the analyzed head? */

@@ -295,7 +295,7 @@ welcome; there are issue templates for both.
 
 ## License
 
-[MIT](LICENSE) © Nickel Christ
+[MIT](LICENSE) © maximalcode
 
 Bundled textures are CC0 from [ambientCG](https://ambientcg.com) — see
 [ATTRIBUTION.md](src/renderer/src/assets/textures/ATTRIBUTION.md).

@@ -1,4 +1,4 @@
-appId: com.nickelchrist.gitcity
+appId: com.maximalcode.gitcity
 productName: Git City
 directories:
   buildResources: build

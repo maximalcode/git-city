@@ -3,7 +3,7 @@
   "version": "0.5.0",
   "description": "Watch your git repository come alive as a 3D city",
   "main": "./out/main/index.js",
-  "author": "Nickel Christ",
+  "author": "maximalcode",
   "license": "MIT",
   "scripts": {
     "dev": "electron-vite dev",

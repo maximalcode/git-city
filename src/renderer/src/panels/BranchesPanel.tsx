@@ -74,8 +74,13 @@ export default function BranchesPanel(): React.JSX.Element | null {
       body: `Stash your changes and switch to "${name}"? Your work is saved to a stash you can restore later.`,
       confirmLabel: 'Stash & switch',
       danger: false,
+      // the dialog promises the work is saved to a stash; if the stash fails,
+      // switching anyway would carry the changes onto the other branch (or
+      // fail with a message about the switch, saying nothing about the stash)
       onConfirm: async () => {
+        const before = useStore.getState().opError
         await stashPush(`switch to ${name}`, true)
+        if (useStore.getState().opError !== before) return
         await switchBranch(name)
       }
     })

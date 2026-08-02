@@ -703,6 +703,25 @@
   flex-direction: column;
   overflow: hidden;
 }
+/* the conflicted file could not be read, or changed under us before a write */
+.merge-error,
+.merge-notice {
+  margin: 14px 18px;
+  padding: 10px 14px;
+  border-radius: 9px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.merge-error {
+  border: 1px solid rgba(255, 107, 107, 0.4);
+  background: rgba(255, 107, 107, 0.08);
+  color: var(--text);
+}
+.merge-notice {
+  border: 1px solid rgba(110, 200, 255, 0.35);
+  background: rgba(110, 200, 255, 0.08);
+  color: var(--text);
+}
 .merge-segments {
   flex: 1;
   overflow-y: auto;

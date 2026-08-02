@@ -7,6 +7,7 @@ import {
   resolveConflictFile,
   resolveWholeFile
 } from './conflicts'
+import { sameConflict } from '../../shared/conflictFile'
 import { makeTempRepo, type FixtureRepo } from './fixtures'
 import { mergeAbort, mergeBranch, mergeContinue } from './merge'
 import { getWorkingStatus } from './status'
@@ -163,6 +164,45 @@ describe('conflict resolution end to end', () => {
     expect((await resolveWholeFile(r.path, 'blob.bin', 'theirs')).ok).toBe(true)
     expect(readFileSync(join(r.path, 'blob.bin'))[0]).toBe(2)
     expect((await mergeContinue(r.path)).ok).toBe(true)
+  })
+
+  /**
+   * The merge panel keeps the file it read in memory and writes it back when
+   * you click "Mark resolved". Anything that changes the file behind its back
+   * — the user resolving it in their own editor, or a second conflict being
+   * selected — turns that buffer into a weapon. sameConflict is what the panel
+   * checks before writing; these prove it sees a real change (#26).
+   */
+  it('sees an external resolution, so the stale buffer is never written', async () => {
+    const r = conflictedRepo()
+    const opened = await readConflictFile(r.path, 'f.txt')
+    expect(opened.segments.some((s) => s.kind === 'conflict')).toBe(true)
+
+    // the user resolves it in their editor: markers gone, their own wording
+    writeFileSync(join(r.path, 'f.txt'), 'line1\ntheir careful merge\nline3\n')
+
+    const reread = await readConflictFile(r.path, 'f.txt')
+    expect(sameConflict(opened, reread)).toBe(false)
+    // git still calls it conflicted, which is why nothing in the status tells
+    // the panel to re-read — the check has to happen at write time
+    const s = await getWorkingStatus(r.path)
+    expect(s.files.find((f) => f.path === 'f.txt')?.conflicted).toBe(true)
+  })
+
+  it('sees no change across a re-read of an untouched file', async () => {
+    const r = conflictedRepo()
+    const first = await readConflictFile(r.path, 'f.txt')
+    const second = await readConflictFile(r.path, 'f.txt')
+    // equal, so leaving the app and coming back keeps the user's hunk choices
+    expect(sameConflict(first, second)).toBe(true)
+  })
+
+  it('rejects for a path with no file in the working tree', async () => {
+    // a delete/rename side of a merge can leave a conflicted path with nothing
+    // on disk; the panel has to catch this rather than keep the last file it
+    // read armed behind "Mark resolved"
+    const r = conflictedRepo()
+    await expect(readConflictFile(r.path, 'not-here.txt')).rejects.toBeInstanceOf(Error)
   })
 
   it('mergeBranch reports conflicted paths', async () => {

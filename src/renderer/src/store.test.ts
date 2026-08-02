@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { WorkingStatus } from '../../shared/types'
-import { isLiveState, statusFingerprint, useStore } from './store'
+import { isLiveState, shouldSurfaceError, statusFingerprint, useStore } from './store'
 
 function baseStatus(): WorkingStatus {
   return {
@@ -47,6 +47,25 @@ describe('statusFingerprint', () => {
       files: [{ path: 'a.ts', index: 'modified', worktree: 'unmodified', conflicted: false }]
     }
     expect(statusFingerprint(before)).not.toBe(statusFingerprint(after))
+  })
+})
+
+describe('shouldSurfaceError', () => {
+  it('stays quiet only when the merge view takes the conflict', () => {
+    expect(shouldSurfaceError('conflict', true)).toBe(false)
+  })
+
+  it('reports a conflict-coded failure the merge view will not handle', () => {
+    // this is Commit: a spinner that appeared, disappeared and changed
+    // nothing, and "Stash & switch" promising a stash it never made
+    expect(shouldSurfaceError('conflict', false)).toBe(true)
+  })
+
+  it('reports every other failure regardless', () => {
+    for (const code of ['auth', 'rejected', 'dirty', 'unknown', undefined] as const) {
+      expect(shouldSurfaceError(code, true)).toBe(true)
+      expect(shouldSurfaceError(code, false)).toBe(true)
+    }
   })
 })
 

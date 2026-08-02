@@ -889,11 +889,24 @@ export const useStore = create<GitCityState>((set, get) => ({
   refreshAnalysis: async () => {
     const { repoPath } = get()
     if (!hasApi() || !repoPath) return
+    // Decided up front, and from the timeline alone.
+    //
+    // isLiveState() also compares the working tree's headHash against the newest
+    // snapshot, which is right for its other callers and guaranteed wrong here:
+    // runOp refreshes the status before it reanalyses, so by this point headHash
+    // is already the commit we are about to add. Asked afterwards it answered
+    // "not live" for every commit, and left the user one snapshot in the past —
+    // timeline a notch short, "Viewing history" banner up, live working-tree
+    // layer switched off, immediately after committing.
+    const before = get()
+    const wasLive =
+      !before.analysis ||
+      before.analysis.snapshots.length === 0 ||
+      before.snapshotIndex === before.analysis.snapshots.length - 1
     set({ reanalyzing: true, historyStale: false })
     try {
       let analysis = await window.gitCity.analyzeIncremental(repoPath)
       if (!analysis) analysis = await window.gitCity.analyzeRepo(repoPath, 50)
-      const wasLive = isLiveState(get())
       set((s) => ({
         analysis,
         // if the user was watching the latest state, keep them there

@@ -172,6 +172,7 @@ function AgentLayer({
   nearestPlot: Int32Array
 }): React.JSX.Element | null {
   const geometry = useMemo(() => geometryFor(spec.kind), [spec.kind])
+  const reduceMotion = useStore((s) => s.reduceMotion)
   const graph = model.roadGraph
   const seed = useRef(1)
   const agentScale = Math.min(1, model.citySize / 140)
@@ -284,7 +285,9 @@ function AgentLayer({
   useFrame((state, dt) => {
     const mesh = meshRef.current
     if (!mesh || pool.length === 0) return
-    const step = Math.min(dt, 0.05)
+    // Reduce motion parks the traffic rather than deleting it: the streets keep
+    // their cars, they just stop being the thing pulling your eye around.
+    const step = reduceMotion ? 0 : Math.min(dt, 0.05)
     const t = state.clock.elapsedTime
     const steer = 1 - Math.exp(-10 * step)
     for (let i = 0; i < pool.length; i++) {

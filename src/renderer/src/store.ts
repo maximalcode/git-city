@@ -128,9 +128,16 @@ function saveDiffSplit(on: boolean): void {
 }
 
 const REDUCEMOTION_KEY = 'gitcity.reducemotion'
+/**
+ * Defaults to the OS setting until the user says otherwise. Someone who has
+ * asked their whole system for less motion should not have to find a checkbox
+ * in here as well — and once they do touch it, their choice is what persists.
+ */
 function loadReduceMotion(): boolean {
   try {
-    return localStorage.getItem(REDUCEMOTION_KEY) === 'on'
+    const stored = localStorage.getItem(REDUCEMOTION_KEY)
+    if (stored !== null) return stored === 'on'
+    return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
   } catch {
     return false
   }

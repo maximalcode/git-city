@@ -2,6 +2,7 @@ import { useLayoutEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { InstancedMesh, Object3D } from 'three'
 import type { FarmModel } from '../layout/farm'
+import { useStore } from '../store'
 import { ANIMAL_KINDS, ANIMAL_SPEED, animalGeometry, type AnimalKind } from './farmShapes'
 
 const dummy = new Object3D()
@@ -55,6 +56,7 @@ export default function Livestock({ model }: { model: FarmModel }): React.JSX.El
 
 function Herd({ kind, model }: { kind: AnimalKind; model: FarmModel }): React.JSX.Element | null {
   const ref = useRef<InstancedMesh>(null!)
+  const reduceMotion = useStore((s) => s.reduceMotion)
   // passed as a prop (not JSX-created), so R3F won't dispose it for us
   const geo = useMemo(() => animalGeometry(kind), [kind])
   useLayoutEffect(() => () => geo.dispose(), [geo])
@@ -101,7 +103,8 @@ function Herd({ kind, model }: { kind: AnimalKind; model: FarmModel }): React.JS
   useFrame((_state, dt) => {
     const mesh = ref.current
     if (!mesh || herd.length === 0) return
-    const step = Math.min(dt, 0.05)
+    // grazing, but standing still — see the note in Traffic
+    const step = reduceMotion ? 0 : Math.min(dt, 0.05)
 
     for (let i = 0; i < herd.length; i++) {
       const a = herd[i]

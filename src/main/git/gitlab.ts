@@ -1,5 +1,5 @@
 import { spawn } from 'child_process'
-import { runGitResult } from './exec'
+import { runGitResult, searchPath } from './exec'
 import type { HostAuth, OpResult, PrFileChange, PullRequestInfo } from '../../shared/types'
 import type { HostProvider } from './host'
 
@@ -30,6 +30,8 @@ function runGlab(cwd: string, args: string[]): Promise<GlabResult> {
       cwd,
       env: {
         ...process.env,
+        // Finder-launched apps do not see Homebrew's bin — see exec.ts
+        PATH: searchPath(),
         GLAB_CHECK_UPDATE: '0',
         GIT_TERMINAL_PROMPT: '0',
         NO_COLOR: '1',
@@ -154,7 +156,8 @@ export function parseMrChanges(stdout: string): PrFileChange[] {
   }
 }
 
-const MISSING = 'GitLab CLI (glab) is not installed.'
+const MISSING =
+  "GitLab CLI (glab) not found. If it is installed, Git City cannot see it on this app's PATH."
 
 async function currentBranch(repoPath: string): Promise<string> {
   const res = await runGitResult(repoPath, ['rev-parse', '--abbrev-ref', 'HEAD'])

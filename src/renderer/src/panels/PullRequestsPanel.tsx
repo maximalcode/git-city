@@ -96,10 +96,18 @@ export default function PullRequestsPanel(): React.JSX.Element | null {
         {!loading && auth && (!auth.authed || !auth.isRepo) && (
           <div className="pr-unavailable">
             <p>{auth.reason}</p>
-            {!auth.available && (
+            {/* only name a CLI once we know which forge this is — an unknown
+                host means no GitHub or GitLab remote, and installing gh does
+                not give a repo one */}
+            {!auth.available && auth.host !== 'unknown' && (
               <p className="pr-hint">
                 Install it from <span className="mono">{words.install}</span>, then run{' '}
                 <span className="mono">{words.login}</span>.
+              </p>
+            )}
+            {auth.host === 'unknown' && (
+              <p className="pr-hint">
+                Pull requests appear here for repositories hosted on GitHub or GitLab.
               </p>
             )}
             {auth.available && !auth.authed && (

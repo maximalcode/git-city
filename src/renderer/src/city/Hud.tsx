@@ -222,7 +222,7 @@ export default function Hud({ snapshot, model }: Props): React.JSX.Element {
 
         <div className="hud-zone hud-right">
           <ViewPicker viewMode={viewMode} setViewMode={setViewMode} />
-          <ColorModePicker colorMode={colorMode} setColorMode={setColorMode} />
+          <ColorModePicker colorMode={colorMode} setColorMode={setColorMode} viewMode={viewMode} />
           <ThemePicker themeId={themeId} setTheme={setTheme} />
           <TimeOfDayControl timeOfDay={timeOfDay} setTimeOfDay={setTimeOfDay} />
           <button
@@ -480,16 +480,20 @@ function ViewPicker({
 
 function ColorModePicker({
   colorMode,
-  setColorMode
+  setColorMode,
+  viewMode
 }: {
   colorMode: ColorMode
   setColorMode: (m: ColorMode) => void
+  viewMode: ViewMode
 }): React.JSX.Element {
   const active = COLOR_MODES.find((m) => m.id === colorMode) ?? COLOR_MODES[0]
   return (
     <Picker
       buttonLabel={<>◑ {active.name}</>}
-      title="Color the city by…"
+      // the registry already names each world; saying "city" in the farm was
+      // the kind of drift a second mode makes easy
+      title={`Color the ${getMode(viewMode).noun} by…`}
       items={COLOR_MODES.map((m) => ({ id: m.id, label: m.name, hint: m.hint }))}
       activeId={colorMode}
       onPick={(id) => setColorMode(id as ColorMode)}

@@ -1,4 +1,5 @@
 import { useStore } from '../store'
+import { getMode } from '../city/modes'
 import SideRail from '../city/SideRail'
 import ChangesPanel from '../panels/ChangesPanel'
 import BranchesPanel from '../panels/BranchesPanel'
@@ -21,6 +22,8 @@ export default function EmptyRepoView(): React.JSX.Element {
 
   const name = analysis?.info.name ?? 'repository'
   const branch = analysis?.info.branch ?? 'main'
+  // the mode is already chosen here, so promise the world they will actually get
+  const noun = getMode(useStore((s) => s.viewMode)).noun
 
   return (
     <div className="city-root empty-repo">
@@ -31,8 +34,8 @@ export default function EmptyRepoView(): React.JSX.Element {
           <div className="empty-repo-badge">{name}</div>
           <h2>No commits yet</h2>
           <p>
-            This repository is on <span className="mono">{branch}</span> with no history to grow a
-            city from — yet.{' '}
+            This repository is on <span className="mono">{branch}</span> with no history to grow a{' '}
+            {noun} from — yet.{' '}
             {changeCount > 0 ? (
               <>
                 You have <strong>{changeCount}</strong> change{changeCount === 1 ? '' : 's'} ready.
@@ -42,8 +45,8 @@ export default function EmptyRepoView(): React.JSX.Element {
             )}
           </p>
           <p className="empty-repo-steps">
-            Open <strong>Changes</strong> (C) → stage your files → write a message → commit. Your
-            first buildings rise the moment you do.
+            Open <strong>Changes</strong> (C) → stage your files → write a message → commit. The
+            first {noun === 'farm' ? 'fields are sown' : 'buildings rise'} the moment you do.
           </p>
           <button className="primary" onClick={() => setPanel('changes')}>
             Open Changes

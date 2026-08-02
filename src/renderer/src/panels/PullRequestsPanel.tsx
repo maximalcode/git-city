@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { PullRequestInfo } from '../../../shared/types'
 import { useStore } from '../store'
+import { getMode } from '../city/modes'
 
 const CI_LABEL: Record<PullRequestInfo['ci'], string> = {
   passing: 'checks passing',
@@ -211,6 +212,8 @@ function PrRow({
   onReview: (n: number, title: string) => void
   busy: boolean
 }): React.JSX.Element {
+  // "Review in city" was still the label with a farm on screen
+  const noun = getMode(useStore((s) => s.viewMode)).noun
   return (
     <div className={`pr-row ${current ? 'current' : ''}`}>
       <div className="pr-main">
@@ -230,9 +233,9 @@ function PrRow({
       <div className="pr-actions">
         <button
           onClick={() => onReview(pr.number, pr.title)}
-          title="Light up this PR's files in the city"
+          title={`Light up this PR's files in the ${noun}`}
         >
-          Review in city
+          Review in {noun}
         </button>
         {!current && (
           <button disabled={busy} onClick={() => onCheckout(pr.number)}>

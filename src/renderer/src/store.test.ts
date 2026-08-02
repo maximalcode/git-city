@@ -108,4 +108,16 @@ describe('isLiveState during a reanalyse', () => {
   it('reports "not live" when the user really is browsing history', () => {
     expect(isLiveState(stateWith(['old111', 'old222'], 0, 'old222'))).toBe(false)
   })
+
+  it('reports "live" for a repository with no commits', () => {
+    // there is no history to browse, so the Changes panel must not offer to
+    // "jump to now" from a snapshot that does not exist
+    expect(isLiveState(stateWith([], 0, ''))).toBe(true)
+  })
+
+  it('reports "not live" with no repository open at all', () => {
+    expect(isLiveState({ analysis: null } as unknown as Parameters<typeof isLiveState>[0])).toBe(
+      false
+    )
+  })
 })

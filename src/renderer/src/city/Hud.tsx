@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Snapshot } from '../../../shared/types'
 import { languageOf } from '../lib/languages'
 import { useHotkeys } from '../lib/useHotkeys'
+import { REPO_HOTKEYS } from '../lib/repoHotkeys'
 import { AheadBehind, formatDate } from '../lib/format'
 import { commitTimeLabel } from '../lib/daytime'
 import Picker from '../lib/Picker'
@@ -95,15 +96,14 @@ export default function Hud({ snapshot, model }: Props): React.JSX.Element {
     return () => window.removeEventListener('pointermove', onMove)
   }, [])
 
+  // the working-tree keys are shared with the empty-repo screen; these are the
+  // ones that only make sense in front of a scene
   const hotkeys = useMemo(
     () => ({
-      c: () => useStore.getState().setPanel('changes'),
-      b: () => useStore.getState().setPanel('branches'),
-      s: () => useStore.getState().setPanel('stashes'),
+      ...REPO_HOTKEYS,
       g: () => useStore.getState().setGraphOpen(!useStore.getState().graphOpen),
       u: () => useStore.getState().setReflogOpen(!useStore.getState().reflogOpen),
       p: () => useStore.getState().setPrPanelOpen(!useStore.getState().prPanelOpen),
-      ',': () => useStore.getState().setSettingsOpen(!useStore.getState().settingsOpen),
       v: () => {
         const st = useStore.getState()
         st.setViewMode(nextMode(st.viewMode).id)
@@ -112,22 +112,6 @@ export default function Hud({ snapshot, model }: Props): React.JSX.Element {
       space: () => {
         const st = useStore.getState()
         st.setPlaying(!st.playing)
-      },
-      escape: () => {
-        const st = useStore.getState()
-        st.setPaletteOpen(false)
-        st.setHelpOpen(false)
-        st.setSearchOpen(false)
-        st.setPrPanelOpen(false)
-        st.setSettingsOpen(false)
-        st.clearReview()
-        st.setPanel('none')
-        st.setDiffOpen(false)
-        st.setFileView('none')
-        st.setGraphOpen(false)
-        st.setRebaseOpen(false)
-        st.setReflogOpen(false)
-        st.setSelected(null)
       }
     }),
     []

@@ -1177,7 +1177,12 @@ async function loadRepo(
 /** Derived: are we viewing HEAD with a status that matches the analyzed head? */
 export function isLiveState(s: GitCityState): boolean {
   const { analysis, snapshotIndex, workingStatus } = s
-  if (!analysis || analysis.snapshots.length === 0) return false
+  if (!analysis) return false
+  // A repository with no commits has no history to browse, so it is always at
+  // "now" — answering false put a "Viewing history — Jump to now" banner on the
+  // Changes panel of a fresh `git init`, offering to jump to a snapshot that
+  // does not exist (#27).
+  if (analysis.snapshots.length === 0) return true
   if (snapshotIndex !== analysis.snapshots.length - 1) return false
   const headSnap = analysis.snapshots[analysis.snapshots.length - 1]
   if (!workingStatus) return true

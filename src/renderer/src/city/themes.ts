@@ -48,9 +48,15 @@ export interface Theme {
   /** ground-floor shop windows + signage on tall buildings */
   shopfront: { enabled: boolean; color: string; intensity: number }
   /**
-   * Ground tone for the non-city worlds — trees stand on green whatever the sky
+   * Ground tone for the non-city worlds — crop stands on green whatever the sky
    * is doing. Lives here rather than in a per-mode map so a new world mode adds
    * a theme knob instead of another parallel palette table.
+   *
+   * Keep these two well clear of black. The city reads `ground` and uses grass
+   * only as a verge, but on the farm this pair IS the picture: the pasture fills
+   * the frame and every plot is mixed two-thirds of the way to `soil`. Tuned as
+   * city accents they were around a third of Daylight's brightness, which took
+   * the farm's whole colour encoding down with them under the dark themes.
    */
   grass: string
   /** tilled earth under the crop in the farm view */
@@ -111,8 +117,8 @@ export const THEMES: Theme[] = [
     particles: 'motes',
     road: { surface: '#10141e', marking: '#8f97ad', markingEmissive: 0, sidewalk: '#2b3242' },
     shopfront: { enabled: true, color: '#ffd9a0', intensity: 1.6 },
-    grass: '#16271a',
-    soil: '#2a2018'
+    grass: '#24402a',
+    soil: '#453424'
   },
   {
     id: 'neon',
@@ -139,8 +145,8 @@ export const THEMES: Theme[] = [
     particles: 'rain',
     road: { surface: '#0c0622', marking: '#4de1ff', markingEmissive: 1.6, sidewalk: '#241a4a' },
     shopfront: { enabled: true, color: '#ff4da6', intensity: 2.6 },
-    grass: '#122436',
-    soil: '#1d2233'
+    grass: '#1d3a55',
+    soil: '#333a52'
   },
   {
     id: 'golden-hour',
@@ -195,8 +201,8 @@ export const THEMES: Theme[] = [
     particles: 'motes',
     road: { surface: '#0c0f16', marking: '#7d8cb8', markingEmissive: 0.4, sidewalk: '#232838' },
     shopfront: { enabled: true, color: '#8fb0ff', intensity: 1.4 },
-    grass: '#141f18',
-    soil: '#221d1a'
+    grass: '#223528',
+    soil: '#3d332c'
   }
 ]
 
@@ -206,4 +212,36 @@ export function getTheme(id: string | undefined): Theme {
   return (
     THEMES.find((t) => t.id === id) ?? THEMES.find((t) => t.id === DEFAULT_THEME_ID) ?? THEMES[0]
   )
+}
+
+/** What a theme spends on actual lights, before the sun's time-of-day factors. */
+export function lightBudget(theme: Theme): number {
+  return theme.hemisphere.intensity + theme.dirMain.intensity + theme.dirFill.intensity
+}
+
+/**
+ * The light a world needs when none of it glows on its own.
+ *
+ * Four of the five themes spend barely a third of Daylight's budget on lights
+ * and make the difference up in emissive geometry — window grids, shopfronts,
+ * street lamps, head- and tail-lights. Every one of those is *city* geometry.
+ * The farm is standard materials throughout, so it collects only the ambient
+ * budget, and under Night (the default), Neon and Midnight Ink it went black:
+ * fields, crop and the whole colour encoding with it.
+ *
+ * A world with nothing emissive of its own therefore lifts a dim theme up to
+ * this floor. Deliberately below Daylight's 3.3, so night still reads darker
+ * than day.
+ */
+export const UNLIT_WORLD_FLOOR = 2.6
+
+/**
+ * Multiplier bringing `theme` up to `floor`, or 1 if it is already bright
+ * enough. Applied to intensities only — light *colours* are untouched, so a
+ * theme keeps its character — and applied before the time-of-day factors, so
+ * a 2 a.m. commit still looks like 2 a.m.
+ */
+export function lightBoost(theme: Theme, floor: number): number {
+  const budget = lightBudget(theme)
+  return budget >= floor ? 1 : floor / budget
 }

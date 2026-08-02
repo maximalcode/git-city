@@ -2,7 +2,7 @@ import { useCallback, useMemo } from 'react'
 import type { Snapshot } from '../../../shared/types'
 import type { FarmModel, FarmTargets } from '../layout/farm'
 import { useStore } from '../store'
-import { getTheme } from './themes'
+import { UNLIT_WORLD_FLOOR, getTheme, lightBoost } from './themes'
 import { sunState } from '../lib/daylight'
 import { timeOfDayFromCommit } from '../lib/daytime'
 import Effects from './Effects'
@@ -39,6 +39,8 @@ export default function FarmScene({
   const size = model.worldSize
   const timeOfDay = sunFollowsCommit ? timeOfDayFromCommit(snapshot.date) : manualTimeOfDay
   const sun = sunState(timeOfDay, size)
+  // nothing out here glows on its own the way a lit window does — see themes.ts
+  const lit = lightBoost(theme, UNLIT_WORLD_FLOOR)
 
   // beacons float just above the standing crop of the named fields
   const anchorsFor = useCallback(
@@ -67,12 +69,12 @@ export default function FarmScene({
         args={[
           theme.hemisphere.sky,
           theme.grass,
-          (theme.hemisphere.intensity + 0.1) * sun.ambientFactor
+          (theme.hemisphere.intensity * lit + 0.1) * sun.ambientFactor
         ]}
       />
       <directionalLight
         position={sun.position}
-        intensity={theme.dirMain.intensity * sun.keyFactor}
+        intensity={theme.dirMain.intensity * lit * sun.keyFactor}
         color={theme.dirMain.color}
         castShadow
         shadow-mapSize={[2048, 2048]}
@@ -85,7 +87,7 @@ export default function FarmScene({
       />
       <directionalLight
         position={[-size, size * 0.5, -size * 0.6]}
-        intensity={theme.dirFill.intensity}
+        intensity={theme.dirFill.intensity * lit}
         color={theme.dirFill.color}
       />
 

@@ -17,6 +17,9 @@ import { makeTempRepo } from './fixtures'
  * back coherent rather than throwing or silently losing files.
  */
 
+/** NTFS forbids characters POSIX allows, and caps a path at 260 characters. */
+const WINDOWS = process.platform === 'win32'
+
 const created: string[] = []
 function tempDir(prefix: string): string {
   const dir = mkdtempSync(join(tmpdir(), prefix))
@@ -129,15 +132,24 @@ describe('repo shapes', () => {
     const paths = result.snapshots.at(-1)?.files.map((f) => f.path) ?? []
     for (const name of names) expect(paths).toContain(name)
 
-    repo.write('another odd "name".ts', 'y\n')
+    // A double quote is what git actually quotes in its output, so it is the
+    // name worth asserting — but NTFS forbids it outright, so on Windows the
+    // oddest legal stand-in is a name that still needs quoting for the shell.
+    const tricky = WINDOWS ? 'another odd name!.ts' : 'another odd "name".ts'
+    repo.write(tricky, 'y\n')
     const status = await getWorkingStatus(repo.path)
-    expect(status.files.map((f) => f.path)).toContain('another odd "name".ts')
+    expect(status.files.map((f) => f.path)).toContain(tricky)
   })
 
   it('analyzes a deeply nested tree with very long paths', async () => {
     const repo = makeTempRepo('git-city-deep-')
     created.push(repo.path)
-    const deep = Array.from({ length: 20 }, (_, i) => `level${i}-${'x'.repeat(8)}`).join('/')
+    // 20 levels either way; the segments shrink on Windows because the whole
+    // path has to clear MAX_PATH (260) — git there refuses to write the file
+    // at all without core.longpaths, which is an OS limit rather than
+    // something the analyzer could cope with.
+    const pad = 'x'.repeat(WINDOWS ? 1 : 8)
+    const deep = Array.from({ length: 20 }, (_, i) => `level${i}-${pad}`).join('/')
     repo.write(`${deep}/leaf.ts`, 'deep\n')
     repo.commitAll('deep tree')
 

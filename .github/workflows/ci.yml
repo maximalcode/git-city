@@ -35,3 +35,28 @@ jobs:
 
       - name: Test
         run: npm test
+
+  # Windows is a shipped target, and its filesystem rules are different enough
+  # (no `"` in a name, 260-character paths) that the suite can fail there while
+  # `ci` is green. That went unnoticed until a release build ran the tests on
+  # windows-latest for the first time and broke the v0.5.0 release.
+  #
+  # A SEPARATE job, not a matrix on `ci`: the branch ruleset requires a check
+  # named exactly "ci", and a matrix would rename it to "ci (ubuntu-latest)",
+  # leaving main permanently unmergeable. Typecheck and lint are
+  # platform-independent, so this job only runs the tests.
+  ci-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Test
+        run: npm test

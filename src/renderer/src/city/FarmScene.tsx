@@ -11,6 +11,12 @@ import Fields from './Fields'
 import Farmstead from './Farmstead'
 import Livestock from './Livestock'
 import Hotspots from './Hotspots'
+import Highlight from './Highlight'
+import StatusOverlay from './StatusOverlay'
+import ConstructionSites from './ConstructionSites'
+
+/** Shortest a hover/select/status box may be drawn over a field. */
+const MARKER_FLOOR = 1.2
 
 /**
  * Everything farm-specific inside the Canvas: sky, sun, pasture underfoot, the
@@ -100,6 +106,12 @@ export default function FarmScene({
       <Fields model={model} targets={targets} theme={theme} />
       <Farmstead model={model} />
       <Livestock model={model} />
+      {/* crop stands a fraction of a building's height, so both marker layers
+          get a floor — otherwise a selected field is a bright smear on the soil
+          rather than a box you can see from the default camera */}
+      <Highlight model={model} targets={targets} floor={MARKER_FLOOR} />
+      <StatusOverlay model={model} targets={targets} floor={MARKER_FLOOR} />
+      <ConstructionSites model={model} size={size} />
       <Hotspots anchors={beacons} />
       <Hotspots anchors={reviewBeacons} color="#6ec8ff" />
       <Effects citySize={size} />

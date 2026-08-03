@@ -86,12 +86,19 @@ function buildAnalysis(): RepoAnalysis {
     for (const f of seeds) {
       if (f.birth > s) continue
       const age = (s - f.birth + 1) / (SNAPSHOT_COUNT - f.birth + 1)
+      // Every file used to carry the current commit's date, which made every
+      // file in the mock equally recent — so the Recency mode could not be
+      // looked at in the preview at all. Files now go quiet at different
+      // points: a deterministic per-file lag, larger for the ones a real
+      // repository leaves alone.
+      const quiet = (f.peak % 11) + (f.path.length % 5)
+      const touched = Math.max(f.birth, s - quiet)
       files.push({
         path: f.path,
         loc: Math.max(5, Math.floor(f.peak * Math.min(1, age * 1.4))),
         commits: 1 + Math.floor(age * 40 * ((f.peak % 7) / 6 + 0.2)),
-        lastTouched: commitDate(s),
-        lastAuthor: authors[(f.peak + s) % authors.length],
+        lastTouched: commitDate(touched),
+        lastAuthor: authors[(f.peak + touched) % authors.length],
         binary: false
       })
     }

@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import type { GitVersion } from '../../../shared/types'
+import { tooOldMessage } from '../../../shared/gitVersion'
 import { hasApi, useStore } from '../store'
 
 /** Last path segment, for showing a repo's folder name. */
@@ -17,9 +19,17 @@ export default function Welcome(): React.JSX.Element {
   const gitVersion = useStore((s) => s.gitVersion)
   const recentRepos = useStore((s) => s.recentRepos)
   const clearRecent = useStore((s) => s.clearRecent)
+  const pendingProbe = useStore((s) => s.pendingProbe)
   const [url, setUrl] = useState('')
   const [dragging, setDragging] = useState(false)
+
+  // Three states, three different instructions: install git, update git, or
+  // wait for the size probe. All of them disable the open controls, but only
+  // the first two are the user's problem to fix (#25).
   const gitMissing = gitVersion === null
+  const gitTooOld = gitVersion !== null && gitVersion !== 'checking' && !gitVersion.supported
+  const probing = pendingProbe !== null
+  const blocked = gitMissing || gitTooOld || probing
 
   const submitUrl = (): void => {
     if (url.trim()) void openUrl(url)
@@ -28,7 +38,7 @@ export default function Welcome(): React.JSX.Element {
   const onDrop = (e: React.DragEvent): void => {
     e.preventDefault()
     setDragging(false)
-    if (gitMissing || !hasApi()) return
+    if (blocked || !hasApi()) return
     const file = e.dataTransfer.files?.[0]
     if (!file) return
     const path = window.gitCity.pathForFile(file)
@@ -58,10 +68,11 @@ export default function Welcome(): React.JSX.Element {
             git command line tool — get it from git-scm.com, then restart the app.
           </div>
         )}
+        {gitTooOld && <div className="error">{tooOldMessage(gitVersion as GitVersion)}</div>}
         {error && <div className="error">{error}</div>}
 
-        <button className="primary" onClick={() => void openLocal()} disabled={gitMissing}>
-          Open a local repository…
+        <button className="primary" onClick={() => void openLocal()} disabled={blocked}>
+          {probing ? 'Checking repository size…' : 'Open a local repository…'}
         </button>
 
         {recentRepos.length > 0 && (
@@ -75,7 +86,7 @@ export default function Welcome(): React.JSX.Element {
                 key={p}
                 className="recent-item"
                 title={p}
-                disabled={gitMissing}
+                disabled={blocked}
                 onClick={() => void openPath(p)}
               >
                 <span className="recent-name">{baseName(p)}</span>
@@ -94,9 +105,9 @@ export default function Welcome(): React.JSX.Element {
             value={url}
             onChange={(e) => setUrl(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && submitUrl()}
-            disabled={gitMissing}
+            disabled={blocked}
           />
-          <button onClick={submitUrl} disabled={gitMissing || !url.trim()}>
+          <button onClick={submitUrl} disabled={blocked || !url.trim()}>
             Clone
           </button>
         </div>

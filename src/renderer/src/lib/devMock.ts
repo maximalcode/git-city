@@ -153,7 +153,7 @@ export function installDevMock(): void {
       snapshotIndex: analysis.snapshots.length - 1,
       workingStatus: buildStatus(analysis),
       repoPath: 'C:/mock/mock-repo',
-      gitVersion: 'mock'
+      gitVersion: { raw: 'git version 2.45.0 (mock)', parts: [2, 45], supported: true }
     })
   }
   // store handle included so browser-automation checks can drive selection

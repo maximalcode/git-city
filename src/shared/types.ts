@@ -418,10 +418,25 @@ export interface WorktreeInfo {
   locked: boolean
 }
 
+/**
+ * What the git on PATH is, and whether Git City can work with it.
+ *
+ * `supported` is false only when a version was parsed and is genuinely too old
+ * to report merge diffs — the case that would otherwise draw a plausible but
+ * wrong city rather than failing (#25).
+ */
+export interface GitVersion {
+  /** verbatim `git --version` output, so the user sees what we saw */
+  raw: string
+  /** [major, minor], or null when the string was unrecognisable */
+  parts: [number, number] | null
+  supported: boolean
+}
+
 /** API exposed to the renderer via the preload bridge. */
 export interface GitCityApi {
-  /** Returns the installed git version, or null if git is missing. */
-  checkGit(): Promise<string | null>
+  /** The installed git, or null if there isn't one on PATH. */
+  checkGit(): Promise<GitVersion | null>
   selectFolder(): Promise<string | null>
   /** Resolve a dropped File to its absolute path (File.path is gone in Electron 35). */
   pathForFile(file: File): string

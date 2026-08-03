@@ -1,7 +1,16 @@
 import { basename } from 'path'
-import type { FileState, ProgressInfo, RepoAnalysis, RepoSize, Snapshot } from '../../shared/types'
+import type {
+  FileState,
+  GitVersion,
+  ProgressInfo,
+  RepoAnalysis,
+  RepoSize,
+  Snapshot
+} from '../../shared/types'
 import { runGit, runGitLines, runGitResult } from './exec'
 import { FriendlyError } from './result'
+import { describeGitVersion } from '../../shared/gitVersion'
+import { BARE_REPOSITORY, gitComplaint, INSIDE_GIT_DIR, NOT_A_REPOSITORY } from './openErrors'
 
 /**
  * Repo analysis built from a single streaming pass of
@@ -15,10 +24,15 @@ import { FriendlyError } from './result'
 
 const SENTINEL = '\x01'
 
-export async function checkGitInstalled(): Promise<string | null> {
+/**
+ * Ask the git on PATH what it is. null means there isn't one — the renderer
+ * distinguishes that (install git) from a version we can't work with (update
+ * git), because they are different instructions.
+ */
+export async function checkGitInstalled(): Promise<GitVersion | null> {
   try {
     const v = await runGit(process.cwd(), ['--version'])
-    return v.trim()
+    return describeGitVersion(v.trim())
   } catch {
     return null
   }
@@ -211,21 +225,38 @@ export async function repoSize(repoPath: string): Promise<RepoSize> {
   return { commits, files }
 }
 
+/**
+ * `--is-inside-work-tree` said no. Ask git what the folder actually is before
+ * telling the user it isn't a repository, because for a bare clone and for a
+ * `.git` directory that answer is simply false (#25).
+ *
+ * Order matters: `--is-bare-repository` is true for both, so it has to be asked
+ * first, and `--is-inside-git-dir` then separates the `.git` of a normal
+ * checkout from a genuinely bare one.
+ */
+async function explainNotAWorkTree(repoPath: string, stderr: string): Promise<string> {
+  const bare = await runGitResult(repoPath, ['rev-parse', '--is-bare-repository'])
+  if (bare.stdout.trim() === 'true') return BARE_REPOSITORY
+
+  const inGitDir = await runGitResult(repoPath, ['rev-parse', '--is-inside-git-dir'])
+  if (inGitDir.stdout.trim() === 'true') return INSIDE_GIT_DIR
+
+  // git's own words, when it had any — the dubious-ownership refusal carries
+  // the exact command the user needs to run.
+  return gitComplaint(stderr) ?? NOT_A_REPOSITORY
+}
+
 export async function analyzeRepo(
   repoPath: string,
   sampleTarget: number,
   onProgress: (p: ProgressInfo) => void
 ): Promise<RepoAnalysis> {
-  const inside = (
-    await runGit(repoPath, ['rev-parse', '--is-inside-work-tree']).catch((err) => {
-      // "git isn't installed" must not be swallowed into "not a repository" —
-      // it is the one failure here the user can actually do something about
-      if (err instanceof FriendlyError) throw err
-      return 'false'
-    })
-  ).trim()
-  if (inside !== 'true') {
-    throw new Error('The selected folder is not a git repository.')
+  // "git isn't installed", "that folder is gone" and "you can't read it" are
+  // FriendlyErrors from exec and must not be swallowed into "not a repository" —
+  // they are the failures the user can actually act on.
+  const probe = await runGitResult(repoPath, ['rev-parse', '--is-inside-work-tree'])
+  if (probe.stdout.trim() !== 'true') {
+    throw new FriendlyError(await explainNotAWorkTree(repoPath, probe.stderr))
   }
 
   onProgress({ phase: 'counting', done: 0, total: 1 })

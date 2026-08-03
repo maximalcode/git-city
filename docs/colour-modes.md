@@ -63,10 +63,17 @@ values in front of them. A repository with a single commit has no spread, so
 every file carries the same value and the ramp has nothing to say. The same
 happens at commit 1 when you scrub any repository's timeline back to the start.
 
-Language, Author and Kind do not have this problem; they are categories, not
-ranges. Tracked in
-[#28](https://github.com/maximalcode/git-city/issues/28).
+Rather than pick an end of the ramp the data doesn't justify, these modes then
+draw one flat colour and the legend says what the shared value is — for example
+_"All files: 1 commit"_. Language, Author and Kind never have this problem; they
+are categories, not ranges.
 
-Note also that the legend shows at most eight entries, so a repository with more
-than eight languages or authors will have on-screen colours with no entry
-explaining them.
+## More than the legend can show
+
+The legend lists the eight most common entries. Past that it adds an
+**"Others (N)"** row rather than stopping silently:
+
+- **Author** — everyone outside the top eight is drawn in the Others colour, so
+  the buildings and the legend agree.
+- **Language** — every language keeps its own colour in the scene, because a
+  language's colour is its identity. Only the legend is capped.

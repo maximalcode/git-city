@@ -336,6 +336,24 @@ export type HostKind = 'github' | 'gitlab' | 'unknown'
  * for GitLab. Merge requests are surfaced as pull requests throughout; only the
  * panel's wording follows the host.
  */
+/**
+ * What the panel should tell the user to do next, decided where the cause is
+ * known rather than inferred from `available`/`authed` in the UI.
+ *
+ * Being offline looks exactly like being logged out from the outside, and the
+ * panel used to say "run gh auth login" to someone whose wifi was off — which
+ * fails too, and pushes them to re-authenticate a perfectly good token (#24).
+ */
+export type HostHint =
+  /** the CLI isn't reachable — install it */
+  | 'install'
+  /** the CLI is there but logged out — log in */
+  | 'login'
+  /** nothing to do but wait or retry (offline, a 5xx, a timeout) */
+  | 'retry'
+  /** genuinely not a repository on this forge */
+  | 'none'
+
 export interface HostAuth {
   host: HostKind
   /** the host's CLI is present on PATH */
@@ -347,7 +365,24 @@ export interface HostAuth {
   login: string | null
   /** why unavailable, for the UI (null when fully usable) */
   reason: string | null
+  /** what to suggest; absent means fall back to the available/authed reading */
+  hint?: HostHint
 }
+
+/**
+ * A list of pull requests, or why there isn't one.
+ *
+ * Deliberately not `PullRequestInfo[]`. A failed call returning `[]` rendered
+ * as "Open (0) — No open pull requests" for a repository with forty of them,
+ * and nothing distinguished "we asked and there are none" from "we could not
+ * ask" (#24).
+ */
+export type PrListResult =
+  | { ok: true; prs: PullRequestInfo[]; /** more exist than we asked for */ more: boolean }
+  | { ok: false; reason: string }
+
+/** The files a PR changes, or why we could not find out. */
+export type PrFilesResult = { ok: true; files: PrFileChange[] } | { ok: false; reason: string }
 
 export interface PullRequestInfo {
   number: number
@@ -519,12 +554,13 @@ export interface GitCityApi {
 
   // --- Pull/merge requests (GitHub via gh, GitLab via glab) ---
   hostStatus(repoPath: string): Promise<HostAuth>
-  listPullRequests(repoPath: string): Promise<PullRequestInfo[]>
+  listPullRequests(repoPath: string): Promise<PrListResult>
   currentBranchPr(repoPath: string): Promise<PullRequestInfo | null>
   checkoutPr(repoPath: string, number: number): Promise<OpResult>
+  /** Pass an empty `base` to let the forge use the repository's default branch. */
   createPr(repoPath: string, base: string, title: string, body: string): Promise<OpResult>
   /** The files a PR changes, for highlighting them in the scene. */
-  pullRequestFiles(repoPath: string, number: number): Promise<PrFileChange[]>
+  pullRequestFiles(repoPath: string, number: number): Promise<PrFilesResult>
   /** Open an external https URL in the default browser. */
   openExternal(url: string): Promise<void>
 

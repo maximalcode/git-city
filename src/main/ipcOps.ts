@@ -5,6 +5,8 @@ import type {
   CommitSearchScope,
   HunkMode,
   OpResult,
+  PrFilesResult,
+  PrListResult,
   ProgressInfo,
   RebaseEntry,
   RepoChangeReason,
@@ -31,7 +33,7 @@ import { getRebaseTodo, runInteractiveRebase } from './git/rebaseInteractive'
 import { createBranch, deleteBranch, listBranches, switchBranch } from './git/branches'
 import { commit, getLastCommitMessage } from './git/commit'
 import { getSigningConfig } from './git/signing'
-import { providerFor, unknownHostAuth } from './git/host'
+import { probeHost, providerFor, unknownHostAuth } from './git/host'
 import { listSubmodules, updateSubmodules } from './git/submodules'
 import { addWorktree, listWorktrees, removeWorktree } from './git/worktrees'
 import { checkForUpdate } from './updates'
@@ -125,15 +127,29 @@ export function registerOpsIpc(): void {
   readOnly('submodules', (repo) => listSubmodules(repo))
   readOnly('worktrees', (repo) => listWorktrees(repo))
   readOnly('repo-size', (repo) => repoSize(repo))
+  // The probe's own answer is used when nobody claims the repo, so a missing
+  // CLI says so instead of being reported as "no GitHub or GitLab remote" (#24).
+  readOnly('host-status', async (repo) => {
+    const { provider, auth } = await probeHost(repo)
+    return provider ? provider.status(repo) : (auth ?? unknownHostAuth())
+  })
   readOnly(
-    'host-status',
-    async (repo) => (await providerFor(repo))?.status(repo) ?? unknownHostAuth()
+    'pr-list',
+    async (repo): Promise<PrListResult> =>
+      (await providerFor(repo))?.listPullRequests(repo) ?? {
+        ok: true,
+        prs: [],
+        more: false
+      }
   )
-  readOnly('pr-list', async (repo) => (await providerFor(repo))?.listPullRequests(repo) ?? [])
   readOnly('pr-current', async (repo) => (await providerFor(repo))?.currentBranchPr(repo) ?? null)
   readOnly(
     'pr-files',
-    async (repo, number: number) => (await providerFor(repo))?.pullRequestFiles(repo, number) ?? []
+    async (repo, number: number): Promise<PrFilesResult> =>
+      (await providerFor(repo))?.pullRequestFiles(repo, number) ?? {
+        ok: false,
+        reason: unknownHostAuth().reason ?? 'No pull-request host for this repository.'
+      }
   )
   ipcMain.handle('git-city:open-external', (_e, url: string) => {
     // only ever open https links (URLs come from gh's own JSON output)

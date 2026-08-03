@@ -1,7 +1,16 @@
 import { spawn } from 'child_process'
 import { runGitResult, searchPath } from './exec'
-import type { HostAuth, OpResult, PrFileChange, PullRequestInfo } from '../../shared/types'
+import type {
+  HostAuth,
+  OpResult,
+  PrFileChange,
+  PrFilesResult,
+  PrListResult,
+  PullRequestInfo
+} from '../../shared/types'
+import { classifyCliFailure, CLI_TIMEOUT_MS, firstLine, TIMED_OUT } from './cliFailure'
 import type { HostProvider } from './host'
+import { hostnameOf } from './hostUrl'
 
 /**
  * GitLab integration via the `glab` CLI — the same bargain we strike with `gh`:
@@ -40,17 +49,31 @@ function runGlab(cwd: string, args: string[]): Promise<GlabResult> {
     })
     let stdout = ''
     let stderr = ''
+    let done = false
+    const finish = (r: GlabResult): void => {
+      if (done) return
+      done = true
+      clearTimeout(timer)
+      resolve(r)
+    }
+    // No limit here meant a glab call behind a dead VPN hung the panel forever,
+    // with the retry button greyed out by the stuck loading state (#24).
+    const timer = setTimeout(() => {
+      child.kill()
+      finish({ code: -1, stdout, stderr: `${stderr}\n${TIMED_OUT}`, missing: false })
+    }, CLI_TIMEOUT_MS)
+
     child.stdout.on('data', (d) => (stdout += d))
     child.stderr.on('data', (d) => (stderr += d))
     child.on('error', (err) =>
-      resolve({
+      finish({
         code: -1,
         stdout,
         stderr: String(err),
         missing: (err as NodeJS.ErrnoException).code === 'ENOENT'
       })
     )
-    child.on('close', (code) => resolve({ code: code ?? -1, stdout, stderr, missing: false }))
+    child.on('close', (code) => finish({ code: code ?? -1, stdout, stderr, missing: false }))
   })
 }
 
@@ -164,7 +187,18 @@ async function currentBranch(repoPath: string): Promise<string> {
   return res.code === 0 ? res.stdout.trim() : ''
 }
 
-async function status(repoPath: string): Promise<HostAuth> {
+/** Wording for "the CLI was there but could not reach the server". */
+function unreachable(failure: 'timeout' | 'offline'): { reason: string; hint: HostAuth['hint'] } {
+  return {
+    reason:
+      failure === 'timeout'
+        ? `GitLab didn't respond within ${CLI_TIMEOUT_MS / 1000}s — check your network or VPN, then ↻.`
+        : "Can't reach GitLab — check your network connection, then ↻.",
+    hint: 'retry'
+  }
+}
+
+async function status(repoPath: string, origin = ''): Promise<HostAuth> {
   const auth = await runGlab(repoPath, ['auth', 'status'])
   if (auth.missing) {
     return {
@@ -173,48 +207,101 @@ async function status(repoPath: string): Promise<HostAuth> {
       authed: false,
       isRepo: false,
       login: null,
-      reason: MISSING
+      reason: MISSING,
+      hint: 'install'
     }
   }
   if (auth.code !== 0) {
-    return {
+    // Being offline is not being logged out, and sending someone to re-auth a
+    // working token because their wifi is off is a dead end (#24).
+    const failure = classifyCliFailure(auth.stderr + auth.stdout)
+    const base = {
       host: 'gitlab',
       available: true,
       authed: false,
       isRepo: false,
-      login: null,
-      reason: 'Not logged in to GitLab — run: glab auth login'
-    }
+      login: null
+    } as const
+    return failure !== 'other'
+      ? { ...base, ...unreachable(failure) }
+      : { ...base, reason: 'Not logged in to GitLab — run: glab auth login', hint: 'login' }
   }
   const project = await runGlab(repoPath, ['api', 'projects/:fullpath'])
-  const isRepo = project.code === 0
-  let login: string | null = null
-  if (isRepo) {
-    const me = await runGlab(repoPath, ['api', 'user'])
-    if (me.code === 0) {
-      try {
-        login = (JSON.parse(me.stdout) as { username?: string }).username ?? null
-      } catch {
-        login = null
-      }
+  if (project.code !== 0) {
+    return {
+      host: 'gitlab',
+      available: true,
+      authed: true,
+      isRepo: false,
+      login: null,
+      ...projectFailure(project, origin)
     }
   }
+  let login: string | null = null
+  const me = await runGlab(repoPath, ['api', 'user'])
+  if (me.code === 0) {
+    try {
+      login = (JSON.parse(me.stdout) as { username?: string }).username ?? null
+    } catch {
+      login = null
+    }
+  }
+  return { host: 'gitlab', available: true, authed: true, isRepo: true, login, reason: null }
+}
+
+/** Why the project lookup failed — mirrors gh's repoViewFailure (#24). */
+function projectFailure(
+  project: GlabResult,
+  origin: string
+): { reason: string; hint: HostAuth['hint'] } {
+  const output = project.stderr + project.stdout
+  const failure = classifyCliFailure(output)
+  if (failure !== 'other') return unreachable(failure)
+  if (/401|unauthorized|not authenticated|glab auth login/i.test(output)) {
+    const host = hostnameOf(origin)
+    return {
+      reason: host
+        ? `glab is not logged in to ${host} — run: glab auth login --hostname ${host}`
+        : 'glab is not logged in to this host — run: glab auth login',
+      hint: 'login'
+    }
+  }
+  if (/404|not found|no such remote|could not determine/i.test(output)) {
+    return { reason: 'This repository has no GitLab remote.', hint: 'none' }
+  }
+  const detail = firstLine(output)
   return {
-    host: 'gitlab',
-    available: true,
-    authed: true,
-    isRepo,
-    login,
-    reason: isRepo ? null : 'This repository has no GitLab remote.'
+    reason: detail
+      ? `glab could not read this project (${detail})`
+      : 'glab could not read this project.',
+    hint: 'retry'
   }
 }
 
-async function listPullRequests(repoPath: string): Promise<PullRequestInfo[]> {
+function listFailureReason(res: GlabResult): string {
+  if (res.missing) return MISSING
+  const failure = classifyCliFailure(res.stderr + res.stdout)
+  if (failure === 'timeout') {
+    return `glab didn't respond within ${CLI_TIMEOUT_MS / 1000}s — check your network or VPN, then ↻.`
+  }
+  if (failure === 'offline') return "Couldn't reach GitLab — check your network, then ↻."
+  const detail = firstLine(res.stderr + res.stdout)
+  return detail ? `Couldn't reach GitLab: ${detail} Try ↻.` : "Couldn't reach GitLab. Try ↻."
+}
+
+/** Ask for one more than we show, so a capped list can say it is capped (#24). */
+const MR_PAGE = 50
+
+async function listPullRequests(repoPath: string): Promise<PrListResult> {
   const res = await runGlab(repoPath, [
     'api',
-    'projects/:fullpath/merge_requests?state=opened&per_page=50'
+    `projects/:fullpath/merge_requests?state=opened&per_page=${MR_PAGE + 1}`
   ])
-  return res.code === 0 ? parseMrList(res.stdout) : []
+  // [] used to mean both "none open" and "the call failed", so a rate limit
+  // rendered as "No open merge requests" for a project with forty (#24).
+  if (res.code !== 0) return { ok: false, reason: listFailureReason(res) }
+  const all = parseMrList(res.stdout)
+  return { ok: true, prs: all.slice(0, MR_PAGE), more: all.length > MR_PAGE }
 }
 
 /**
@@ -243,12 +330,15 @@ async function currentBranchPr(repoPath: string): Promise<PullRequestInfo | null
   }
 }
 
-async function pullRequestFiles(repoPath: string, number: number): Promise<PrFileChange[]> {
+async function pullRequestFiles(repoPath: string, number: number): Promise<PrFilesResult> {
   const res = await runGlab(repoPath, [
     'api',
     `projects/:fullpath/merge_requests/${number}/changes`
   ])
-  return res.code === 0 ? parseMrChanges(res.stdout) : []
+  // Returning [] here made the review banner assert "0 files" — a confident
+  // claim that the MR changes nothing (#24).
+  if (res.code !== 0) return { ok: false, reason: listFailureReason(res) }
+  return { ok: true, files: parseMrChanges(res.stdout) }
 }
 
 function fail(res: GlabResult, fallback: string): OpResult {

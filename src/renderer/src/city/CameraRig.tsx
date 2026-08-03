@@ -70,6 +70,14 @@ export default function CameraRig({
     }
   }, [controls])
 
+  // Someone reacting to the motion they can see, by ticking "Reduce motion",
+  // was watching the camera keep orbiting: the flag was only read when the rig
+  // was created, and the orbit has no time limit, so it did not stop on its
+  // own either. The setting looked broken until the next repo open (#30).
+  useEffect(() => {
+    if (reduceMotion) intro.current = false
+  }, [reduceMotion])
+
   // Update limits that depend on the active world size / mode without tearing
   // the controls down.
   useEffect(() => {

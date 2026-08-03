@@ -21,8 +21,20 @@ export const REPO_HOTKEYS: Record<string, () => void> = {
   // which screen is up — closing what was never open is a no-op.
   escape: () => {
     const st = useStore.getState()
+    // The guide first, and alone. It is the only overlay that can be up
+    // without a flag being set — on first run it shows because `onboarded` is
+    // false, so clearing helpOpen did nothing and Escape was a silent no-op
+    // in front of it. Returning here also stops one Escape from tearing down
+    // the panels underneath an overlay the user was only trying to close (#30).
+    if (st.helpOpen) {
+      st.setHelpOpen(false)
+      return
+    }
+    if (!st.onboarded) {
+      st.dismissOnboarding()
+      return
+    }
     st.setPaletteOpen(false)
-    st.setHelpOpen(false)
     st.setSearchOpen(false)
     st.setPrPanelOpen(false)
     st.setSettingsOpen(false)

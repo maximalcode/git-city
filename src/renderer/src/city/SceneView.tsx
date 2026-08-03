@@ -87,6 +87,15 @@ export default function SceneView(): React.JSX.Element {
     [mode, analysis, snapshot, colorMode]
   )
 
+  // A PR's added files do not exist on this branch, so the model cannot place
+  // them: they never glow, and the banner's ‹ › stepper landed on them with no
+  // camera move and no highlight while the counter insisted they were there.
+  // Splitting them out is what lets the banner say so (#30).
+  const locatablePaths = useMemo(
+    () => reviewPaths.filter((p) => scene.focus(p) !== null),
+    [reviewPaths, scene]
+  )
+
   const snapshotCount = analysis.snapshots.length
   useEffect(() => {
     if (!playing) return
@@ -181,7 +190,7 @@ export default function SceneView(): React.JSX.Element {
       <ReflogPanel />
       <PullRequestsPanel />
       <SettingsPanel />
-      <ReviewBanner />
+      <ReviewBanner locatable={locatablePaths} />
       <TimelapseExporter canvasRef={canvasElRef} />
       <MergeView />
     </div>

@@ -95,6 +95,16 @@ export default function TimelapseExporter({
             resolve()
             return
           }
+          // Playback stopped short of the end. The transport is disabled while
+          // exporting, so this should not happen — but if anything does stop
+          // it, waiting forever is the worst possible answer: the overlay said
+          // "Recording time-lapse…" indefinitely over a frozen scene, and the
+          // only way out threw the partial recording away silently (#30).
+          if (!s.playing) {
+            cancelled = true
+            resolve()
+            return
+          }
           setTimeout(check, 60)
         }
         check()

@@ -1,7 +1,15 @@
 import { useLayoutEffect, useMemo, useRef } from 'react'
 import { InstancedMesh, Object3D } from 'three'
 import type { FarmModel } from '../layout/farm'
-import { barnGeometry, fenceGeometry, siloGeometry, windPumpGeometry } from './farmShapes'
+import { useStore } from '../store'
+import { getTheme } from './themes'
+import {
+  barnGeometry,
+  farmGlowGeometry,
+  fenceGeometry,
+  siloGeometry,
+  windPumpGeometry
+} from './farmShapes'
 
 const dummy = new Object3D()
 
@@ -26,10 +34,16 @@ function Steads({ model }: { model: FarmModel }): React.JSX.Element | null {
   const barnRef = useRef<InstancedMesh>(null!)
   const siloRef = useRef<InstancedMesh>(null!)
   const pumpRef = useRef<InstancedMesh>(null!)
+  const glowRef = useRef<InstancedMesh>(null!)
+
+  const lights = getTheme(useStore((s) => s.themeId)).farmLights
 
   const barnGeo = useMemo(() => barnGeometry(), [])
   const siloGeo = useMemo(() => siloGeometry(), [])
   const pumpGeo = useMemo(() => windPumpGeometry(), [])
+  // Built only when a theme wants it, so Daylight pays nothing for geometry it
+  // would render as five dull grey boxes on every farmstead.
+  const glowGeo = useMemo(() => (lights.enabled ? farmGlowGeometry() : null), [lights.enabled])
   useLayoutEffect(
     () => () => {
       barnGeo.dispose()
@@ -38,6 +52,7 @@ function Steads({ model }: { model: FarmModel }): React.JSX.Element | null {
     },
     [barnGeo, siloGeo, pumpGeo]
   )
+  useLayoutEffect(() => () => glowGeo?.dispose(), [glowGeo])
 
   // wind pumps only on parcels with room for one, so small holdings stay tidy
   const pumps = useMemo(
@@ -49,6 +64,9 @@ function Steads({ model }: { model: FarmModel }): React.JSX.Element | null {
     const barns = barnRef.current
     const silos = siloRef.current
     if (!barns || !silos) return
+    // the glow shares the barn's placement exactly — its geometry is authored
+    // in the barn's own local space, so one matrix drives both
+    const glow = glowRef.current
     model.steads.forEach((s, i) => {
       // tuck the buildings into a corner of the parcel, off the crop
       const bx = s.rect.x + Math.min(5.5, s.rect.w * 0.16)
@@ -59,6 +77,7 @@ function Steads({ model }: { model: FarmModel }): React.JSX.Element | null {
       dummy.scale.setScalar(1)
       dummy.updateMatrix()
       barns.setMatrixAt(i, dummy.matrix)
+      glow?.setMatrixAt(i, dummy.matrix)
 
       dummy.position.set(bx + Math.cos(face + 0.9) * 5.2, 0, bz + Math.sin(face + 0.9) * 5.2)
       dummy.rotation.set(0, 0, 0)
@@ -67,7 +86,8 @@ function Steads({ model }: { model: FarmModel }): React.JSX.Element | null {
     })
     barns.instanceMatrix.needsUpdate = true
     silos.instanceMatrix.needsUpdate = true
-  }, [model])
+    if (glow) glow.instanceMatrix.needsUpdate = true
+  }, [model, glowGeo])
 
   useLayoutEffect(() => {
     const mesh = pumpRef.current
@@ -104,6 +124,18 @@ function Steads({ model }: { model: FarmModel }): React.JSX.Element | null {
       {pumps.length > 0 && (
         <instancedMesh ref={pumpRef} args={[pumpGeo, undefined, pumps.length]} castShadow>
           <meshStandardMaterial vertexColors roughness={0.8} />
+        </instancedMesh>
+      )}
+      {glowGeo && (
+        // Unlit and emissive, like the city's window grids: these are light
+        // sources in the composition, not surfaces to be lit. No shadows —
+        // a lamp head that casts one reads as a floating box.
+        <instancedMesh
+          key={lights.color}
+          ref={glowRef}
+          args={[glowGeo, undefined, model.steads.length]}
+        >
+          <meshBasicMaterial color={lights.color} toneMapped={false} />
         </instancedMesh>
       )}
     </group>

@@ -170,6 +170,54 @@ function topBy(counts: Map<string, number>, n: number): string[] {
     .map((e) => e[0])
 }
 
+/** How many swatches a categorical legend shows before folding the rest. */
+export const LEGEND_MAX = 8
+
+/** Colour for everything past {@link LEGEND_MAX} in a categorical mode. */
+export const OTHERS_COLOR = '#64748b'
+
+/**
+ * A categorical legend, with the tail folded into one honest "Others" row.
+ *
+ * It used to stop after eight swatches with no indication there were more,
+ * while the first-run guide told the user "see the legend for what each colour
+ * means" — so in any mid-sized repository most of the colours on screen had no
+ * entry explaining them (#28).
+ */
+function categoricalLegend(
+  top: string[],
+  total: number,
+  colorOf: (name: string) => string
+): Legend {
+  const items = top.map((name) => ({ label: name || 'unknown', color: colorOf(name) }))
+  if (total > top.length) {
+    items.push({ label: `Others (${total - top.length})`, color: OTHERS_COLOR })
+  }
+  return { gradient: false, items }
+}
+
+/**
+ * A ramp needs a range, and on a repository with one commit there isn't one.
+ *
+ * Every file then carries the same value, and the ramp lands on whichever end
+ * stop the arithmetic happens to reach: a freshly initialised repository came
+ * out entirely 'Long ago' blue-grey under Recency and entirely 'Often' red
+ * under Activity, both while the legend underneath promised a spread. The same
+ * thing happens at commit 1 when scrubbing any repository's timeline (#28).
+ *
+ * `at` is where a single-valued repository should sit on the ramp: the midpoint
+ * for Activity and Size, the recent end for Recency — a file committed today
+ * is not "long ago" whatever else is true.
+ */
+function flatColorer(stops: Color[], at: number, label: string): Colorer {
+  const flat = ramp(stops, at, new Color())
+  const hex = `#${flat.getHexString()}`
+  return {
+    colorFor: (_f, _i, out) => out.copy(flat),
+    legend: { gradient: false, items: [{ label, color: hex }] }
+  }
+}
+
 /** Build a per-mode colorer + legend for one snapshot. */
 export function buildColorer(model: ColorContext, snapshot: Snapshot, mode: ColorMode): Colorer {
   const files = snapshot.files
@@ -180,24 +228,30 @@ export function buildColorer(model: ColorContext, snapshot: Snapshot, mode: Colo
       const { name } = languageOf(f.path)
       counts.set(name, (counts.get(name) ?? 0) + 1)
     }
-    const top = topBy(counts, 8)
+    const top = topBy(counts, LEGEND_MAX)
+    // The scene keeps every language its own colour here — a language's colour
+    // is its identity and folding them would be a bigger lie than the legend
+    // running out of room. The legend just admits there are more.
     return {
       colorFor: (_f, i, out) => out.copy(model.langColors[i]),
-      legend: {
-        gradient: false,
-        items: top.map((name) => ({
-          label: name,
-          color: colorForLanguageName(name, files)
-        }))
-      }
+      legend: categoricalLegend(top, counts.size, (name) => colorForLanguageName(name, files))
     }
   }
 
   if (mode === 'activity') {
-    let max = 1
-    for (const f of files) if (f.commits > max) max = f.commits
+    let min = Infinity
+    let max = 0
+    for (const f of files) {
+      if (f.commits < min) min = f.commits
+      if (f.commits > max) max = f.commits
+    }
+    if (files.length > 0 && min === max) {
+      const n = max
+      return flatColorer(ACTIVITY, 0.5, `All files: ${n} commit${n === 1 ? '' : 's'}`)
+    }
+    const top = Math.max(1, max)
     return {
-      colorFor: (f, _i, out) => ramp(ACTIVITY, Math.sqrt(f.commits / max), out),
+      colorFor: (f, _i, out) => ramp(ACTIVITY, Math.sqrt(f.commits / top), out),
       legend: gradientLegend('Rarely', 'Often', ACTIVITY)
     }
   }
@@ -209,6 +263,11 @@ export function buildColorer(model: ColorContext, snapshot: Snapshot, mode: Colo
       if (f.lastTouched < min) min = f.lastTouched
       if (f.lastTouched > max) max = f.lastTouched
     }
+    if (files.length > 0 && min === max) {
+      // the recent end, not the midpoint: everything here was touched by the
+      // same commit, and that commit is the newest thing in the repository
+      return flatColorer(RECENCY, 1, 'All files touched at the same time')
+    }
     const span = Math.max(1, max - min)
     return {
       colorFor: (f, _i, out) => ramp(RECENCY, (f.lastTouched - min) / span, out),
@@ -217,9 +276,17 @@ export function buildColorer(model: ColorContext, snapshot: Snapshot, mode: Colo
   }
 
   if (mode === 'size') {
-    let max = 1
-    for (const f of files) if (f.loc > max) max = f.loc
-    const norm = (loc: number): number => Math.sqrt(loc) / Math.sqrt(max)
+    let min = Infinity
+    let max = 0
+    for (const f of files) {
+      if (f.loc < min) min = f.loc
+      if (f.loc > max) max = f.loc
+    }
+    if (files.length > 0 && min === max) {
+      return flatColorer(SIZE, 0.5, `All files: ${max} line${max === 1 ? '' : 's'}`)
+    }
+    const top = Math.max(1, max)
+    const norm = (loc: number): number => Math.sqrt(loc) / Math.sqrt(top)
     return {
       colorFor: (f, _i, out) => ramp(SIZE, norm(f.loc), out),
       legend: gradientLegend('Small', 'Large', SIZE)
@@ -229,9 +296,15 @@ export function buildColorer(model: ColorContext, snapshot: Snapshot, mode: Colo
   if (mode === 'author') {
     const counts = new Map<string, number>()
     for (const f of files) counts.set(f.lastAuthor, (counts.get(f.lastAuthor) ?? 0) + 1)
-    const top = topBy(counts, 8)
+    const top = topBy(counts, LEGEND_MAX)
+    // Unlike language, the tail is folded in the SCENE too: an author's colour
+    // is arbitrary, so a swatch-less one tells the viewer nothing, and "Others"
+    // at least means the same thing on the buildings as in the legend (#28).
+    const shown = new Set(top)
+    const others = new Color(OTHERS_COLOR)
     const cache = new Map<string, Color>()
     const colorOf = (name: string): Color => {
+      if (!shown.has(name)) return others
       let c = cache.get(name)
       if (!c) {
         c = new Color(authorColor(name))
@@ -241,10 +314,7 @@ export function buildColorer(model: ColorContext, snapshot: Snapshot, mode: Colo
     }
     return {
       colorFor: (f, _i, out) => out.copy(colorOf(f.lastAuthor)),
-      legend: {
-        gradient: false,
-        items: top.map((name) => ({ label: name || 'unknown', color: authorColor(name) }))
-      }
+      legend: categoricalLegend(top, counts.size, authorColor)
     }
   }
 

@@ -65,7 +65,16 @@ export async function resetTo(repoPath: string, ref: string, mode: ResetMode): P
   const bad = optionLikeName(ref)
   if (bad) return bad
   const res = await runGitResult(repoPath, ['reset', `--${mode}`, ref, '--'])
-  return res.code === 0 ? ok() : failFrom(res)
+  if (res.code === 0) return ok()
+  // Undo on a freshly cloned repository asks for HEAD@{1}, which does not
+  // exist yet — git answers "log for 'HEAD' only has 1 entries", which is
+  // ungrammatical, names an internal concept and has nothing to do with the
+  // word "Undo" the user just clicked. Reachable seconds after a clone (#26).
+  const out = `${res.stderr}\n${res.stdout}`
+  if (/only has \d+ entries|unknown revision|ambiguous argument/i.test(out)) {
+    return failFrom(res, 'Nothing to undo — this repository has no earlier HEAD position yet.')
+  }
+  return failFrom(res)
 }
 
 /**

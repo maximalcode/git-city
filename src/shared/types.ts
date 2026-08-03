@@ -149,9 +149,17 @@ export interface OpResult {
     | 'dirty'
     | 'not-merged'
     | 'nothing-to-do'
+    /** git has no user.name / user.email configured yet */
+    | 'identity'
     | 'unknown'
   /** friendly one-liner for the UI */
   message?: string
+  /**
+   * `message` was written for this exact situation, so it beats the generic
+   * per-code wording. Without it, a specific "you are not on a branch" would be
+   * replaced by the generic no-upstream sentence (#26).
+   */
+  friendly?: boolean
   /** raw git output for the expandable details section */
   gitOutput?: string
   /** conflicted paths when code === 'conflict' */

@@ -21,6 +21,7 @@ import type {
 import { DEFAULT_THEME_ID } from './city/themes'
 import { DEFAULT_MODE, isViewMode, type ViewMode } from './city/modes'
 import { repoWarning, type RepoWarning } from './lib/repoScale'
+import { opMessage } from '../../shared/opMessages'
 import type { ColorMode } from './city/colorModes'
 
 export type { ColorMode }
@@ -222,6 +223,7 @@ const REPO_STATE_RESET: Partial<GitCityState> = {
   playing: false,
   searchOpen: false,
   workingStatus: null,
+  statusError: null,
   branches: [],
   stashes: [],
   tags: [],
@@ -302,6 +304,12 @@ interface GitCityState {
   /** a newer release found on GitHub, or null; dismissed for the session once closed */
   update: UpdateInfo | null
   /**
+   * State of a user-initiated update check. It exists only so the button can
+   * say something: pressing it was a silent no-op when you were already
+   * current or offline, so you could not tell whether the check ran (#26).
+   */
+  updateCheck: 'idle' | 'checking' | 'checked'
+  /**
    * PR being visually reviewed in the scene (its changed files glow), or null.
    * `error` set means the file list could not be fetched — the banner says so
    * instead of claiming the PR changes nothing (#24).
@@ -315,7 +323,18 @@ interface GitCityState {
   rebaseOpen: boolean
   reflogOpen: boolean
   panel: Panel
-  opInProgress: { label: string } | null
+  /**
+   * The running op. `cancellable` is only true for the network ops that
+   * actually honour cancelCurrentOp — the HUD used to offer Cancel for every
+   * op, and clicking it during a submodule update or a rebase did precisely
+   * nothing while the whole UI stayed disabled (#26).
+   */
+  opInProgress: { label: string; cancellable: boolean } | null
+  /**
+   * Why the working tree could not be read. Never confused with "the tree is
+   * clean" — the panel shows an error with a Retry instead of an empty list.
+   */
+  statusError: string | null
   opError: { message: string; gitOutput?: string } | null
   confirm: ConfirmRequest | null
   mergeView: MergeViewState | null
@@ -399,7 +418,8 @@ interface GitCityState {
   reviewPrInCity(number: number, title: string): Promise<void>
   clearReview(): void
   openExternal(url: string): void
-  checkForUpdate(): Promise<void>
+  /** `manual` = the user pressed the button, so the result is worth showing. */
+  checkForUpdate(manual?: boolean): Promise<void>
   dismissUpdate(): void
   startExport(): void
   endExport(error?: string | null): void
@@ -485,6 +505,7 @@ export const useStore = create<GitCityState>((set, get) => ({
   reflogOpen: false,
   panel: 'none',
   opInProgress: null,
+  statusError: null,
   opError: null,
   confirm: null,
   mergeView: null,
@@ -503,6 +524,7 @@ export const useStore = create<GitCityState>((set, get) => ({
   reduceMotion: loadReduceMotion(),
   settingsOpen: false,
   update: null,
+  updateCheck: 'idle',
   review: null,
   reviewLoading: false,
   exporting: false,
@@ -728,12 +750,16 @@ export const useStore = create<GitCityState>((set, get) => ({
     try {
       const status = await window.gitCity.status(repoPath)
       const fp = statusFingerprint(status)
+      if (get().statusError !== null) set({ statusError: null })
       if (fp === lastFingerprint) return
       lastFingerprint = fp
       set({ workingStatus: status })
       // conflicts appeared while a merge view is open → nothing to do; gone → maybe close
-    } catch {
-      // status can briefly fail during an index.lock window; the next event retries
+    } catch (err) {
+      // Swallowed entirely before, so a corrupt index or a repo folder that
+      // went away mid-session left the Changes panel showing "Staged (0) /
+      // Changes (0)" with a blank list — which reads as a clean tree (#26).
+      set({ statusError: cleanError(err) })
     }
   },
 
@@ -882,13 +908,19 @@ export const useStore = create<GitCityState>((set, get) => ({
   openExternal: (url) => {
     if (hasApi()) void window.gitCity.openExternal(url)
   },
-  checkForUpdate: async () => {
+  checkForUpdate: async (manual = false) => {
     if (!hasApi()) return
+    // Only a check the user asked for reports itself. The startup one is
+    // deliberately invisible — it must not make the Settings button read
+    // "No update found" before anyone has pressed it.
+    if (manual) set({ updateCheck: 'checking' })
     try {
       const update = await window.gitCity.checkForUpdate()
       if (update) set({ update })
     } catch {
-      /* offline / rate-limited — silently skip */
+      /* offline / rate-limited — the main process already fails soft */
+    } finally {
+      if (manual) set({ updateCheck: 'checked' })
     }
   },
   dismissUpdate: () => set({ update: null }),
@@ -925,7 +957,7 @@ export const useStore = create<GitCityState>((set, get) => ({
   runInteractiveRebase: async (base, entries) => {
     const { repoPath } = get()
     if (!hasApi() || !repoPath) return false
-    set({ opInProgress: { label: 'Rebasing…' }, opError: null })
+    set({ opInProgress: { label: 'Rebasing…', cancellable: false }, opError: null })
     let result: OpResult
     try {
       result = await window.gitCity.rebaseInteractive(repoPath, base, entries)
@@ -1036,15 +1068,20 @@ export const useStore = create<GitCityState>((set, get) => ({
     ),
   // fetch never moves HEAD — it only updates remote refs, so no re-analysis;
   // the payoff is refreshBranches() (runs after every op) surfacing updated remotes
-  fetch: () => runOp(set, get, 'Fetching…', (repo) => window.gitCity.fetch(repo)),
+  // cancellable: these three go through simple-git with an AbortSignal, so
+  // cancelCurrentOp actually stops them. Nothing else does (#26).
+  fetch: () =>
+    runOp(set, get, 'Fetching…', (repo) => window.gitCity.fetch(repo), { cancellable: true }),
   pull: () =>
     runOp(set, get, 'Pulling…', (repo) => window.gitCity.pull(repo), {
+      cancellable: true,
       reanalyze: true,
       effect: 'pull',
       conflictsOpenMerge: true
     }),
   push: (setUpstream) =>
     runOp(set, get, 'Pushing…', (repo) => window.gitCity.push(repo, setUpstream), {
+      cancellable: true,
       effect: 'push'
     }),
   cancelOp: async () => {
@@ -1142,6 +1179,8 @@ export const useStore = create<GitCityState>((set, get) => ({
 // ---------- helpers ----------
 
 interface RunOpts {
+  /** the op honours cancelCurrentOp — fetch/pull/push only */
+  cancellable?: boolean
   reanalyze?: boolean
   effect?: EffectKind
   conflictsOpenMerge?: boolean
@@ -1159,7 +1198,7 @@ async function runOp(
 ): Promise<void> {
   const { repoPath } = get()
   if (!hasApi() || !repoPath) return
-  set({ opInProgress: { label }, opError: null })
+  set({ opInProgress: { label, cancellable: opts.cancellable === true }, opError: null })
   let result: OpResult
   try {
     result = await fn(repoPath)
@@ -1182,9 +1221,10 @@ async function runOp(
       set({ mergeView: { active: result.conflicts?.[0] ?? null, source: src } })
     }
     if (shouldSurfaceError(result.code, opts.conflictsOpenMerge === true)) {
-      set({
-        opError: { message: result.message ?? 'Operation failed.', gitOutput: result.gitOutput }
-      })
+      // opMessage, not result.message: for the codes we recognise, git's own
+      // first line is written for someone mid-task in a terminal and reads
+      // badly in a toast with no context (#26).
+      set({ opError: { message: opMessage(result), gitOutput: result.gitOutput } })
     }
     return
   }

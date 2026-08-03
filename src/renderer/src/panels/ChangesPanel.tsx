@@ -38,6 +38,8 @@ function partition(status: WorkingStatus): {
 export default function ChangesPanel(): React.JSX.Element | null {
   const panel = useStore((s) => s.panel)
   const status = useStore((s) => s.workingStatus)
+  const statusError = useStore((s) => s.statusError)
+  const refreshStatus = useStore((s) => s.refreshStatus)
   const live = useStore(isLiveState)
   const opInProgress = useStore((s) => s.opInProgress)
   const stage = useStore((s) => s.stage)
@@ -158,6 +160,16 @@ export default function ChangesPanel(): React.JSX.Element | null {
       )}
 
       <div className="panel-scroll">
+        {/* Without this, a status that failed rendered as "Staged (0) / Nothing
+            staged / Changes (0)" with a blank list — indistinguishable from a
+            clean working tree (#26). */}
+        {!status && statusError && (
+          <div className="panel-error">
+            <span>Couldn&apos;t read the working tree: {statusError}</span>
+            <button onClick={() => void refreshStatus()}>Retry</button>
+          </div>
+        )}
+        {!status && !statusError && <div className="empty">Reading the working tree…</div>}
         {parts && parts.conflicted.length > 0 && (
           <section>
             <div className="section-head danger-text">

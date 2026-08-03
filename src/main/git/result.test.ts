@@ -23,6 +23,10 @@ describe('classifyGitError', () => {
     ['nothing to commit, working tree clean', 'nothing-to-do'],
     ['No local changes to save', 'nothing-to-do'],
     ['Already up to date.', 'nothing-to-do'],
+    // a first commit on a machine git has never been configured on (#26)
+    ['Author identity unknown\n\n*** Please tell me who you are.', 'identity'],
+    ['fatal: empty ident name (for <you@your-host.local>) not allowed', 'identity'],
+    ['fatal: unable to auto-detect email address', 'identity'],
     ['fatal: something completely unexpected', 'unknown'],
     ['', 'unknown']
   ]
@@ -54,6 +58,37 @@ describe('failFrom / failFromError / ok', () => {
   it('ok() carries an optional message', () => {
     expect(ok()).toEqual({ ok: true, message: undefined })
     expect(ok('done').message).toBe('done')
+  })
+
+  /**
+   * git leads a rejected push with "To <url>", which reads like a success line
+   * and was the entire toast — while the sentence explaining what to do sat
+   * inside a collapsed expander (#26).
+   */
+  it('skips transport chatter when picking the headline', () => {
+    const push = failFrom({
+      code: 1,
+      stdout: '',
+      stderr:
+        'To github.com:you/your-repo.git\n' +
+        ' ! [rejected]        main -> main (fetch first)\n' +
+        "hint: Updates were rejected because the remote contains work that you do\nhint: not have locally. Use 'git pull' before pushing again."
+    })
+    expect(push.message).toContain('[rejected]')
+    expect(push.message).not.toMatch(/^To /)
+    expect(push.code).toBe('rejected')
+  })
+
+  it('falls back to the transport line when it is genuinely all there is', () => {
+    expect(failFrom({ code: 1, stdout: '', stderr: 'To github.com:you/repo.git' }).message).toBe(
+      'To github.com:you/repo.git'
+    )
+  })
+
+  it('marks a caller-supplied message as friendly, and a derived one as not', () => {
+    // the flag is what stops the generic per-code wording replacing it
+    expect(failFrom({ code: 1, stdout: '', stderr: 'x' }, 'Nothing to undo.').friendly).toBe(true)
+    expect(failFrom({ code: 1, stdout: '', stderr: 'x' }).friendly).toBe(false)
   })
 })
 

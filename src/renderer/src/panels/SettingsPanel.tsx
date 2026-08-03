@@ -34,6 +34,7 @@ export default function SettingsPanel(): React.JSX.Element | null {
   const askConfirm = useStore((s) => s.askConfirm)
   const checkForUpdate = useStore((s) => s.checkForUpdate)
   const update = useStore((s) => s.update)
+  const updateCheck = useStore((s) => s.updateCheck)
 
   if (!open) return null
 
@@ -172,8 +173,21 @@ export default function SettingsPanel(): React.JSX.Element | null {
           <button className="settings-action" disabled={recentCount === 0} onClick={clearRecent}>
             Clear recent repositories{recentCount > 0 ? ` (${recentCount})` : ''}
           </button>
-          <button className="settings-action" onClick={() => void checkForUpdate()}>
-            Check for updates{update ? ` — ${update.version} available` : ''}
+          {/* The result is worded honestly rather than claiming "up to date":
+              the main process treats offline, rate-limited and current
+              identically, so we genuinely do not know which it was (#26). */}
+          <button
+            className="settings-action"
+            disabled={updateCheck === 'checking'}
+            onClick={() => void checkForUpdate(true)}
+          >
+            {update
+              ? `Update available — ${update.version}`
+              : updateCheck === 'checking'
+                ? 'Checking…'
+                : updateCheck === 'checked'
+                  ? 'No update found — you are on the latest version, or GitHub was unreachable'
+                  : 'Check for updates'}
           </button>
           <button className="settings-action danger" onClick={confirmReset}>
             Reset all preferences

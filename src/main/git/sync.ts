@@ -78,6 +78,18 @@ export async function pushRemote(
     return remoteOp(repoPath, 'pushing', onProgress, (git) => git.push(['--progress']))
   }
   const branch = (await runGit(repoPath, ['rev-parse', '--abbrev-ref', 'HEAD'])).trim()
+  // On a detached HEAD, `-u origin HEAD` fails with an essay about refnames
+  // whose first line is a transport line, so the toast said nothing about the
+  // real problem: you are not on a branch (#26).
+  if (branch === 'HEAD' || !branch) {
+    return {
+      ok: false,
+      code: 'no-upstream',
+      message:
+        'You are not on a branch (detached HEAD). Create a branch here first, then publish it.',
+      friendly: true
+    }
+  }
   const remote = (await runGit(repoPath, ['remote'])).split('\n').map((r) => r.trim())
   const target = remote.includes('origin') ? 'origin' : (remote.find((r) => r) ?? 'origin')
   return remoteOp(repoPath, 'pushing', onProgress, (git) =>

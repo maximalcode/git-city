@@ -59,6 +59,15 @@ export interface ModeDef {
    * darkens the canopy interiors into mud, so modes opt in.
    */
   ao: boolean
+  /**
+   * How far back the camera starts, as a multiple of the world size.
+   *
+   * The city's detail is its skyline, which reads from a distance. The farm's
+   * is at ground level — livestock, crop rows, the lit barn windows — and at
+   * the city's framing the herds were specks (#22). Its world is also flatter,
+   * so there is no skyline to lose by coming in closer.
+   */
+  cameraScale: number
   /** first-run guide rows; the colour row follows the active colour mode */
   rows(colorName: string): { icon: IconName; title: string; body: string }[]
   prepare(analysis: RepoAnalysis, snapshot: Snapshot, colorMode: ColorMode): PreparedScene
@@ -130,6 +139,7 @@ const cityMode: ModeDef = {
   hint: 'Files as buildings in districts',
   noun: 'city',
   ao: true,
+  cameraScale: 1,
   rows: (colorName) => [
     { icon: 'city', title: 'Buildings are files', body: 'Taller = more lines of code.' },
     {
@@ -172,6 +182,8 @@ const farmMode: ModeDef = {
   icon: 'farm',
   hint: 'Files as fields on a working farm',
   noun: 'farm',
+  // two-thirds of the city's framing: the farm's detail is at ground level
+  cameraScale: 0.66,
   // the crop is foliage, not massing: AO just darkens it into mud
   ao: false,
   rows: (colorName) => [

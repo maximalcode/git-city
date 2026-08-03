@@ -56,10 +56,10 @@ describe('REPO_HOTKEYS', () => {
 
   it('escape closes everything the empty-repo screen can open', () => {
     const st = useStore.getState()
+    st.dismissOnboarding() // past first run: no guide in the way
     st.setPanel('changes')
     st.setSettingsOpen(true)
     st.setDiffOpen(true)
-    st.setHelpOpen(true)
 
     REPO_HOTKEYS.escape()
 
@@ -67,6 +67,34 @@ describe('REPO_HOTKEYS', () => {
     expect(after.panel).toBe('none')
     expect(after.settingsOpen).toBe(false)
     expect(after.diffOpen).toBe(false)
-    expect(after.helpOpen).toBe(false)
+  })
+
+  /**
+   * The guide is a modal overlay over everything else, so Escape has to take it
+   * off first and stop — tearing down the panels underneath an overlay the user
+   * was only trying to close is not what they asked for (#30).
+   */
+  it('escape takes the guide off first, leaving what is behind it alone', () => {
+    const st = useStore.getState()
+    st.dismissOnboarding()
+    st.setPanel('changes')
+    st.setHelpOpen(true)
+
+    REPO_HOTKEYS.escape()
+    expect(useStore.getState().helpOpen).toBe(false)
+    expect(useStore.getState().panel).toBe('changes')
+
+    REPO_HOTKEYS.escape()
+    expect(useStore.getState().panel).toBe('none')
+  })
+
+  it('escape dismisses the first-run guide, which no flag marks as open', () => {
+    // it shows because `onboarded` is false, so clearing helpOpen did nothing
+    // and Escape was a silent no-op in front of it (#30)
+    useStore.setState({ onboarded: false, helpOpen: false })
+
+    REPO_HOTKEYS.escape()
+
+    expect(useStore.getState().onboarded).toBe(true)
   })
 })

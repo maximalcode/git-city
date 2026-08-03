@@ -2556,6 +2556,11 @@
   font-family: Consolas, monospace;
   white-space: nowrap;
 }
+/* Files the PR touches that this branch's scene cannot place — stated rather
+   than silently counted among the ones you can step through (#30). */
+.review-elsewhere {
+  opacity: 0.75;
+}
 /* The file count could not be fetched — say so rather than claiming zero (#24).
    Wraps, unlike the count: this is a sentence, not a number. */
 .review-count.review-error {

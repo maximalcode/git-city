@@ -57,7 +57,13 @@ export default function Hud({ snapshot, model }: Props): React.JSX.Element {
   const setHelpOpen = useStore((s) => s.setHelpOpen)
   const startExport = useStore((s) => s.startExport)
   const exporting = useStore((s) => s.exporting)
-  const modalOpen = useStore((s) => s.confirm !== null || s.mergeView !== null)
+  // The guide counts as a modal: it dims the scene, and Space used to start
+  // playback behind it — which the card's own footer invites the user to press
+  // — while C opened Changes under the backdrop (#30). It has no "open" flag of
+  // its own: on first run it shows because `onboarded` is false.
+  const modalOpen = useStore(
+    (s) => s.confirm !== null || s.mergeView !== null || s.helpOpen || !s.onboarded
+  )
 
   const byPath = useMemo(() => new Map(snapshot.files.map((f) => [f.path, f])), [snapshot])
 
@@ -116,9 +122,13 @@ export default function Hud({ snapshot, model }: Props): React.JSX.Element {
     }),
     []
   )
-  // suspended while the confirm dialog or merge view is up — 'c'/'space'/etc.
-  // must not toggle panels or playback underneath a modal
-  useHotkeys(hotkeys, !modalOpen)
+  // Suspended while the confirm dialog or merge view is up — 'c'/'space'/etc.
+  // must not toggle panels or playback underneath a modal. Escape is exempt:
+  // it is how you dismiss the thing that is blocking, and the map's own handler
+  // deals with the layering.
+  // `exporting` joins the suspension for the same reason the transport is
+  // disabled below: Space during a recording stalls it.
+  useHotkeys(hotkeys, !modalOpen && !exporting, ['escape'])
 
   const last = analysis.snapshots.length - 1
   const hoveredFile = hovered ? byPath.get(hovered) : undefined
@@ -344,11 +354,15 @@ export default function Hud({ snapshot, model }: Props): React.JSX.Element {
             </button>
           )}
         </div>
+        {/* The export drives the transport itself, so touching it mid-record
+            fought the recording — and stalled it, since the poll waits for
+            playback to reach the end (#30). */}
         <div className="timeline-row">
           <button
             className="play"
+            disabled={exporting}
             onClick={() => setPlaying(!playing)}
-            title="Play history (Space)"
+            title={exporting ? 'Recording a time-lapse…' : 'Play history (Space)'}
             aria-label={playing ? 'Pause history' : 'Play history'}
           >
             {playing ? '❚❚' : '▶'}
@@ -358,6 +372,7 @@ export default function Hud({ snapshot, model }: Props): React.JSX.Element {
             min={0}
             max={last}
             step={1}
+            disabled={exporting}
             value={Math.min(snapshotIndex, last)}
             onChange={(e) => setSnapshotIndex(Number(e.target.value))}
           />

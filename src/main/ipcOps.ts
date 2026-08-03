@@ -68,9 +68,36 @@ function readOnly<T>(
     } catch (err) {
       if (err instanceof FriendlyError) throw new Error(err.message)
       console.error(`[git-city] ${channel} failed:`, err)
-      throw new Error(`Could not load ${channel.replace(/-/g, ' ')}.`)
+      // "Could not load blame." next to a Retry that loops was every reason a
+      // read can fail. git usually said something useful — pass its first line
+      // on, with absolute paths reduced to a basename so the panel doesn't
+      // become a directory listing (#30).
+      const detail = gitDetail(err, repoPath)
+      throw new Error(
+        detail
+          ? `Could not load ${channel.replace(/-/g, ' ')}: ${detail}`
+          : `Could not load ${channel.replace(/-/g, ' ')}.`
+      )
     }
   })
+}
+
+/**
+ * git's own first line, safe to show. Returns null when there is nothing worth
+ * adding — an internal stack, or a message that is just our own command line.
+ */
+function gitDetail(err: unknown, repoPath: string): string | null {
+  if (!(err instanceof Error)) return null
+  const line = err.message
+    .split('\n')
+    .map((l) => l.replace(/^(fatal|error|warning):\s*/i, '').trim())
+    .find((l) => l.length > 0)
+  if (!line) return null
+  // Our own failure text ("git log --first-parent … exited with 128") tells the
+  // user nothing and exposes the invocation; the console.error above keeps it.
+  if (/^git\s.*exited with/.test(line)) return null
+  const short = line.split(repoPath).join(basename(repoPath))
+  return short.length > 200 ? `${short.slice(0, 199)}…` : short
 }
 
 /**

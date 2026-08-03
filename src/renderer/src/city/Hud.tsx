@@ -139,6 +139,8 @@ export default function Hud({ snapshot, model }: Props): React.JSX.Element {
   const branchLabel = st ? (st.branch ?? `detached @ ${st.detachedAt}`) : analysis.info.branch
   const hasRemote = (st?.remotes.length ?? 0) > 0
   const hasUpstream = st?.upstream != null
+  // detached HEAD: there is no branch for Publish to create an upstream for
+  const onNoBranch = st != null && st.branch == null
   const opState = st?.opState ?? 'none'
 
   return (
@@ -184,11 +186,20 @@ export default function Hud({ snapshot, model }: Props): React.JSX.Element {
                 <Icon name="pull" size={15} />
                 Pull
               </button>
+              {/* On a detached HEAD there is no branch to publish, and the
+                  invitation to try was the only thing on screen that mentioned
+                  it — the failure said nothing about not being on one (#26). */}
               <button
                 className="primary"
-                disabled={busy}
+                disabled={busy || onNoBranch}
                 onClick={() => void push(!hasUpstream)}
-                title={hasUpstream ? 'Push' : 'Publish this branch'}
+                title={
+                  onNoBranch
+                    ? 'You are not on a branch (detached HEAD). Create a branch here first.'
+                    : hasUpstream
+                      ? 'Push'
+                      : 'Publish this branch'
+                }
               >
                 <Icon name="push" size={15} />
                 {hasUpstream ? 'Push' : 'Publish'}
@@ -199,7 +210,10 @@ export default function Hud({ snapshot, model }: Props): React.JSX.Element {
           {busy && (
             <span className="op-spinner">
               <span className="spinner" /> {opInProgress?.label}
-              <button onClick={() => void cancelOp()}>Cancel</button>
+              {/* Only for ops that honour cancelCurrentOp. Offering it during a
+                  submodule update or a rebase gave the user a button that did
+                  nothing at all while the whole UI stayed disabled (#26). */}
+              {opInProgress?.cancellable && <button onClick={() => void cancelOp()}>Cancel</button>}
             </span>
           )}
           {!busy && reanalyzing && (

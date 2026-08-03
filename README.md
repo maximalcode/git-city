@@ -33,6 +33,9 @@ signing stays with gpg-agent / ssh-agent, and there is no telemetry.
 > `xattr -d com.apple.quarantine "/Applications/Git City.app"`. Signing is on
 > the roadmap; it needs a paid certificate.
 
+Anything else that goes wrong on first run is in
+**[Troubleshooting](docs/troubleshooting.md)**.
+
 ## What it looks like
 
 |                                                                     |                                                         |
@@ -184,6 +187,8 @@ signing stays with gpg-agent / ssh-agent, and there is no telemetry.
 | `Space`          | Play/pause the timeline        |
 | `Escape`         | Close panels / clear selection |
 
+Also as a page: [docs/shortcuts.md](docs/shortcuts.md).
+
 ## How it works
 
 Git City runs one streaming pass of
@@ -286,6 +291,16 @@ MapControls (see `city/CameraRig.tsx`), and drei's text stack embeds a
 base64 WASM blob that antivirus heuristics love to false-positive on. All
 vehicle and tree geometry is likewise built in-code from merged three.js
 primitives, no external models.
+
+## Docs
+
+- [Troubleshooting](docs/troubleshooting.md) — unsigned installers, git not on
+  `PATH`, slow repositories, empty cities
+- [What the colours mean](docs/colour-modes.md) — the six encodings
+- [Keyboard shortcuts](docs/shortcuts.md)
+- [Security](SECURITY.md) — what leaves your machine (one version check), what
+  it executes, how to report a vulnerability
+- [Releasing](RELEASING.md) — cutting a release
 
 ## Contributing
 

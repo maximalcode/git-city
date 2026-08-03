@@ -72,17 +72,20 @@ Above about 60,000 files the street network stops being drawn — the plots are
 too small for roads to fit. Tracked in
 [#12](https://github.com/maximalcode/git-city/issues/12).
 
-## "The selected folder is not a git repository" — but it is
+## Git City won't open a folder
 
 Git City renders a **working tree**, so it needs the folder that _contains_
-`.git` — not `.git` itself, and not a `--bare` clone. For a bare repository,
-clone it first (`git clone <path> <dest>`) and open the clone.
+`.git` — not `.git` itself, and not a `--bare` clone. It will say which of those
+you picked. For a bare repository, clone it first
+(`git clone <path> <dest>`) and open the clone.
 
-The same message also appears when Git City cannot _read_ the folder at all, so
-if the path is definitely a normal repository, check its permissions and
-ownership. Running `git status` in that folder yourself will usually name the
-real cause — including git's "dubious ownership" advice, which tells you the
-exact `git config --global --add safe.directory …` line to run.
+**"Git City does not have permission to read …"** means exactly that: check the
+folder's permissions and ownership. If git itself is refusing over ownership,
+Git City passes git's own advice through, including the
+`git config --global --add safe.directory …` line you need to run.
+
+**"The selected folder is not a git repository"** now only appears when it
+genuinely isn't one.
 
 ## The city looks empty, or the scene is dark
 

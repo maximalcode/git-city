@@ -42,11 +42,12 @@ Git City **stores no tokens, passwords or keys**. It has no credential store,
 and nothing it writes to disk contains a secret.
 
 - **Remote authentication** — handled by git and your own credential helper.
-  Git City never prompts for a password, and never sees one. Its git
-  invocations run with `GIT_TERMINAL_PROMPT=0`, so a missing credential fails
-  fast rather than blocking on a prompt you cannot see. (`clone` is the one
-  call that does not yet set it —
-  [#25](https://github.com/maximalcode/git-city/issues/25).)
+  Git City never prompts for a password, and never sees one. Every git
+  invocation runs with `GIT_TERMINAL_PROMPT=0`, so a missing credential fails
+  fast rather than blocking on a prompt you cannot see.
+  [`remoteEnv.ts`](src/main/git/remoteEnv.ts) builds the environment for
+  network operations from an allowlist, so nothing else in your shell
+  environment reaches them either.
 - **Pull requests** — shelled out to the official `gh` / `glab` CLIs, which
   hold their own login. Git City never sees the token.
 - **Commit signing** — delegated to `gpg-agent` / `ssh-agent`. Keys and

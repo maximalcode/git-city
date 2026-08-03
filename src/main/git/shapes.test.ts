@@ -203,6 +203,35 @@ describe('repo shapes', () => {
     expect(paths.some((p) => p.startsWith('vendor/inner/'))).toBe(false)
   })
 
+  it('tells the user a bare repository is bare, not that it is not a repository', async () => {
+    const source = makeTempRepo('git-city-bare-src-')
+    created.push(source.path)
+    source.write('a.ts', 'let x = 1\n')
+    source.commitAll('first')
+    const dir = tempDir('git-city-bare-')
+    const bare = join(dir, 'bare.git')
+    execFileSync('git', ['clone', '--bare', `file://${source.path}`, bare], { stdio: 'pipe' })
+
+    // it really is a repository — the old message sent the user looking in
+    // entirely the wrong place (#25)
+    await expect(analyze(bare)).rejects.toThrow(/bare repository/i)
+    await expect(analyze(bare)).rejects.toThrow(/clone it first/i)
+  })
+
+  it('tells the user they picked the .git folder', async () => {
+    const repo = makeTempRepo('git-city-dotgit-')
+    created.push(repo.path)
+    repo.write('a.ts', 'let x = 1\n')
+    repo.commitAll('first')
+
+    await expect(analyze(join(repo.path, '.git'))).rejects.toThrow(/\.git folder/i)
+  })
+
+  it('still says "not a git repository" for a folder that genuinely is not one', async () => {
+    const dir = tempDir('git-city-plain-')
+    await expect(analyze(dir)).rejects.toThrow(/not a git repository/i)
+  })
+
   it('handles many files in a single directory', async () => {
     const repo = makeTempRepo('git-city-wide-')
     created.push(repo.path)

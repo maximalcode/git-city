@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type {
   BranchInfo,
+  GitVersion,
   HostAuth,
   OpResult,
   ProgressInfo,
@@ -272,7 +273,10 @@ interface GitCityState {
   viewMode: ViewMode
   progress: ProgressInfo | null
   error: string | null
-  gitVersion: string | null | 'unknown'
+  /** 'checking' until the probe answers; null means git is not on PATH at all */
+  gitVersion: GitVersion | null | 'checking'
+  /** the repository being size-probed before opening, so Welcome can say so */
+  pendingProbe: string | null
   recentRepos: string[]
   searchOpen: boolean
 
@@ -448,7 +452,8 @@ export const useStore = create<GitCityState>((set, get) => ({
   viewMode: loadViewMode(),
   progress: null,
   error: null,
-  gitVersion: 'unknown',
+  gitVersion: 'checking',
+  pendingProbe: null,
   recentRepos: loadRecent(),
   searchOpen: false,
 
@@ -529,6 +534,12 @@ export const useStore = create<GitCityState>((set, get) => ({
     // Probe the size first: a monorepo can take minutes to replay, and a
     // progress bar with no sense of scale reads as a hang (#12). Cheap enough
     // (two counting calls) that the common case is unaffected.
+    //
+    // pendingProbe is what Welcome shows during it. The counting is fast on a
+    // normal repo and slow on exactly the repos this exists to warn about, and
+    // with nothing on screen the user clicked Open a second time and got a
+    // second folder dialog (#25).
+    set({ pendingProbe: path, error: null })
     try {
       const warning = repoWarning(await window.gitCity.repoSize(path))
       if (warning) {
@@ -537,6 +548,8 @@ export const useStore = create<GitCityState>((set, get) => ({
       }
     } catch {
       // if sizing fails, just open — never block on the advisory path
+    } finally {
+      set({ pendingProbe: null })
     }
     await loadRepo(set, get, () => window.gitCity.analyzeRepo(path, 50), path)
   },

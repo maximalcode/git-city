@@ -2,6 +2,7 @@ import { spawn } from 'child_process'
 import { existsSync } from 'fs'
 import { createInterface } from 'readline'
 import { FriendlyError } from './result'
+import { permissionMessage } from './openErrors'
 
 /**
  * Shared git process runners.
@@ -57,14 +58,29 @@ export interface GitResult {
 }
 
 /**
+ * Turn a failed spawn into something worth showing, or null to pass the raw
+ * error along.
+ *
  * Every git call goes through a spawn, so a machine without git on PATH fails
  * with a bare `spawn git ENOENT` — which reaches the user as either a generic
  * "could not load" or that raw string, neither of which says what to do. The
  * packaged app is the case that matters: installing the .exe or .dmg does not
  * install git.
+ *
+ * The same errno covers three different situations, and they need three
+ * different sentences: no git, no folder, and no permission.
  */
-export function gitMissingError(err: unknown, cwd?: string): FriendlyError | null {
-  if ((err as NodeJS.ErrnoException)?.code !== 'ENOENT') return null
+export function spawnFailure(err: unknown, cwd?: string): FriendlyError | null {
+  const code = (err as NodeJS.ErrnoException)?.code
+
+  // A folder git could see but we cannot enter. Reported as "not a git
+  // repository" before, which sent the user to look in entirely the wrong
+  // place (#25).
+  if (code === 'EACCES' || code === 'EPERM') {
+    return new FriendlyError(permissionMessage(cwd ?? 'that folder'))
+  }
+
+  if (code !== 'ENOENT') return null
   // spawn reports ENOENT for a missing *cwd* as well as a missing binary, so a
   // repo folder that was renamed, deleted or unmounted since it was opened used
   // to send the user off to install the git they already have.
@@ -106,7 +122,7 @@ export function runGitResult(
       if ((err as NodeJS.ErrnoException).code === 'ABORT_ERR') {
         resolve({ code: -1, stdout, stderr: stderr || 'Operation cancelled.' })
       } else {
-        reject(gitMissingError(err, cwd) ?? err)
+        reject(spawnFailure(err, cwd) ?? err)
       }
     })
     child.on('close', (code) => resolve({ code: code ?? -1, stdout, stderr }))
@@ -168,10 +184,13 @@ export function runGitLines(
     child.stderr.on('data', (d) => (err += d))
     const rl = createInterface({ input: child.stdout, crlfDelay: Infinity })
     rl.on('line', onLine)
-    child.on('error', (e) => reject(gitMissingError(e, cwd) ?? e))
-    child.on('close', (code) => {
+    child.on('error', (e) => reject(spawnFailure(e, cwd) ?? e))
+    child.on('close', (code, signal) => {
       if (code === 0) resolve()
-      else reject(new Error(err.trim() || `git ${args.join(' ')} exited with ${code}`))
+      // A killed process has a null code, which used to print as "exited with
+      // null". The signal is the only thing that says what happened, and this
+      // text is what lands in the main-process log.
+      else reject(new Error(err.trim() || `git ${args.join(' ')} exited with ${code ?? signal}`))
     })
   })
 }

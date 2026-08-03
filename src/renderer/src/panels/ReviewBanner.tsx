@@ -38,9 +38,15 @@ export default function ReviewBanner(): React.JSX.Element | null {
         Reviewing <strong>#{review.number}</strong>
         <span className="review-title"> {review.title}</span>
       </span>
-      <span className="review-count">
-        {count} file{count === 1 ? '' : 's'}
-      </span>
+      {/* "0 files" used to be asserted whenever the fetch failed — a confident
+          claim that the PR changes nothing (#24) */}
+      {review.error ? (
+        <span className="review-count review-error">{review.error}</span>
+      ) : (
+        <span className="review-count">
+          {count} file{count === 1 ? '' : 's'}
+        </span>
+      )}
       {count > 0 && (
         <span className="review-step">
           <button onClick={() => step(-1)} aria-label="Previous file">

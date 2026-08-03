@@ -229,6 +229,8 @@ const REPO_STATE_RESET: Partial<GitCityState> = {
   worktrees: [],
   hostAuth: null,
   pullRequests: [],
+  prsTruncated: false,
+  hostError: null,
   currentPr: null,
   prPanelOpen: false,
   prLoading: false,
@@ -290,13 +292,21 @@ interface GitCityState {
   worktrees: WorktreeInfo[]
   hostAuth: HostAuth | null
   pullRequests: PullRequestInfo[]
+  /** more open PRs exist than the panel asked for */
+  prsTruncated: boolean
+  /** why the PR list could not be fetched — never confused with "there are none" */
+  hostError: string | null
   currentPr: PullRequestInfo | null
   prPanelOpen: boolean
   prLoading: boolean
   /** a newer release found on GitHub, or null; dismissed for the session once closed */
   update: UpdateInfo | null
-  /** PR being visually reviewed in the scene (its changed files glow), or null */
-  review: { number: number; title: string; paths: string[] } | null
+  /**
+   * PR being visually reviewed in the scene (its changed files glow), or null.
+   * `error` set means the file list could not be fetched — the banner says so
+   * instead of claiming the PR changes nothing (#24).
+   */
+  review: { number: number; title: string; paths: string[]; error: string | null } | null
   reviewLoading: boolean
   /** time-lapse recording in progress */
   exporting: boolean
@@ -466,6 +476,8 @@ export const useStore = create<GitCityState>((set, get) => ({
   worktrees: [],
   hostAuth: null,
   pullRequests: [],
+  prsTruncated: false,
+  hostError: null,
   currentPr: null,
   prPanelOpen: false,
   prLoading: false,
@@ -509,6 +521,14 @@ export const useStore = create<GitCityState>((set, get) => ({
         void get().refreshBranches()
         void get().refreshStashes()
         void get().refreshTags()
+        // "This branch" otherwise keeps showing the PR of the branch just
+        // left — and that PR is filtered out of the Open list, so it appears
+        // in the wrong place and nowhere else. Conversely, after checking out
+        // a PR's branch the stale null offered "Create PR" for a branch that
+        // already has one (#24). Only for users who have opened the panel;
+        // nobody else should pay for a gh spawn on every checkout.
+        const st = get()
+        if (st.prPanelOpen || st.hostAuth !== null) void st.refreshHost()
         // external HEAD move: don't surprise-reanalyze; offer a reload pill
         const s = get()
         if (s.opInProgress === null && s.reanalyzing === false) set({ historyStale: true })
@@ -775,22 +795,42 @@ export const useStore = create<GitCityState>((set, get) => ({
   refreshHost: async () => {
     const { repoPath } = get()
     if (!hasApi() || !repoPath) return
-    set({ prLoading: true })
+    set({ prLoading: true, hostError: null })
+    // A slow gh call from the previous repository could otherwise land in the
+    // new one's panel, offering "Check out" for a PR number that doesn't exist
+    // there (#29).
+    const stillHere = (): boolean => get().repoPath === repoPath
     try {
       const auth = await window.gitCity.hostStatus(repoPath)
+      if (!stillHere()) return
       if (!auth.authed || !auth.isRepo) {
-        set({ hostAuth: auth, pullRequests: [], currentPr: null })
+        set({ hostAuth: auth, pullRequests: [], currentPr: null, prsTruncated: false })
         return
       }
-      const [pullRequests, currentPr] = await Promise.all([
+      const [list, currentPr] = await Promise.all([
         window.gitCity.listPullRequests(repoPath),
         window.gitCity.currentBranchPr(repoPath)
       ])
-      set({ hostAuth: auth, pullRequests, currentPr })
-    } catch {
-      /* leave prior state; gh hiccup */
+      if (!stillHere()) return
+      // A failed list is not an empty list. Rendering it as "No open pull
+      // requests" was a confident lie about a repo with forty of them (#24).
+      if (!list.ok) {
+        set({ hostAuth: auth, currentPr, hostError: list.reason })
+        return
+      }
+      set({
+        hostAuth: auth,
+        pullRequests: list.prs,
+        prsTruncated: list.more,
+        currentPr,
+        hostError: null
+      })
+    } catch (err) {
+      // Swallowing this left the panel completely blank — no message, no empty
+      // state, and a ↻ that visibly did nothing (#24).
+      if (stillHere()) set({ hostError: cleanError(err) })
     } finally {
-      set({ prLoading: false })
+      if (stillHere()) set({ prLoading: false })
     }
   },
   checkoutPr: (number) =>
@@ -813,13 +853,21 @@ export const useStore = create<GitCityState>((set, get) => ({
     const { repoPath } = get()
     if (!hasApi() || !repoPath) return
     set({ reviewLoading: true, prPanelOpen: false })
+    const stillHere = (): boolean => get().repoPath === repoPath
     try {
-      const files = await window.gitCity.pullRequestFiles(repoPath, number)
-      set({ review: { number, title, paths: files.map((f) => f.path) } })
-    } catch {
-      set({ review: null })
+      const res = await window.gitCity.pullRequestFiles(repoPath, number)
+      if (!stillHere()) return
+      // "Reviewing #42 — 0 files" was asserted whenever the fetch failed: a
+      // confident claim that the PR changes nothing (#24).
+      set(
+        res.ok
+          ? { review: { number, title, paths: res.files.map((f) => f.path), error: null } }
+          : { review: { number, title, paths: [], error: res.reason } }
+      )
+    } catch (err) {
+      if (stillHere()) set({ review: { number, title, paths: [], error: cleanError(err) } })
     } finally {
-      set({ reviewLoading: false })
+      if (stillHere()) set({ reviewLoading: false })
     }
   },
   clearReview: () => set({ review: null }),

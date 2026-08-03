@@ -2556,6 +2556,14 @@
   font-family: Consolas, monospace;
   white-space: nowrap;
 }
+/* The file count could not be fetched — say so rather than claiming zero (#24).
+   Wraps, unlike the count: this is a sentence, not a number. */
+.review-count.review-error {
+  color: var(--danger);
+  font-family: inherit;
+  white-space: normal;
+  max-width: 42ch;
+}
 .review-step {
   display: inline-flex;
   gap: 2px;

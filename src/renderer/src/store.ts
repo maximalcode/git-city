@@ -511,7 +511,15 @@ export const useStore = create<GitCityState>((set, get) => ({
         void get().refreshTags()
         // external HEAD move: don't surprise-reanalyze; offer a reload pill
         const s = get()
-        if (s.opInProgress === null && s.reanalyzing === false) set({ historyStale: true })
+        if (s.opInProgress === null && s.reanalyzing === false) {
+          // ...unless there is no scene to disturb. A repo with no commits
+          // renders EmptyRepoView, which carries no reload affordance, so a
+          // first commit made outside the app left "No commits yet" on screen
+          // indefinitely while the Changes panel beside it showed a clean tree.
+          // Only closing and reopening the repository fixed it (#29).
+          if ((s.analysis?.snapshots.length ?? 0) === 0) void s.refreshAnalysis()
+          else set({ historyStale: true })
+        }
       }
     })
     window.gitCity

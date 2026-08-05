@@ -1,4 +1,5 @@
 import type { RepoSize } from '../../../shared/types'
+import { MAX_DRAWN_FILES } from '../layout/cap'
 
 /**
  * Whether a repository is big enough to be worth warning about before opening.
@@ -18,12 +19,26 @@ export const STREETLESS_FILE_COUNT = 60_000
 const WARN_ABOVE_SECONDS = 25
 
 /**
- * Rough seconds to analyse, extrapolated linearly from a single measured point
- * (129.6s for 14,271 commits ≈ 9ms each). One data point is a weak basis, so
- * callers should present this as an order of magnitude and never as a countdown.
+ * Rough seconds before the scene is on screen.
+ *
+ * Two costs, and the second one used to be missing entirely — the estimate
+ * counted only the history replay, so for a TypeScript-sized monorepo it
+ * promised "a couple of minutes" for a wait of over three and a half (#12).
+ *
+ * - **analysis**, linear in commits: 129.6s for 14,271 ≈ 9ms each.
+ * - **scene build**, in the renderer: 4.9s at 5,000 files and 16.7s at 20,000
+ *   on a cold load, so roughly 0.8ms per drawn file. Bounded, because
+ *   {@link MAX_DRAWN_FILES} means the explosive tail past 20k is never paid —
+ *   uncapped, 81,368 files took 212s.
+ *
+ * Both are extrapolations from few points, so callers must present the result
+ * as an order of magnitude and never as a countdown.
  */
-export function estimateSeconds(commits: number): number {
-  return (commits * 9) / 1000
+export function estimateSeconds(commits: number, files = 0): number {
+  const analysis = (commits * 9) / 1000
+  const drawn = Math.min(files, MAX_DRAWN_FILES)
+  const scene = (drawn * 0.8) / 1000
+  return analysis + scene
 }
 
 export interface RepoWarning {
@@ -33,6 +48,10 @@ export interface RepoWarning {
   /** true once the road network is effectively gone */
   streetless: boolean
   dense: boolean
+  /** the scene will show a subset of the files */
+  capped: boolean
+  /** how many will actually be drawn */
+  drawn: number
 }
 
 function wordWait(seconds: number): string {
@@ -48,7 +67,7 @@ function wordWait(seconds: number): string {
  * flat tree draws badly but may replay quickly.
  */
 export function repoWarning(size: RepoSize): RepoWarning | null {
-  const seconds = estimateSeconds(size.commits)
+  const seconds = estimateSeconds(size.commits, size.files)
   const slow = seconds >= WARN_ABOVE_SECONDS
   const dense = size.files >= DENSE_FILE_COUNT
   if (!slow && !dense) return null
@@ -56,6 +75,10 @@ export function repoWarning(size: RepoSize): RepoWarning | null {
     size,
     wait: wordWait(seconds),
     streetless: size.files >= STREETLESS_FILE_COUNT,
-    dense
+    dense,
+    // above the cap the scene is a subset, and the dialog has to say so before
+    // they commit to the wait — not after (#12)
+    capped: size.files > MAX_DRAWN_FILES,
+    drawn: Math.min(size.files, MAX_DRAWN_FILES)
   }
 }

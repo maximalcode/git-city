@@ -46,7 +46,9 @@ function model(paths: string[]): CityModel {
     paths,
     indexOf: new Map(paths.map((p, i) => [p, i])),
     langColors: paths.map(() => new Color('#3178c6')),
-    citySize: 100
+    citySize: 100,
+    totalFiles: paths.length,
+    capped: false
   }
 }
 

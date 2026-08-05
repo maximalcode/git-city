@@ -25,6 +25,20 @@
   border-radius: 999px;
   padding: 3px 10px;
 }
+/* "20,000 of 81,368 files" — the scene is a subset, and saying so quietly in
+   the top bar is what keeps the cap from being a silent lie (#12). Deliberately
+   not an alert colour: it is a statement of fact, not a problem. */
+.capped-chip {
+  font-size: 11.5px;
+  font-family: Consolas, monospace;
+  color: var(--text-dim);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--panel-border);
+  border-radius: 999px;
+  padding: 2px 9px;
+  white-space: nowrap;
+  cursor: help;
+}
 .op-spinner {
   display: flex;
   align-items: center;

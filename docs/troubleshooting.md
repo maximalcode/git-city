@@ -64,12 +64,27 @@ If you installed the CLI while Git City was open, press **↻** in the panel.
 
 Git City replays the entire history to know each file's size at every commit.
 That cost scales with commits × files: a normal repository opens in seconds, but
-a monorepo genuinely takes minutes (measured: 14,271 commits and 81,368 files →
-about 130 seconds). Above roughly 20,000 files you get a warning with the real
-numbers and a way out before the wait starts.
+a monorepo genuinely takes minutes (measured: 14,271 commits → about 130
+seconds). Above roughly 20,000 files you get a warning with the real numbers and
+a way out before the wait starts.
 
-Above about 60,000 files the street network stops being drawn — the plots are
-too small for roads to fit. Tracked in
+## "20,000 of 81,368 files" in the top bar
+
+Not a bug — the scene is showing a subset, and that chip is Git City telling you
+so. Above 20,000 files it draws the **20,000 largest** (by peak line count) and
+leaves the rest out.
+
+The reason is blunt: drawing all 81,368 files of a TypeScript-sized repository
+took **212 seconds** before the scene became usable, against about 25 with the
+cap. Above roughly 60,000 files the streets stop being drawn regardless — the
+plots are too small for a road to fit between them — so those extra buildings
+were costing minutes to render something that had stopped looking like a city.
+
+The kept set is the same for every frame of the timeline, so scrubbing history
+never makes buildings appear or vanish unexpectedly.
+
+Making a monorepo genuinely _readable_ — collapsing deep directories rather than
+dropping files — is still open:
 [#12](https://github.com/maximalcode/git-city/issues/12).
 
 ## Git City won't open a folder

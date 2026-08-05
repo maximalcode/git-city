@@ -15,6 +15,7 @@
 import { Color } from 'three'
 import type { RepoAnalysis, Snapshot } from '../../../shared/types'
 import { cityLayout, type CityLayout, type Rect } from './treemap'
+import { capFiles } from './cap'
 import { languageOf } from '../lib/languages'
 import { buildColorer, type ColorMode } from '../city/colorModes'
 
@@ -48,6 +49,9 @@ export interface FarmModel {
   /** the parcels that get a farmstead — the top-level directories */
   steads: { rect: Rect; parcel: number }[]
   worldSize: number
+  /** files the repository has, which is more than `paths` when capped (#12) */
+  totalFiles: number
+  capped: boolean
 }
 
 export interface FarmTargets {
@@ -77,7 +81,11 @@ export function buildFarmModel(analysis: RepoAnalysis): FarmModel {
       if ((weights.get(f.path) ?? 0) < w) weights.set(f.path, w)
     }
   }
-  const files = Array.from(weights, ([path, weight]) => ({ path, weight }))
+  // same ceiling as the city — a monorepo's fields are unreadable long before
+  // the scene finishes building, so draw the largest and say so (#12)
+  const { files, total, capped } = capFiles(
+    Array.from(weights, ([path, weight]) => ({ path, weight }))
+  )
   // wider than the city: fields need room to read as fields, and the
   // farm is meant to feel like it goes on
   const worldSize = Math.max(110, Math.min(340, Math.sqrt(files.length) * 12))
@@ -126,7 +134,9 @@ export function buildFarmModel(analysis: RepoAnalysis): FarmModel {
     parcelOf,
     layout,
     steads,
-    worldSize
+    worldSize,
+    totalFiles: total,
+    capped
   }
 }
 

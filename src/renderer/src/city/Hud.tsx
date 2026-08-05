@@ -10,13 +10,14 @@ import Icon from '../lib/icons'
 import { useStore, type ColorMode, type ViewMode } from '../store'
 import { THEMES, getTheme } from './themes'
 import { COLOR_MODES, type ColorContext } from './colorModes'
+import { cappedLabel } from '../layout/cap'
 import { MODES, getMode, nextMode } from './modes'
 import Legend from './Legend'
 import SearchBox from './SearchBox'
 import SideRail from './SideRail'
 
 /** The slice of a scene model the HUD needs — every mode model satisfies it. */
-export type HudModel = ColorContext & { paths: string[] }
+export type HudModel = ColorContext & { paths: string[]; totalFiles: number; capped: boolean }
 
 interface Props {
   snapshot: Snapshot
@@ -150,6 +151,17 @@ export default function Hud({ snapshot, model }: Props): React.JSX.Element {
       <div className="hud-top">
         <div className="hud-zone hud-left">
           <span className="repo-name">{analysis.info.name}</span>
+          {/* A cap the user cannot see would be worse than no cap: the city
+              would silently be a different repository from the one they
+              opened (#12). */}
+          {model.capped && (
+            <span
+              className="capped-chip"
+              title={`This repository is too large to draw in full. Showing the ${model.paths.length.toLocaleString()} largest files by peak line count; the other ${(model.totalFiles - model.paths.length).toLocaleString()} are not in the scene.`}
+            >
+              {cappedLabel(model.paths.length, model.totalFiles)}
+            </span>
+          )}
           <button
             className={`branch-chip${panel === 'branches' ? ' active' : ''}`}
             onClick={() => setPanel('branches')}

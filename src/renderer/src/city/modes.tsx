@@ -39,7 +39,7 @@ export interface PreparedScene {
   /** world extent, for the camera rig, fog and minimap scale */
   worldSize: number
   /** satisfies HudModel and ColorContext — both models already do */
-  hud: { paths: string[]; langColors: Color[] }
+  hud: { paths: string[]; langColors: Color[]; totalFiles: number; capped: boolean }
   /** where the camera should fly for a file, or null if absent from this scene */
   focus(path: string): Vector3 | null
   dots(): MinimapDot[]

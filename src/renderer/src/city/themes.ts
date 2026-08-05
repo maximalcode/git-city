@@ -61,6 +61,17 @@ export interface Theme {
   grass: string
   /** tilled earth under the crop in the farm view */
   soil: string
+
+  /**
+   * The farm's answer to `windows` — lit barn windows, the doorway spill and
+   * the yard lamp. Under the dark themes the city is composed almost entirely
+   * of lit windows; the farm had no equivalent, so it read as a dim field of
+   * rectangles rather than a place at night (#22).
+   *
+   * A knob here rather than a per-mode table, for the same reason `grass` and
+   * `soil` are: a new world adds a theme knob, not another parallel palette.
+   */
+  farmLights: { enabled: boolean; color: string; intensity: number }
 }
 
 export const THEMES: Theme[] = [
@@ -90,7 +101,8 @@ export const THEMES: Theme[] = [
     road: { surface: '#2a3140', marking: '#c8cede', markingEmissive: 0, sidewalk: '#68718a' },
     shopfront: { enabled: false, color: '#ffd9a0', intensity: 0 },
     grass: '#3f6b30',
-    soil: '#5a4227'
+    soil: '#5a4227',
+    farmLights: { enabled: false, color: '#ffd9a0', intensity: 0 }
   },
   {
     id: 'realistic-night',
@@ -118,7 +130,8 @@ export const THEMES: Theme[] = [
     road: { surface: '#10141e', marking: '#8f97ad', markingEmissive: 0, sidewalk: '#2b3242' },
     shopfront: { enabled: true, color: '#ffd9a0', intensity: 1.6 },
     grass: '#24402a',
-    soil: '#453424'
+    soil: '#453424',
+    farmLights: { enabled: true, color: '#ffcb84', intensity: 2.6 }
   },
   {
     id: 'neon',
@@ -146,7 +159,8 @@ export const THEMES: Theme[] = [
     road: { surface: '#0c0622', marking: '#4de1ff', markingEmissive: 1.6, sidewalk: '#241a4a' },
     shopfront: { enabled: true, color: '#ff4da6', intensity: 2.6 },
     grass: '#1d3a55',
-    soil: '#333a52'
+    soil: '#333a52',
+    farmLights: { enabled: true, color: '#7df0ff', intensity: 3.2 }
   },
   {
     id: 'golden-hour',
@@ -174,7 +188,8 @@ export const THEMES: Theme[] = [
     road: { surface: '#2c2030', marking: '#e8c8a0', markingEmissive: 0, sidewalk: '#4c3b48' },
     shopfront: { enabled: true, color: '#ffcf8a', intensity: 1.2 },
     grass: '#4a5326',
-    soil: '#5b3f1f'
+    soil: '#5b3f1f',
+    farmLights: { enabled: true, color: '#ffd9a0', intensity: 1.2 }
   },
   {
     id: 'midnight-ink',
@@ -202,7 +217,8 @@ export const THEMES: Theme[] = [
     road: { surface: '#0c0f16', marking: '#7d8cb8', markingEmissive: 0.4, sidewalk: '#232838' },
     shopfront: { enabled: true, color: '#8fb0ff', intensity: 1.4 },
     grass: '#223528',
-    soil: '#3d332c'
+    soil: '#3d332c',
+    farmLights: { enabled: true, color: '#9fc0ff', intensity: 2.0 }
   }
 ]
 

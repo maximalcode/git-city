@@ -4,6 +4,7 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { analyzeRepo, pickSampleIndices } from './analyze'
+import { materializeSnapshot } from '../../shared/snapshots'
 
 let repo: string
 
@@ -46,7 +47,8 @@ describe('analyzeRepo', () => {
     expect(result.info.branch).toBe('main')
     expect(result.snapshots).toHaveLength(3)
 
-    const [s1, s2, s3] = result.snapshots
+    // materialize each capture back out of the columns before asserting (#62)
+    const [s1, s2, s3] = result.snapshots.map((_, i) => materializeSnapshot(result, i))
 
     expect(s1.files).toHaveLength(1)
     expect(s1.files[0]).toMatchObject({ path: 'a.txt', loc: 3, commits: 1 })

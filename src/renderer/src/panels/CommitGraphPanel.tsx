@@ -24,6 +24,7 @@ const cy = (row: number): number => row * ROW_H + ROW_H / 2
 export default function CommitGraphPanel(): React.JSX.Element | null {
   const graphOpen = useStore((s) => s.graphOpen)
   const repoPath = useStore((s) => s.repoPath)
+  const headHash = useStore((s) => s.workingStatus?.headHash)
   const busy = useStore((s) => s.opInProgress !== null)
   const setGraphOpen = useStore((s) => s.setGraphOpen)
   const askConfirm = useStore((s) => s.askConfirm)
@@ -54,7 +55,11 @@ export default function CommitGraphPanel(): React.JSX.Element | null {
     return () => {
       cancelled = true
     }
-  }, [graphOpen, repoPath, retryNonce])
+    // headHash: a commit made while the graph was open never appeared, the
+    // white HEAD ring stayed on the old tip, and a branch chip stayed attached
+    // to the pre-checkout commit — with nothing saying the view was stale and
+    // no refresh control outside the error branch (#29).
+  }, [graphOpen, repoPath, retryNonce, headHash])
 
   const rowIndex = useMemo(() => {
     const m = new Map<string, GraphCommit>()

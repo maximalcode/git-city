@@ -10,13 +10,14 @@ import Icon from '../lib/icons'
 import { useStore, type ColorMode, type ViewMode } from '../store'
 import { THEMES, getTheme } from './themes'
 import { COLOR_MODES, type ColorContext } from './colorModes'
+import { cappedLabel } from '../layout/cap'
 import { MODES, getMode, nextMode } from './modes'
 import Legend from './Legend'
 import SearchBox from './SearchBox'
 import SideRail from './SideRail'
 
 /** The slice of a scene model the HUD needs — every mode model satisfies it. */
-export type HudModel = ColorContext & { paths: string[] }
+export type HudModel = ColorContext & { paths: string[]; totalFiles: number; capped: boolean }
 
 interface Props {
   snapshot: Snapshot
@@ -57,7 +58,13 @@ export default function Hud({ snapshot, model }: Props): React.JSX.Element {
   const setHelpOpen = useStore((s) => s.setHelpOpen)
   const startExport = useStore((s) => s.startExport)
   const exporting = useStore((s) => s.exporting)
-  const modalOpen = useStore((s) => s.confirm !== null || s.mergeView !== null)
+  // The guide counts as a modal: it dims the scene, and Space used to start
+  // playback behind it — which the card's own footer invites the user to press
+  // — while C opened Changes under the backdrop (#30). It has no "open" flag of
+  // its own: on first run it shows because `onboarded` is false.
+  const modalOpen = useStore(
+    (s) => s.confirm !== null || s.mergeView !== null || s.helpOpen || !s.onboarded
+  )
 
   const byPath = useMemo(() => new Map(snapshot.files.map((f) => [f.path, f])), [snapshot])
 
@@ -116,9 +123,13 @@ export default function Hud({ snapshot, model }: Props): React.JSX.Element {
     }),
     []
   )
-  // suspended while the confirm dialog or merge view is up — 'c'/'space'/etc.
-  // must not toggle panels or playback underneath a modal
-  useHotkeys(hotkeys, !modalOpen)
+  // Suspended while the confirm dialog or merge view is up — 'c'/'space'/etc.
+  // must not toggle panels or playback underneath a modal. Escape is exempt:
+  // it is how you dismiss the thing that is blocking, and the map's own handler
+  // deals with the layering.
+  // `exporting` joins the suspension for the same reason the transport is
+  // disabled below: Space during a recording stalls it.
+  useHotkeys(hotkeys, !modalOpen && !exporting, ['escape'])
 
   const last = analysis.snapshots.length - 1
   const hoveredFile = hovered ? byPath.get(hovered) : undefined
@@ -129,6 +140,8 @@ export default function Hud({ snapshot, model }: Props): React.JSX.Element {
   const branchLabel = st ? (st.branch ?? `detached @ ${st.detachedAt}`) : analysis.info.branch
   const hasRemote = (st?.remotes.length ?? 0) > 0
   const hasUpstream = st?.upstream != null
+  // detached HEAD: there is no branch for Publish to create an upstream for
+  const onNoBranch = st != null && st.branch == null
   const opState = st?.opState ?? 'none'
 
   return (
@@ -138,6 +151,17 @@ export default function Hud({ snapshot, model }: Props): React.JSX.Element {
       <div className="hud-top">
         <div className="hud-zone hud-left">
           <span className="repo-name">{analysis.info.name}</span>
+          {/* A cap the user cannot see would be worse than no cap: the city
+              would silently be a different repository from the one they
+              opened (#12). */}
+          {model.capped && (
+            <span
+              className="capped-chip"
+              title={`This repository is too large to draw in full. Showing the ${model.paths.length.toLocaleString()} largest files by peak line count; the other ${(model.totalFiles - model.paths.length).toLocaleString()} are not in the scene.`}
+            >
+              {cappedLabel(model.paths.length, model.totalFiles)}
+            </span>
+          )}
           <button
             className={`branch-chip${panel === 'branches' ? ' active' : ''}`}
             onClick={() => setPanel('branches')}
@@ -174,11 +198,20 @@ export default function Hud({ snapshot, model }: Props): React.JSX.Element {
                 <Icon name="pull" size={15} />
                 Pull
               </button>
+              {/* On a detached HEAD there is no branch to publish, and the
+                  invitation to try was the only thing on screen that mentioned
+                  it — the failure said nothing about not being on one (#26). */}
               <button
                 className="primary"
-                disabled={busy}
+                disabled={busy || onNoBranch}
                 onClick={() => void push(!hasUpstream)}
-                title={hasUpstream ? 'Push' : 'Publish this branch'}
+                title={
+                  onNoBranch
+                    ? 'You are not on a branch (detached HEAD). Create a branch here first.'
+                    : hasUpstream
+                      ? 'Push'
+                      : 'Publish this branch'
+                }
               >
                 <Icon name="push" size={15} />
                 {hasUpstream ? 'Push' : 'Publish'}
@@ -189,7 +222,10 @@ export default function Hud({ snapshot, model }: Props): React.JSX.Element {
           {busy && (
             <span className="op-spinner">
               <span className="spinner" /> {opInProgress?.label}
-              <button onClick={() => void cancelOp()}>Cancel</button>
+              {/* Only for ops that honour cancelCurrentOp. Offering it during a
+                  submodule update or a rebase gave the user a button that did
+                  nothing at all while the whole UI stayed disabled (#26). */}
+              {opInProgress?.cancellable && <button onClick={() => void cancelOp()}>Cancel</button>}
             </span>
           )}
           {!busy && reanalyzing && (
@@ -344,11 +380,15 @@ export default function Hud({ snapshot, model }: Props): React.JSX.Element {
             </button>
           )}
         </div>
+        {/* The export drives the transport itself, so touching it mid-record
+            fought the recording — and stalled it, since the poll waits for
+            playback to reach the end (#30). */}
         <div className="timeline-row">
           <button
             className="play"
+            disabled={exporting}
             onClick={() => setPlaying(!playing)}
-            title="Play history (Space)"
+            title={exporting ? 'Recording a time-lapse…' : 'Play history (Space)'}
             aria-label={playing ? 'Pause history' : 'Play history'}
           >
             {playing ? '❚❚' : '▶'}
@@ -358,6 +398,7 @@ export default function Hud({ snapshot, model }: Props): React.JSX.Element {
             min={0}
             max={last}
             step={1}
+            disabled={exporting}
             value={Math.min(snapshotIndex, last)}
             onChange={(e) => setSnapshotIndex(Number(e.target.value))}
           />

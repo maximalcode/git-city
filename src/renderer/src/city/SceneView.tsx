@@ -6,6 +6,7 @@ import SceneBoundary from '../lib/SceneBoundary'
 import { useStore } from '../store'
 import { playStepMs } from '../lib/playback'
 import { hotspots as computeHotspots } from '../lib/hotspots'
+import { materializeSnapshot } from '../../../shared/snapshots'
 import { getTheme } from './themes'
 import { getMode } from './modes'
 import Hud from './Hud'
@@ -71,7 +72,12 @@ export default function SceneView(): React.JSX.Element {
     setCanvasKey((k) => k + 1)
   }
 
-  const snapshot = analysis.snapshots[Math.min(snapshotIndex, analysis.snapshots.length - 1)]
+  // The analysis stores snapshots columnar (#62); only the timeline position
+  // actually on screen is ever materialized back into objects.
+  const snapshot = useMemo(
+    () => materializeSnapshot(analysis, Math.min(snapshotIndex, analysis.snapshots.length - 1)),
+    [analysis, snapshotIndex]
+  )
 
   const hotspotPaths = useMemo(
     () => (showHotspots ? computeHotspots(snapshot) : []),
@@ -85,6 +91,15 @@ export default function SceneView(): React.JSX.Element {
   const scene = useMemo(
     () => mode.prepare(analysis, snapshot, colorMode),
     [mode, analysis, snapshot, colorMode]
+  )
+
+  // A PR's added files do not exist on this branch, so the model cannot place
+  // them: they never glow, and the banner's ‹ › stepper landed on them with no
+  // camera move and no highlight while the counter insisted they were there.
+  // Splitting them out is what lets the banner say so (#30).
+  const locatablePaths = useMemo(
+    () => reviewPaths.filter((p) => scene.focus(p) !== null),
+    [reviewPaths, scene]
   )
 
   const snapshotCount = analysis.snapshots.length
@@ -130,8 +145,14 @@ export default function SceneView(): React.JSX.Element {
           key={canvasKey}
           shadows
           dpr={[1, 1.75]}
+          // cameraScale: the farm's detail is at ground level, so the city's
+          // framing left its herds and lit barns as specks (#22)
           camera={{
-            position: [size * 0.9, size * 0.75, size * 0.9],
+            position: [
+              size * 0.9 * mode.cameraScale,
+              size * 0.75 * mode.cameraScale,
+              size * 0.9 * mode.cameraScale
+            ],
             fov: 40,
             near: 0.5,
             far: size * 30
@@ -181,7 +202,7 @@ export default function SceneView(): React.JSX.Element {
       <ReflogPanel />
       <PullRequestsPanel />
       <SettingsPanel />
-      <ReviewBanner />
+      <ReviewBanner locatable={locatablePaths} />
       <TimelapseExporter canvasRef={canvasElRef} />
       <MergeView />
     </div>

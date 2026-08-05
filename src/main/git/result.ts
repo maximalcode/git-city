@@ -40,6 +40,12 @@ export function classifyGitError(text: string): NonNullable<OpResult['code']> {
     return 'dirty'
   }
   if (/not fully merged/i.test(text)) return 'not-merged'
+  // A first commit on a machine git has never been configured on. The two
+  // lines that fix it are on lines 7-8 of git's output, so they landed inside
+  // a collapsed <details> almost nobody opens (#26).
+  if (/Author identity unknown|empty ident name|unable to auto-detect email/i.test(text)) {
+    return 'identity'
+  }
   if (
     /nothing to commit|no changes added to commit|No local changes to save|nothing added to commit|Already up to date|is up to date/i.test(
       text
@@ -74,6 +80,9 @@ export function failFrom(res: GitResult, friendly?: string): OpResult {
     ok: false,
     code,
     message: friendly ?? firstLine(output) ?? 'git command failed',
+    // a caller-supplied message was written for this exact case, so it beats
+    // the generic per-code wording the UI would otherwise substitute (#26)
+    friendly: friendly !== undefined,
     gitOutput: output || undefined
   }
 }
@@ -83,10 +92,20 @@ export function failFromError(err: unknown): OpResult {
   return { ok: false, code: classifyGitError(text), message: firstLine(text), gitOutput: text }
 }
 
-function firstLine(text: string): string | undefined {
-  const line = text
+/**
+ * git's transport chatter, which is not an error and must never be the headline.
+ *
+ * A rejected push printed "To github.com:you/your-repo.git" as the whole toast —
+ * which reads more like a success line than a failure, while the actual
+ * "use 'git pull' before pushing again" advice sat inside a collapsed
+ * expander (#26).
+ */
+const TRANSPORT_LINE = /^(To|From|Pushing to|Fetching|Everything up-to-date|remote:)\b/i
+
+export function firstLine(text: string): string | undefined {
+  const lines = text
     .split('\n')
     .map((l) => l.replace(/^(error|fatal|warning):\s*/i, '').trim())
-    .find((l) => l.length > 0)
-  return line
+    .filter((l) => l.length > 0)
+  return lines.find((l) => !TRANSPORT_LINE.test(l)) ?? lines[0]
 }

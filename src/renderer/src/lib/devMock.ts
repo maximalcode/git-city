@@ -9,6 +9,7 @@
  * regressions comparable across sessions.
  */
 import type { FileState, RepoAnalysis, Snapshot, WorkingStatus } from '../../../shared/types'
+import { buildAnalysis as compactAnalysis, materializeSnapshot } from '../../../shared/snapshots'
 import { hasApi, useStore } from '../store'
 
 const DIRS = [
@@ -86,12 +87,19 @@ function buildAnalysis(): RepoAnalysis {
     for (const f of seeds) {
       if (f.birth > s) continue
       const age = (s - f.birth + 1) / (SNAPSHOT_COUNT - f.birth + 1)
+      // Every file used to carry the current commit's date, which made every
+      // file in the mock equally recent — so the Recency mode could not be
+      // looked at in the preview at all. Files now go quiet at different
+      // points: a deterministic per-file lag, larger for the ones a real
+      // repository leaves alone.
+      const quiet = (f.peak % 11) + (f.path.length % 5)
+      const touched = Math.max(f.birth, s - quiet)
       files.push({
         path: f.path,
         loc: Math.max(5, Math.floor(f.peak * Math.min(1, age * 1.4))),
         commits: 1 + Math.floor(age * 40 * ((f.peak % 7) / 6 + 0.2)),
-        lastTouched: commitDate(s),
-        lastAuthor: authors[(f.peak + s) % authors.length],
+        lastTouched: commitDate(touched),
+        lastAuthor: authors[(f.peak + touched) % authors.length],
         binary: false
       })
     }
@@ -105,19 +113,19 @@ function buildAnalysis(): RepoAnalysis {
     })
   }
 
-  return {
-    info: {
+  return compactAnalysis(
+    {
       name: 'mock-repo',
       path: 'C:/mock/mock-repo',
       branch: 'main',
       commitCount: SNAPSHOT_COUNT
     },
     snapshots
-  }
+  )
 }
 
 function buildStatus(analysis: RepoAnalysis): WorkingStatus {
-  const head = analysis.snapshots[analysis.snapshots.length - 1]
+  const head = materializeSnapshot(analysis, analysis.snapshots.length - 1)
   const paths = head.files.map((f) => f.path)
   return {
     branch: 'main',
@@ -153,7 +161,7 @@ export function installDevMock(): void {
       snapshotIndex: analysis.snapshots.length - 1,
       workingStatus: buildStatus(analysis),
       repoPath: 'C:/mock/mock-repo',
-      gitVersion: 'mock'
+      gitVersion: { raw: 'git version 2.45.0 (mock)', parts: [2, 45], supported: true }
     })
   }
   // store handle included so browser-automation checks can drive selection

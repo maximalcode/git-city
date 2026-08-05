@@ -44,6 +44,21 @@ describe('theme registry', () => {
       expect(t.shopfront.intensity).toBeGreaterThanOrEqual(0)
       expect(t.grass).toMatch(/^#[0-9a-f]{6}$/i)
       expect(t.soil).toMatch(/^#[0-9a-f]{6}$/i)
+      expect(typeof t.farmLights.enabled).toBe('boolean')
+      expect(t.farmLights.color).toMatch(/^#[0-9a-f]{6}$/i)
+      expect(t.farmLights.intensity).toBeGreaterThanOrEqual(0)
+    }
+  })
+
+  /**
+   * The farm's night language mirrors the city's: the themes that make their
+   * light budget up in emissive geometry must give the farm some too, or it
+   * stays a dim field of rectangles while the city glows (#22).
+   */
+  it('every theme that lights the city also lights the farm', () => {
+    for (const t of THEMES) {
+      expect(t.farmLights.enabled, t.id).toBe(t.windows.enabled)
+      if (t.farmLights.enabled) expect(t.farmLights.intensity, t.id).toBeGreaterThan(0)
     }
   })
 

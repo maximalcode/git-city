@@ -1,6 +1,7 @@
 import { simpleGit, type SimpleGit } from 'simple-git'
 import type { OpResult, ProgressInfo } from '../../shared/types'
-import { runGit } from './exec'
+import { runGit, searchPath } from './exec'
+import { remoteEnv } from './remoteEnv'
 import { failFromError, ok } from './result'
 
 /**
@@ -13,33 +14,6 @@ import { failFromError, ok } from './result'
  */
 
 let currentOp: AbortController | null = null
-
-/**
- * simple-git refuses remote tasks when the env carries GIT_EDITOR (unsafe-
- * editor protection) or GIT_ASKPASS (unsafe-askpass protection), and a parent
- * process may well have set either — VS Code terminals export GIT_ASKPASS, so
- * without this every remote op fails when the app is launched from one.
- * Remote ops never open an editor, and auth stays with the system git
- * (credential manager / SSH agent), so strip those keys instead of opting
- * into simple-git's unsafe mode.
- */
-const UNSAFE_ENV_VARS = new Set([
-  'GIT_EDITOR',
-  'GIT_SEQUENCE_EDITOR',
-  'EDITOR',
-  'VISUAL',
-  'GIT_ASKPASS',
-  'SSH_ASKPASS'
-])
-
-function remoteEnv(): Record<string, string> {
-  const env: Record<string, string> = {}
-  for (const [k, v] of Object.entries(process.env)) {
-    if (v !== undefined && !UNSAFE_ENV_VARS.has(k)) env[k] = v
-  }
-  env.GIT_TERMINAL_PROMPT = '0'
-  return env
-}
 
 export function cancelCurrentOp(): void {
   currentOp?.abort()
@@ -57,7 +31,7 @@ function makeGit(
     progress({ progress }) {
       onProgress({ phase, done: progress, total: 100 })
     }
-  }).env(remoteEnv())
+  }).env(remoteEnv(process.env, { PATH: searchPath() }))
 }
 
 async function remoteOp(
@@ -104,6 +78,18 @@ export async function pushRemote(
     return remoteOp(repoPath, 'pushing', onProgress, (git) => git.push(['--progress']))
   }
   const branch = (await runGit(repoPath, ['rev-parse', '--abbrev-ref', 'HEAD'])).trim()
+  // On a detached HEAD, `-u origin HEAD` fails with an essay about refnames
+  // whose first line is a transport line, so the toast said nothing about the
+  // real problem: you are not on a branch (#26).
+  if (branch === 'HEAD' || !branch) {
+    return {
+      ok: false,
+      code: 'no-upstream',
+      message:
+        'You are not on a branch (detached HEAD). Create a branch here first, then publish it.',
+      friendly: true
+    }
+  }
   const remote = (await runGit(repoPath, ['remote'])).split('\n').map((r) => r.trim())
   const target = remote.includes('origin') ? 'origin' : (remote.find((r) => r) ?? 'origin')
   return remoteOp(repoPath, 'pushing', onProgress, (git) =>

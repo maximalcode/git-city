@@ -75,6 +75,24 @@ describe('sync against a local bare origin', () => {
     expect(s.upstream).toBe('origin/topic')
   }, 60_000)
 
+  /**
+   * `-u origin HEAD` fails with an essay about refnames whose first line is a
+   * transport line, so the toast said nothing about the real problem: you are
+   * not on a branch (#26).
+   */
+  it('says you are not on a branch instead of pushing a detached HEAD', async () => {
+    const p = pair()
+    p.a.write('x.txt', 'one\n')
+    p.a.commitAll('one')
+    p.a.git('checkout', '--detach', 'HEAD')
+
+    const res = await pushRemote(p.a.path, true, noop)
+    expect(res.ok).toBe(false)
+    expect(res.message).toContain('detached HEAD')
+    // friendly, so the UI does not replace it with the generic no-upstream text
+    expect(res.friendly).toBe(true)
+  }, 60_000)
+
   it('surfaces a clean error when the remote is unreachable', async () => {
     const p = pair()
     rmSync(p.origin, { recursive: true, force: true })

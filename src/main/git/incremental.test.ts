@@ -1,6 +1,7 @@
 import { rmSync } from 'fs'
 import { afterAll, describe, expect, it } from 'vitest'
 import { analyzeIncremental, analyzeRepo } from './analyze'
+import { materializeSnapshot } from '../../shared/snapshots'
 import { makeTempRepo, type FixtureRepo } from './fixtures'
 
 const cleanups: string[] = []
@@ -44,8 +45,8 @@ describe('analyzeIncremental', () => {
     expect(incremental!.info.commitCount).toBe(full.info.commitCount)
     expect(incremental!.snapshots.length).toBe(full.snapshots.length)
     for (let i = 0; i < full.snapshots.length; i++) {
-      const a = incremental!.snapshots[i]
-      const b = full.snapshots[i]
+      const a = materializeSnapshot(incremental!, i)
+      const b = materializeSnapshot(full, i)
       expect(a.hash).toBe(b.hash)
       expect(a.index).toBe(b.index)
       const sort = (files: { path: string }[]): unknown =>
@@ -88,8 +89,8 @@ describe('analyzeIncremental', () => {
     expect(incremental).not.toBeNull()
     const full = await analyzeRepo(r.path, 1000, noop)
 
-    const lastInc = incremental!.snapshots[incremental!.snapshots.length - 1]
-    const lastFull = full.snapshots[full.snapshots.length - 1]
+    const lastInc = materializeSnapshot(incremental!, incremental!.snapshots.length - 1)
+    const lastFull = materializeSnapshot(full, full.snapshots.length - 1)
     expect(lastInc.hash).toBe(lastFull.hash)
     const locOf = (s: typeof lastInc, p: string): number | undefined =>
       s.files.find((f) => f.path === p)?.loc

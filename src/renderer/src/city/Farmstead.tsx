@@ -1,9 +1,22 @@
 import { useLayoutEffect, useMemo, useRef } from 'react'
+import { useFrame } from '@react-three/fiber'
 import { InstancedMesh, Object3D } from 'three'
 import type { FarmModel } from '../layout/farm'
-import { barnGeometry, fenceGeometry, siloGeometry, windPumpGeometry } from './farmShapes'
+import { useStore } from '../store'
+import { getTheme } from './themes'
+import {
+  WIND_PUMP_HUB_Y,
+  barnGeometry,
+  farmGlowGeometry,
+  fenceGeometry,
+  siloGeometry,
+  windPumpGeometry,
+  windPumpRotorGeometry
+} from './farmShapes'
 
 const dummy = new Object3D()
+// YXZ: yaw about Y first, then X — which by then is the rotor's own axle
+dummy.rotation.order = 'YXZ'
 
 /**
  * The built farm: a barn and silo on every top-level parcel, wind pumps on the
@@ -26,18 +39,29 @@ function Steads({ model }: { model: FarmModel }): React.JSX.Element | null {
   const barnRef = useRef<InstancedMesh>(null!)
   const siloRef = useRef<InstancedMesh>(null!)
   const pumpRef = useRef<InstancedMesh>(null!)
+  const rotorRef = useRef<InstancedMesh>(null!)
+  const glowRef = useRef<InstancedMesh>(null!)
+
+  const lights = getTheme(useStore((s) => s.themeId)).farmLights
+  const reduceMotion = useStore((s) => s.reduceMotion)
 
   const barnGeo = useMemo(() => barnGeometry(), [])
   const siloGeo = useMemo(() => siloGeometry(), [])
   const pumpGeo = useMemo(() => windPumpGeometry(), [])
+  const rotorGeo = useMemo(() => windPumpRotorGeometry(), [])
+  // Built only when a theme wants it, so Daylight pays nothing for geometry it
+  // would render as five dull grey boxes on every farmstead.
+  const glowGeo = useMemo(() => (lights.enabled ? farmGlowGeometry() : null), [lights.enabled])
   useLayoutEffect(
     () => () => {
       barnGeo.dispose()
       siloGeo.dispose()
       pumpGeo.dispose()
+      rotorGeo.dispose()
     },
-    [barnGeo, siloGeo, pumpGeo]
+    [barnGeo, siloGeo, pumpGeo, rotorGeo]
   )
+  useLayoutEffect(() => () => glowGeo?.dispose(), [glowGeo])
 
   // wind pumps only on parcels with room for one, so small holdings stay tidy
   const pumps = useMemo(
@@ -49,6 +73,9 @@ function Steads({ model }: { model: FarmModel }): React.JSX.Element | null {
     const barns = barnRef.current
     const silos = siloRef.current
     if (!barns || !silos) return
+    // the glow shares the barn's placement exactly — its geometry is authored
+    // in the barn's own local space, so one matrix drives both
+    const glow = glowRef.current
     model.steads.forEach((s, i) => {
       // tuck the buildings into a corner of the parcel, off the crop
       const bx = s.rect.x + Math.min(5.5, s.rect.w * 0.16)
@@ -59,6 +86,7 @@ function Steads({ model }: { model: FarmModel }): React.JSX.Element | null {
       dummy.scale.setScalar(1)
       dummy.updateMatrix()
       barns.setMatrixAt(i, dummy.matrix)
+      glow?.setMatrixAt(i, dummy.matrix)
 
       dummy.position.set(bx + Math.cos(face + 0.9) * 5.2, 0, bz + Math.sin(face + 0.9) * 5.2)
       dummy.rotation.set(0, 0, 0)
@@ -67,10 +95,12 @@ function Steads({ model }: { model: FarmModel }): React.JSX.Element | null {
     })
     barns.instanceMatrix.needsUpdate = true
     silos.instanceMatrix.needsUpdate = true
-  }, [model])
+    if (glow) glow.instanceMatrix.needsUpdate = true
+  }, [model, glowGeo])
 
   useLayoutEffect(() => {
     const mesh = pumpRef.current
+    const rotors = rotorRef.current
     if (!mesh) return
     pumps.forEach((s, i) => {
       dummy.position.set(s.rect.x + s.rect.w - 4.5, 0, s.rect.y + s.rect.h - 4.5)
@@ -78,9 +108,36 @@ function Steads({ model }: { model: FarmModel }): React.JSX.Element | null {
       dummy.scale.setScalar(1)
       dummy.updateMatrix()
       mesh.setMatrixAt(i, dummy.matrix)
+      // the rotor hangs on the same tower: same spot, same yaw, axle height up
+      dummy.position.y = WIND_PUMP_HUB_Y
+      dummy.updateMatrix()
+      rotors?.setMatrixAt(i, dummy.matrix)
     })
     mesh.instanceMatrix.needsUpdate = true
+    if (rotors) rotors.instanceMatrix.needsUpdate = true
   }, [pumps])
+
+  // The one thing on a farmstead that visibly moves. Reduce motion parks the
+  // blades at whatever angle they were milled to — same contract as Traffic —
+  // and the placement effect above means they exist even if this never runs.
+  useFrame((state) => {
+    const rotors = rotorRef.current
+    if (!rotors || reduceMotion || pumps.length === 0) return
+    const t = state.clock.elapsedTime
+    pumps.forEach((s, i) => {
+      dummy.position.set(
+        s.rect.x + s.rect.w - 4.5,
+        WIND_PUMP_HUB_Y,
+        s.rect.y + s.rect.h - 4.5
+      )
+      // each pump finds its own wind: same direction, slightly different speed
+      dummy.rotation.set(t * (0.9 + ((i * 7) % 5) * 0.22), i * 1.1, 0)
+      dummy.scale.setScalar(1)
+      dummy.updateMatrix()
+      rotors.setMatrixAt(i, dummy.matrix)
+    })
+    rotors.instanceMatrix.needsUpdate = true
+  })
 
   if (model.steads.length === 0) return null
   return (
@@ -104,6 +161,23 @@ function Steads({ model }: { model: FarmModel }): React.JSX.Element | null {
       {pumps.length > 0 && (
         <instancedMesh ref={pumpRef} args={[pumpGeo, undefined, pumps.length]} castShadow>
           <meshStandardMaterial vertexColors roughness={0.8} />
+        </instancedMesh>
+      )}
+      {pumps.length > 0 && (
+        <instancedMesh ref={rotorRef} args={[rotorGeo, undefined, pumps.length]} castShadow>
+          <meshStandardMaterial vertexColors roughness={0.8} />
+        </instancedMesh>
+      )}
+      {glowGeo && (
+        // Unlit and emissive, like the city's window grids: these are light
+        // sources in the composition, not surfaces to be lit. No shadows —
+        // a lamp head that casts one reads as a floating box.
+        <instancedMesh
+          key={lights.color}
+          ref={glowRef}
+          args={[glowGeo, undefined, model.steads.length]}
+        >
+          <meshBasicMaterial color={lights.color} toneMapped={false} />
         </instancedMesh>
       )}
     </group>

@@ -9,7 +9,7 @@ export interface FileState {
   binary: boolean
 }
 
-/** The full repo state at one sampled commit. */
+/** The full repo state at one sampled commit, materialized for consumption. */
 export interface Snapshot {
   hash: string
   /** unix ms */
@@ -19,6 +19,37 @@ export interface Snapshot {
   /** 0-based index of this commit along first-parent history */
   index: number
   files: FileState[]
+}
+
+/**
+ * The same capture, columnar: parallel typed arrays where entry i describes
+ * the file `paths[pathId[i]]` (interning tables live on RepoAnalysis).
+ *
+ * This is the wire and resting format (#62). A monorepo's analysis holds
+ * ~50 captures × every file as a JS object — over half a gigabyte resident,
+ * twice (main-process cache + renderer copy). As columns the same data is
+ * ~25 bytes per file entry, structured-clones cheaply over IPC, and one
+ * materializeSnapshot call rebuilds the object form for the capture actually
+ * being viewed.
+ */
+export interface CompactSnapshot {
+  hash: string
+  /** unix ms */
+  date: number
+  author: string
+  message: string
+  /** 0-based index of this commit along first-parent history */
+  index: number
+  /** index into RepoAnalysis.paths */
+  pathId: Uint32Array
+  loc: Uint32Array
+  commits: Uint32Array
+  /** unix ms of the last commit touching this file */
+  lastTouched: Float64Array
+  /** index into RepoAnalysis.authors */
+  authorId: Uint32Array
+  /** 0 | 1 — a boolean per entry */
+  binary: Uint8Array
 }
 
 export interface RepoInfo {
@@ -31,8 +62,12 @@ export interface RepoInfo {
 
 export interface RepoAnalysis {
   info: RepoInfo
+  /** interned path table — CompactSnapshot.pathId indexes into this */
+  paths: string[]
+  /** interned author table — CompactSnapshot.authorId indexes into this */
+  authors: string[]
   /** ordered oldest → newest; the last snapshot is HEAD */
-  snapshots: Snapshot[]
+  snapshots: CompactSnapshot[]
 }
 
 /** Cheap size probe, read before committing to a full history replay. */
@@ -149,9 +184,17 @@ export interface OpResult {
     | 'dirty'
     | 'not-merged'
     | 'nothing-to-do'
+    /** git has no user.name / user.email configured yet */
+    | 'identity'
     | 'unknown'
   /** friendly one-liner for the UI */
   message?: string
+  /**
+   * `message` was written for this exact situation, so it beats the generic
+   * per-code wording. Without it, a specific "you are not on a branch" would be
+   * replaced by the generic no-upstream sentence (#26).
+   */
+  friendly?: boolean
   /** raw git output for the expandable details section */
   gitOutput?: string
   /** conflicted paths when code === 'conflict' */
@@ -336,6 +379,24 @@ export type HostKind = 'github' | 'gitlab' | 'unknown'
  * for GitLab. Merge requests are surfaced as pull requests throughout; only the
  * panel's wording follows the host.
  */
+/**
+ * What the panel should tell the user to do next, decided where the cause is
+ * known rather than inferred from `available`/`authed` in the UI.
+ *
+ * Being offline looks exactly like being logged out from the outside, and the
+ * panel used to say "run gh auth login" to someone whose wifi was off — which
+ * fails too, and pushes them to re-authenticate a perfectly good token (#24).
+ */
+export type HostHint =
+  /** the CLI isn't reachable — install it */
+  | 'install'
+  /** the CLI is there but logged out — log in */
+  | 'login'
+  /** nothing to do but wait or retry (offline, a 5xx, a timeout) */
+  | 'retry'
+  /** genuinely not a repository on this forge */
+  | 'none'
+
 export interface HostAuth {
   host: HostKind
   /** the host's CLI is present on PATH */
@@ -347,7 +408,24 @@ export interface HostAuth {
   login: string | null
   /** why unavailable, for the UI (null when fully usable) */
   reason: string | null
+  /** what to suggest; absent means fall back to the available/authed reading */
+  hint?: HostHint
 }
+
+/**
+ * A list of pull requests, or why there isn't one.
+ *
+ * Deliberately not `PullRequestInfo[]`. A failed call returning `[]` rendered
+ * as "Open (0) — No open pull requests" for a repository with forty of them,
+ * and nothing distinguished "we asked and there are none" from "we could not
+ * ask" (#24).
+ */
+export type PrListResult =
+  | { ok: true; prs: PullRequestInfo[]; /** more exist than we asked for */ more: boolean }
+  | { ok: false; reason: string }
+
+/** The files a PR changes, or why we could not find out. */
+export type PrFilesResult = { ok: true; files: PrFileChange[] } | { ok: false; reason: string }
 
 export interface PullRequestInfo {
   number: number
@@ -418,10 +496,25 @@ export interface WorktreeInfo {
   locked: boolean
 }
 
+/**
+ * What the git on PATH is, and whether Git City can work with it.
+ *
+ * `supported` is false only when a version was parsed and is genuinely too old
+ * to report merge diffs — the case that would otherwise draw a plausible but
+ * wrong city rather than failing (#25).
+ */
+export interface GitVersion {
+  /** verbatim `git --version` output, so the user sees what we saw */
+  raw: string
+  /** [major, minor], or null when the string was unrecognisable */
+  parts: [number, number] | null
+  supported: boolean
+}
+
 /** API exposed to the renderer via the preload bridge. */
 export interface GitCityApi {
-  /** Returns the installed git version, or null if git is missing. */
-  checkGit(): Promise<string | null>
+  /** The installed git, or null if there isn't one on PATH. */
+  checkGit(): Promise<GitVersion | null>
   selectFolder(): Promise<string | null>
   /** Resolve a dropped File to its absolute path (File.path is gone in Electron 35). */
   pathForFile(file: File): string
@@ -504,12 +597,13 @@ export interface GitCityApi {
 
   // --- Pull/merge requests (GitHub via gh, GitLab via glab) ---
   hostStatus(repoPath: string): Promise<HostAuth>
-  listPullRequests(repoPath: string): Promise<PullRequestInfo[]>
+  listPullRequests(repoPath: string): Promise<PrListResult>
   currentBranchPr(repoPath: string): Promise<PullRequestInfo | null>
   checkoutPr(repoPath: string, number: number): Promise<OpResult>
+  /** Pass an empty `base` to let the forge use the repository's default branch. */
   createPr(repoPath: string, base: string, title: string, body: string): Promise<OpResult>
   /** The files a PR changes, for highlighting them in the scene. */
-  pullRequestFiles(repoPath: string, number: number): Promise<PrFileChange[]>
+  pullRequestFiles(repoPath: string, number: number): Promise<PrFilesResult>
   /** Open an external https URL in the default browser. */
   openExternal(url: string): Promise<void>
 

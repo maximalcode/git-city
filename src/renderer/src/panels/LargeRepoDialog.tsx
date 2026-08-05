@@ -34,7 +34,7 @@ export default function LargeRepoDialog(): React.JSX.Element | null {
   }, [pending, confirmOpen, cancel])
 
   if (!pending) return null
-  const { size, wait, dense, streetless } = pending.warning
+  const { size, wait, dense, streetless, capped, drawn } = pending.warning
 
   return (
     <div className="modal-backdrop" onClick={cancel}>
@@ -50,7 +50,16 @@ export default function LargeRepoDialog(): React.JSX.Element | null {
           {size.files.toLocaleString()} files and {size.commits.toLocaleString()} commits. Reading
           the history takes {wait}, and it cannot be paused once it starts.
         </p>
-        {dense && (
+        {/* Said before they commit to the wait, not discovered afterwards: the
+            scene they get will not be the whole repository (#12). */}
+        {capped && (
+          <p>
+            Only the <strong>{drawn.toLocaleString()}</strong> largest files will be drawn — the
+            rest would take minutes more to build and would not be legible anyway. The {noun} you
+            get is a subset, and the top bar says so while it is open.
+          </p>
+        )}
+        {dense && !capped && (
           <p>
             {streetless
               ? `At this size the roads stop being drawn entirely — the plots are too small to fit one between them, so expect a dense block rather than a laid-out ${noun}.`

@@ -34,6 +34,7 @@ export default function CameraRig({
 }): null {
   const camera = useThree((s) => s.camera)
   const gl = useThree((s) => s.gl)
+  const scene = useThree((s) => s.scene)
   const selected = useStore((s) => s.selected)
   const reduceMotion = useStore((s) => s.reduceMotion)
 
@@ -70,6 +71,14 @@ export default function CameraRig({
     }
   }, [controls])
 
+  // Someone reacting to the motion they can see, by ticking "Reduce motion",
+  // was watching the camera keep orbiting: the flag was only read when the rig
+  // was created, and the orbit has no time limit, so it did not stop on its
+  // own either. The setting looked broken until the next repo open (#30).
+  useEffect(() => {
+    if (reduceMotion) intro.current = false
+  }, [reduceMotion])
+
   // Update limits that depend on the active world size / mode without tearing
   // the controls down.
   useEffect(() => {
@@ -82,9 +91,24 @@ export default function CameraRig({
   // to input after a view-mode switch (the regression this rig guards against).
   useEffect(() => {
     if (import.meta.env.DEV) {
-      ;(window as unknown as { __gitCityCam?: unknown }).__gitCityCam = camera
+      const w = window as unknown as {
+        __gitCityCam?: unknown
+        __gitCityScene?: unknown
+        __gitCitySceneReadyMs?: number
+      }
+      w.__gitCityCam = camera
+      // The scene root too: it is what lets a headless probe ask "which
+      // instanced meshes actually moved this second?" — the only sound way to
+      // verify animation from outside the canvas (#58).
+      w.__gitCityScene = scene
+      // Milliseconds from navigation start to the scene being interactive.
+      // The scale work in #12 needed this and had to infer it from a polling
+      // probe, which is not sound — the rig does not remount when the model
+      // changes, so the sentinel never resets. One timestamp makes the cost
+      // directly readable instead.
+      w.__gitCitySceneReadyMs = performance.now()
     }
-  }, [camera])
+  }, [camera, scene])
 
   // fly-to when the selection changes to something the scene can locate
   useEffect(() => {

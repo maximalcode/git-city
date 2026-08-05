@@ -26,6 +26,7 @@ function actionGlyph(action: string): string {
 export default function ReflogPanel(): React.JSX.Element | null {
   const reflogOpen = useStore((s) => s.reflogOpen)
   const repoPath = useStore((s) => s.repoPath)
+  const headHash = useStore((s) => s.workingStatus?.headHash)
   const busy = useStore((s) => s.opInProgress !== null)
   const setReflogOpen = useStore((s) => s.setReflogOpen)
   const askConfirm = useStore((s) => s.askConfirm)
@@ -50,7 +51,12 @@ export default function ReflogPanel(): React.JSX.Element | null {
     return () => {
       cancelled = true
     }
-  }, [reflogOpen, repoPath, retryNonce])
+    // headHash: the time machine's whole job is moving HEAD, and it never
+    // refetched after doing so — the green "now" chip stayed on the entry that
+    // was current before the rewind, the row just rewound to still offered
+    // "⟲ Rewind", and the new reset entry that would undo it never appeared.
+    // runOp refreshes status before resolving, so this is current by then (#29).
+  }, [reflogOpen, repoPath, retryNonce, headHash])
 
   if (!reflogOpen) return null
 

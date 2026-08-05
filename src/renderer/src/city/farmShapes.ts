@@ -66,7 +66,39 @@ export function barnGeometry(): BufferGeometry {
   const roof = paint(roofGeo, 0.22, 0.2, 0.22)
   const door = paint(box(0.25, 2.2, 2.0, 3.2, 0, 0), 0.86, 0.85, 0.8)
   const trim = paint(box(0.18, 0.22, 2.5, 3.18, 2.2, 0), 0.86, 0.85, 0.8)
-  return merge([walls, roof, door, trim])
+  // The yard lamp's post. It stands whatever the theme is doing — only the head
+  // is emissive, and that lives in farmGlowGeometry so it can be left out
+  // entirely under Daylight (#22).
+  const lampPost = paint(box(0.16, LAMP_HEIGHT, 0.16, LAMP_X, 0, LAMP_Z), 0.24, 0.23, 0.22)
+  return merge([walls, roof, door, trim, lampPost])
+}
+
+/** Where the yard lamp stands, in the barn's own local space. */
+const LAMP_X = -3.6
+const LAMP_Z = 2.4
+const LAMP_HEIGHT = 3.2
+
+/**
+ * The lit parts of a farmstead, as one geometry sharing the barn's instance
+ * matrix: two hayloft windows, the doorway spill, and the yard lamp's head.
+ *
+ * Separate from the barn because it is drawn with an unlit emissive material,
+ * and because the dark themes are the only ones that want it. This is the
+ * farm's answer to the city's window grids — under Night the city is composed
+ * entirely of lit windows, and the farm had no equivalent, so it read as a dim
+ * field of rectangles rather than a place at night (#22).
+ */
+export function farmGlowGeometry(): BufferGeometry {
+  // proud of the wall by a hair so they never z-fight with the boards
+  const w = 3.22
+  const loftLeft = box(0.06, 0.5, 0.55, w, 2.35, -1.05)
+  const loftRight = box(0.06, 0.5, 0.55, w, 2.35, 1.05)
+  // the gap under the big door, which is where the light actually falls
+  const doorSpill = box(0.06, 0.45, 1.7, w, 0.05, 0)
+  // a small window on the long side, so the barn is not dark from three angles
+  const side = box(0.5, 0.45, 0.06, 0.9, 1.5, 2.22)
+  const lampHead = box(0.42, 0.3, 0.42, LAMP_X, LAMP_HEIGHT, LAMP_Z)
+  return merge([loftLeft, loftRight, doorSpill, side, lampHead])
 }
 
 /** A grain silo: corrugated cylinder under a domed cap. */
@@ -87,9 +119,15 @@ export function fenceGeometry(): BufferGeometry {
   return merge([post, railLow, railHigh])
 }
 
+/** Height of the rotor's axle above the ground — where Farmstead hangs it. */
+export const WIND_PUMP_HUB_Y = 5.3
+
 /**
- * A wind pump — the tall lattice tower that says "this is a big holding" from
- * across the map, and gives the farm a vertical accent the fields cannot.
+ * A wind pump's tower — the tall lattice that says "this is a big holding"
+ * from across the map, and gives the farm a vertical accent the fields cannot.
+ *
+ * The rotor is windPumpRotorGeometry, kept out of the merge so it can be its
+ * own instanced mesh and actually turn (#58).
  */
 export function windPumpGeometry(): BufferGeometry {
   const parts: BufferGeometry[] = []
@@ -108,16 +146,26 @@ export function windPumpGeometry(): BufferGeometry {
     parts.push(paint(leg, 0.42, 0.4, 0.36))
   }
   parts.push(paint(box(1.0, 0.08, 1.0, 0, 2.4, 0), 0.42, 0.4, 0.36))
+  return merge(parts)
+}
+
+/**
+ * Hub and blade fan, centred on its axle (which runs along +X, like every
+ * facing here). Place an instance at WIND_PUMP_HUB_Y with the tower's yaw and
+ * roll it about local X to spin — the fan is symmetric about the axle, so the
+ * spin has no wobble.
+ */
+export function windPumpRotorGeometry(): BufferGeometry {
+  const parts: BufferGeometry[] = []
   const hub = paint(new CylinderGeometry(0.22, 0.22, 0.24, 8), 0.5, 0.48, 0.44)
   hub.rotateZ(Math.PI / 2)
-  hub.translate(0, 5.3, 0)
   parts.push(hub)
   // blades as a fan of thin plates around the hub
   for (let i = 0; i < 6; i++) {
     const blade = new BoxGeometry(0.06, 1.5, 0.34)
     blade.translate(0, 0.85, 0)
     blade.rotateX((i / 6) * Math.PI * 2)
-    blade.translate(0.14, 5.3, 0)
+    blade.translate(0.14, 0, 0)
     parts.push(paint(blade, 0.72, 0.72, 0.68))
   }
   return merge(parts)
@@ -246,6 +294,11 @@ function chickenGeometry(): BufferGeometry {
   return merge([body, head, comb, beak, ...legs(0.14, 0.12, H, 0.85, 0.62, 0.18, 0.035)])
 }
 
+/**
+ * Cached per kind, like trafficShapes' geometryFor: herds remount on every
+ * mode switch, and rebuilding four merged geometries each time would leak the
+ * old ones. Cached geometries are shared — consumers must never dispose them.
+ */
 const animalCache = new Map<AnimalKind, BufferGeometry>()
 
 export function animalGeometry(kind: AnimalKind): BufferGeometry {
@@ -270,4 +323,49 @@ export const ANIMAL_SPEED: Record<AnimalKind, number> = {
   sheep: 0.5,
   pig: 0.42,
   chicken: 0.75
+}
+
+/**
+ * A tractor: green body, yellow cab, and the big-rear-small-front wheels that
+ * are the whole silhouette. Faces +X like everything else here, so the track
+ * walker only has to place and turn it.
+ *
+ * Built at roughly a car's scale so it reads at the same camera distance the
+ * city's traffic does.
+ */
+export function tractorGeometry(): BufferGeometry {
+  const body = paint(box(1.5, 0.5, 0.72, 0, 0.34, 0), 0.13, 0.42, 0.16)
+  const bonnet = paint(box(0.72, 0.3, 0.6, 0.42, 0.62, 0), 0.13, 0.42, 0.16)
+  const cab = paint(box(0.56, 0.56, 0.62, -0.3, 0.62, 0), 0.85, 0.72, 0.12)
+  // exhaust stack — small, but it is what makes the shape read as a tractor
+  const stack = paint(box(0.09, 0.42, 0.09, 0.2, 1.0, 0.22), 0.22, 0.22, 0.24)
+
+  const wheel = (x: number, z: number, r: number): BufferGeometry => {
+    const g = new CylinderGeometry(r, r, 0.16, 10)
+    g.rotateX(Math.PI / 2)
+    g.translate(x, r, z)
+    return paint(g, 0.11, 0.11, 0.12)
+  }
+  return merge([
+    body,
+    bonnet,
+    cab,
+    stack,
+    wheel(-0.36, 0.42, 0.44),
+    wheel(-0.36, -0.42, 0.44),
+    wheel(0.52, 0.38, 0.24),
+    wheel(0.52, -0.38, 0.24)
+  ])
+}
+
+/**
+ * How many tractors work a holding, from the number of tracks.
+ *
+ * Deliberately far sparser than the city's traffic, which scales at 0.4 agents
+ * per street segment. A farm with rush-hour density would read as a depot, not
+ * a farm — the point is that the tracks are *used*, not busy (#52).
+ */
+export function tractorCount(trackCount: number): number {
+  if (trackCount < 4) return 0
+  return Math.min(12, Math.max(1, Math.round(trackCount * 0.02)))
 }

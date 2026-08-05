@@ -20,8 +20,8 @@ the holding.
 ## Download
 
 Grab the latest build from **[Releases](https://github.com/maximalcode/git-city/releases/latest)**
-— a Windows installer and DMGs for both Apple Silicon and Intel Macs. Linux:
-build from source (see [Development](#development)).
+— a Windows installer, DMGs for both Apple Silicon and Intel Macs, and an
+AppImage + `.deb` for Linux (the AppImage just needs `chmod +x`, no install).
 
 Git City shells out to `git`, so you need **git on your PATH**. It never asks
 for a token and stores nothing: pull requests go through the `gh` / `glab` CLI,
@@ -31,7 +31,11 @@ signing stays with gpg-agent / ssh-agent, and there is no telemetry.
 > publisher" — choose _More info → Run anyway_. macOS is blunter and calls the
 > app _"damaged"_: right-click the app → **Open**, or run
 > `xattr -d com.apple.quarantine "/Applications/Git City.app"`. Signing is on
-> the roadmap; it needs a paid certificate.
+> the roadmap; it needs a paid certificate. Linux has no equivalent gate — the
+> AppImage and deb run as-is.
+
+Anything else that goes wrong on first run is in
+**[Troubleshooting](docs/troubleshooting.md)**.
 
 ## What it looks like
 
@@ -184,6 +188,8 @@ signing stays with gpg-agent / ssh-agent, and there is no telemetry.
 | `Space`          | Play/pause the timeline        |
 | `Escape`         | Close panels / clear selection |
 
+Also as a page: [docs/shortcuts.md](docs/shortcuts.md).
+
 ## How it works
 
 Git City runs one streaming pass of
@@ -203,20 +209,25 @@ keeps the UI live and mutes itself during operations.
 
 Most projects open instantly. The honest limits, measured rather than guessed:
 
-| Repo size                                  | What to expect                                                                                                                                                          |
-| ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| up to ~5,000 files                         | opens in seconds, city reads clearly                                                                                                                                    |
-| ~20,000 files                              | still fine; layout takes a fraction of a second                                                                                                                         |
-| ~80,000 files (a monorepo like TypeScript) | a couple of minutes to read the history, and the streets stop being drawn — plots get too small to fit a road between them, so you get a dense block rather than a city |
+| Repo size          | What to expect                                                                                                                              |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| up to ~5,000 files | opens in seconds, city reads clearly                                                                                                        |
+| ~20,000 files      | still fine; this is also the ceiling on how many buildings get drawn                                                                        |
+| above 20,000 files | the **20,000 largest files** are drawn and the top bar says so — e.g. `20,000 of 81,368 files`. Reading the history still costs full price. |
 
-Git City checks the size before opening and warns you if it is going to be
-slow, so you can back out rather than watch a progress bar and wonder. The
-history pass is the expensive part and scales with commit count: a full
-`microsoft/TypeScript` clone (14,271 first-parent commits, 81,368 files) takes
-about 130 seconds and peaks around 540 MB.
+Git City checks the size before opening and tells you what you are in for, so
+you can back out rather than watch a progress bar and wonder.
 
-Making very large repos genuinely readable — collapsing deep directories rather
-than drawing every file — is tracked as an open issue, not a solved problem.
+The draw ceiling exists because past it the scene stops being worth building: a
+`microsoft/TypeScript` clone (81,368 files) took **212 seconds** to become
+interactive with every file drawn, against ~25 with the cap — and above ~60,000
+files the streets have already stopped being drawn anyway, because the plots are
+too small to fit a road between them. The history pass is separate and scales
+with commit count: 14,271 first-parent commits takes about 130 seconds.
+
+Collapsing deep directories, so a monorepo is genuinely _readable_ rather than
+merely fast, is still open — the cap keeps the app usable, it does not make a
+80,000-file repository legible.
 
 ## Development
 
@@ -286,6 +297,16 @@ MapControls (see `city/CameraRig.tsx`), and drei's text stack embeds a
 base64 WASM blob that antivirus heuristics love to false-positive on. All
 vehicle and tree geometry is likewise built in-code from merged three.js
 primitives, no external models.
+
+## Docs
+
+- [Troubleshooting](docs/troubleshooting.md) — unsigned installers, git not on
+  `PATH`, slow repositories, empty cities
+- [What the colours mean](docs/colour-modes.md) — the six encodings
+- [Keyboard shortcuts](docs/shortcuts.md)
+- [Security](SECURITY.md) — what leaves your machine (one version check), what
+  it executes, how to report a vulnerability
+- [Releasing](RELEASING.md) — cutting a release
 
 ## Contributing
 

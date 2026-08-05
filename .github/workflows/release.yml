@@ -1,6 +1,8 @@
 name: Release
 
-# Builds the installers for every supported platform.
+# Builds the installers for every supported platform: an NSIS .exe on
+# windows-latest, two DMGs on macos-latest, and AppImage + deb on
+# ubuntu-latest.
 #   - Push a tag  v*  ->  builds AND publishes a GitHub Release with every
 #     installer attached.
 #   - "Run workflow" button (workflow_dispatch)  ->  builds only, uploads the
@@ -12,8 +14,8 @@ name: Release
 # The build jobs refuse to run if the tag (v1.0.0) and package.json version
 # (1.0.0) disagree.
 #
-# The two build jobs never touch the Release themselves — they only publish
-# artifacts, and a third job collects those into one Release. That way the
+# The build jobs never touch the Release themselves — they only publish
+# artifacts, and a final job collects those into one Release. That way the
 # platforms cannot race each other to create it.
 
 on:
@@ -103,10 +105,51 @@ jobs:
           path: dist/*.dmg
           if-no-files-found: error
 
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify tag matches package.json version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          pkg="$(node -p "require('./package.json').version")"
+          if [ "$tag" != "$pkg" ]; then
+            echo "::error::Tag v$tag does not match package.json version $pkg. Bump package.json and re-tag."
+            exit 1
+          fi
+          echo "Tag and package.json agree on version $pkg."
+
+      - name: Run tests
+        run: npm test
+
+      # AppImage + deb (see electron-builder.yml). No signing step: Linux has
+      # no SmartScreen/Gatekeeper equivalent, so these run without warnings.
+      - name: Build Linux installers
+        run: npm run dist:linux
+
+      - name: Upload installer artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: installer-linux
+          path: |
+            dist/*.AppImage
+            dist/*.deb
+          if-no-files-found: error
+
   # Only on a version tag: collect every platform's artifact into a single
   # Release with auto-generated notes.
   publish:
-    needs: [build-win, build-mac]
+    needs: [build-win, build-mac, build-linux]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:

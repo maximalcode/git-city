@@ -4,6 +4,8 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 import { afterAll, describe, expect, it } from 'vitest'
 import { analyzeRepo } from './analyze'
+import { materializeSnapshot } from '../../shared/snapshots'
+import type { RepoAnalysis } from '../../shared/types'
 import { getWorkingStatus } from './status'
 import { makeTempRepo } from './fixtures'
 
@@ -16,6 +18,11 @@ import { makeTempRepo } from './fixtures'
  * filenames, a shallow clone. Each one asserts that analysis and status come
  * back coherent rather than throwing or silently losing files.
  */
+
+
+/** the HEAD capture's files, materialized out of the columns (#62) */
+const headFiles = (r: RepoAnalysis): ReturnType<typeof materializeSnapshot>['files'] =>
+  materializeSnapshot(r, r.snapshots.length - 1).files
 
 /** NTFS forbids characters POSIX allows, and caps a path at 260 characters. */
 const WINDOWS = process.platform === 'win32'
@@ -44,7 +51,7 @@ describe('repo shapes', () => {
 
     const result = await analyze(repo.path)
     expect(result.snapshots.length).toBeGreaterThan(0)
-    expect(result.snapshots.at(-1)?.files.map((f) => f.path)).toContain('a.ts')
+    expect(headFiles(result).map((f) => f.path)).toContain('a.ts')
 
     const status = await getWorkingStatus(repo.path)
     expect(status.branch).toBe('master')
@@ -62,7 +69,7 @@ describe('repo shapes', () => {
 
     const result = await analyze(repo.path)
     // detached at the first commit: b.ts is not in this history yet
-    expect(result.snapshots.at(-1)?.files.map((f) => f.path)).toEqual(['a.ts'])
+    expect(headFiles(result).map((f) => f.path)).toEqual(['a.ts'])
 
     const status = await getWorkingStatus(repo.path)
     expect(status).toBeTruthy()
@@ -129,7 +136,7 @@ describe('repo shapes', () => {
     repo.commitAll('odd names')
 
     const result = await analyze(repo.path)
-    const paths = result.snapshots.at(-1)?.files.map((f) => f.path) ?? []
+    const paths = headFiles(result).map((f) => f.path)
     for (const name of names) expect(paths).toContain(name)
 
     // A double quote is what git actually quotes in its output, so it is the
@@ -154,7 +161,7 @@ describe('repo shapes', () => {
     repo.commitAll('deep tree')
 
     const result = await analyze(repo.path)
-    const paths = result.snapshots.at(-1)?.files.map((f) => f.path) ?? []
+    const paths = headFiles(result).map((f) => f.path)
     expect(paths).toContain(`${deep}/leaf.ts`)
   })
 
@@ -173,7 +180,7 @@ describe('repo shapes', () => {
     expect(result.snapshots.length).toBeGreaterThan(0)
     // a depth-1 clone only knows the tip commit
     expect(result.info.commitCount).toBe(1)
-    expect(result.snapshots.at(-1)?.files.length).toBe(5)
+    expect(headFiles(result).length).toBe(5)
   })
 
   it('analyzes a repo with a submodule without descending into it', async () => {
@@ -197,10 +204,39 @@ describe('repo shapes', () => {
     outer.commitAll('add submodule')
 
     const result = await analyze(outer.path)
-    const paths = result.snapshots.at(-1)?.files.map((f) => f.path) ?? []
+    const paths = headFiles(result).map((f) => f.path)
     expect(paths).toContain('outer.ts')
     // the submodule is a gitlink, not a tree of files to draw
     expect(paths.some((p) => p.startsWith('vendor/inner/'))).toBe(false)
+  })
+
+  it('tells the user a bare repository is bare, not that it is not a repository', async () => {
+    const source = makeTempRepo('git-city-bare-src-')
+    created.push(source.path)
+    source.write('a.ts', 'let x = 1\n')
+    source.commitAll('first')
+    const dir = tempDir('git-city-bare-')
+    const bare = join(dir, 'bare.git')
+    execFileSync('git', ['clone', '--bare', `file://${source.path}`, bare], { stdio: 'pipe' })
+
+    // it really is a repository — the old message sent the user looking in
+    // entirely the wrong place (#25)
+    await expect(analyze(bare)).rejects.toThrow(/bare repository/i)
+    await expect(analyze(bare)).rejects.toThrow(/clone it first/i)
+  })
+
+  it('tells the user they picked the .git folder', async () => {
+    const repo = makeTempRepo('git-city-dotgit-')
+    created.push(repo.path)
+    repo.write('a.ts', 'let x = 1\n')
+    repo.commitAll('first')
+
+    await expect(analyze(join(repo.path, '.git'))).rejects.toThrow(/\.git folder/i)
+  })
+
+  it('still says "not a git repository" for a folder that genuinely is not one', async () => {
+    const dir = tempDir('git-city-plain-')
+    await expect(analyze(dir)).rejects.toThrow(/not a git repository/i)
   })
 
   it('handles many files in a single directory', async () => {
@@ -210,6 +246,6 @@ describe('repo shapes', () => {
     repo.commitAll('wide directory')
 
     const result = await analyze(repo.path)
-    expect(result.snapshots.at(-1)?.files.length).toBe(1200)
+    expect(headFiles(result).length).toBe(1200)
   })
 })

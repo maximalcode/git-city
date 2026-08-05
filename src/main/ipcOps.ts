@@ -1,10 +1,12 @@
 import { app, ipcMain, shell } from 'electron'
 import type { WebContents } from 'electron'
-import { resolve, sep } from 'path'
+import { basename, resolve, sep } from 'path'
 import type {
   CommitSearchScope,
   HunkMode,
   OpResult,
+  PrFilesResult,
+  PrListResult,
   ProgressInfo,
   RebaseEntry,
   RepoChangeReason,
@@ -31,7 +33,7 @@ import { getRebaseTodo, runInteractiveRebase } from './git/rebaseInteractive'
 import { createBranch, deleteBranch, listBranches, switchBranch } from './git/branches'
 import { commit, getLastCommitMessage } from './git/commit'
 import { getSigningConfig } from './git/signing'
-import { providerFor, unknownHostAuth } from './git/host'
+import { probeHost, providerFor, unknownHostAuth } from './git/host'
 import { listSubmodules, updateSubmodules } from './git/submodules'
 import { addWorktree, listWorktrees, removeWorktree } from './git/worktrees'
 import { checkForUpdate } from './updates'
@@ -39,6 +41,7 @@ import { readConflictFile, resolveConflictFile, resolveWholeFile } from './git/c
 import { mergeAbort, mergeBranch, mergeContinue } from './git/merge'
 import { withRepoLock } from './git/queue'
 import { FriendlyError, failFromError } from './git/result'
+import { analysisFailedMessage } from './git/openErrors'
 import { discardFiles, stageFiles, unstageFiles } from './git/stage'
 import { stashApply, stashDrop, stashList, stashPop, stashPush } from './git/stash'
 import { getWorkingStatus } from './git/status'
@@ -65,9 +68,36 @@ function readOnly<T>(
     } catch (err) {
       if (err instanceof FriendlyError) throw new Error(err.message)
       console.error(`[git-city] ${channel} failed:`, err)
-      throw new Error(`Could not load ${channel.replace(/-/g, ' ')}.`)
+      // "Could not load blame." next to a Retry that loops was every reason a
+      // read can fail. git usually said something useful — pass its first line
+      // on, with absolute paths reduced to a basename so the panel doesn't
+      // become a directory listing (#30).
+      const detail = gitDetail(err, repoPath)
+      throw new Error(
+        detail
+          ? `Could not load ${channel.replace(/-/g, ' ')}: ${detail}`
+          : `Could not load ${channel.replace(/-/g, ' ')}.`
+      )
     }
   })
+}
+
+/**
+ * git's own first line, safe to show. Returns null when there is nothing worth
+ * adding — an internal stack, or a message that is just our own command line.
+ */
+function gitDetail(err: unknown, repoPath: string): string | null {
+  if (!(err instanceof Error)) return null
+  const line = err.message
+    .split('\n')
+    .map((l) => l.replace(/^(fatal|error|warning):\s*/i, '').trim())
+    .find((l) => l.length > 0)
+  if (!line) return null
+  // Our own failure text ("git log --first-parent … exited with 128") tells the
+  // user nothing and exposes the invocation; the console.error above keeps it.
+  if (/^git\s.*exited with/.test(line)) return null
+  const short = line.split(repoPath).join(basename(repoPath))
+  return short.length > 200 ? `${short.slice(0, 199)}…` : short
 }
 
 /**
@@ -124,15 +154,29 @@ export function registerOpsIpc(): void {
   readOnly('submodules', (repo) => listSubmodules(repo))
   readOnly('worktrees', (repo) => listWorktrees(repo))
   readOnly('repo-size', (repo) => repoSize(repo))
+  // The probe's own answer is used when nobody claims the repo, so a missing
+  // CLI says so instead of being reported as "no GitHub or GitLab remote" (#24).
+  readOnly('host-status', async (repo) => {
+    const { provider, auth } = await probeHost(repo)
+    return provider ? provider.status(repo) : (auth ?? unknownHostAuth())
+  })
   readOnly(
-    'host-status',
-    async (repo) => (await providerFor(repo))?.status(repo) ?? unknownHostAuth()
+    'pr-list',
+    async (repo): Promise<PrListResult> =>
+      (await providerFor(repo))?.listPullRequests(repo) ?? {
+        ok: true,
+        prs: [],
+        more: false
+      }
   )
-  readOnly('pr-list', async (repo) => (await providerFor(repo))?.listPullRequests(repo) ?? [])
   readOnly('pr-current', async (repo) => (await providerFor(repo))?.currentBranchPr(repo) ?? null)
   readOnly(
     'pr-files',
-    async (repo, number: number) => (await providerFor(repo))?.pullRequestFiles(repo, number) ?? []
+    async (repo, number: number): Promise<PrFilesResult> =>
+      (await providerFor(repo))?.pullRequestFiles(repo, number) ?? {
+        ok: false,
+        reason: unknownHostAuth().reason ?? 'No pull-request host for this repository.'
+      }
   )
   ipcMain.handle('git-city:open-external', (_e, url: string) => {
     // only ever open https links (URLs come from gh's own JSON output)
@@ -168,9 +212,17 @@ export function registerOpsIpc(): void {
   readOnly('reflog', (repo, limit?: number) => getReflog(repo, limit ?? 100))
   readOnly('tags', (repo) => listTags(repo))
   readOnly('rebase-todo', (repo, count: number) => getRebaseTodo(repo, count))
-  ipcMain.handle('git-city:analyze-incremental', (_e, repoPath: string) =>
-    withRepoLock(repoPath, () => analyzeIncremental(repoPath))
-  )
+  // Wrapped like every other read: an interrupted history pass otherwise
+  // reached the user as the internal command line plus "exited with null" (#25).
+  ipcMain.handle('git-city:analyze-incremental', async (_e, repoPath: string) => {
+    try {
+      return await withRepoLock(repoPath, () => analyzeIncremental(repoPath))
+    } catch (err) {
+      if (err instanceof FriendlyError) throw new Error(err.message)
+      console.error('[git-city] analyze-incremental failed:', err)
+      throw new Error(analysisFailedMessage(basename(repoPath)))
+    }
+  })
   ipcMain.handle('git-city:open-in-editor', (_e, repoPath: string, path: string) => {
     const root = resolve(repoPath)
     const abs = resolve(root, path)

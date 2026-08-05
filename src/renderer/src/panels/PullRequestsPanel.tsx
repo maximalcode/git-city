@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { PullRequestInfo } from '../../../shared/types'
+import type { HostAuth, PullRequestInfo } from '../../../shared/types'
 import { useStore } from '../store'
 import { getMode } from '../city/modes'
 
@@ -42,11 +42,25 @@ const VOCAB = {
   }
 } as const
 
+/**
+ * What to suggest for a HostAuth. Providers set `hint` where the cause is
+ * known; the fallback reproduces the old available/authed reading for anything
+ * that predates it.
+ */
+function hintOf(auth: HostAuth): NonNullable<HostAuth['hint']> {
+  if (auth.hint) return auth.hint
+  if (!auth.available) return 'install'
+  if (!auth.authed) return 'login'
+  return 'none'
+}
+
 export default function PullRequestsPanel(): React.JSX.Element | null {
   const open = useStore((s) => s.prPanelOpen)
   const setOpen = useStore((s) => s.setPrPanelOpen)
   const auth = useStore((s) => s.hostAuth)
   const prs = useStore((s) => s.pullRequests)
+  const truncated = useStore((s) => s.prsTruncated)
+  const hostError = useStore((s) => s.hostError)
   const currentPr = useStore((s) => s.currentPr)
   const loading = useStore((s) => s.prLoading)
   const status = useStore((s) => s.workingStatus)
@@ -61,7 +75,11 @@ export default function PullRequestsPanel(): React.JSX.Element | null {
   const words = VOCAB[auth?.host === 'gitlab' ? 'gitlab' : 'github']
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
-  const [base, setBase] = useState('main')
+  // Empty, not 'main'. Both providers omit the flag when base is blank and the
+  // forge then uses the repository's own default branch — hardcoding 'main'
+  // produced a raw GraphQL error on every master/develop repo, and the panel's
+  // own base field a few pixels away never said it was the cause (#24).
+  const [base, setBase] = useState('')
 
   if (!open) return null
 
@@ -71,7 +89,7 @@ export default function PullRequestsPanel(): React.JSX.Element | null {
   const submitCreate = (): void => {
     const t = title.trim() || (branch ?? '')
     if (!t) return
-    void createPr(base.trim() || 'main', t, body.trim())
+    void createPr(base.trim(), t, body.trim())
     setTitle('')
     setBody('')
   }
@@ -81,7 +99,9 @@ export default function PullRequestsPanel(): React.JSX.Element | null {
       <div className="panel-head">
         <span>{words.plural}</span>
         <div className="pr-head-actions">
-          <button className="pr-refresh" disabled={loading} onClick={() => void refreshHost()}>
+          {/* never disabled: the loading state is exactly what gets stuck, and
+              greying out the only retry control made that unrecoverable (#24) */}
+          <button className="pr-refresh" title="Refresh" onClick={() => void refreshHost()}>
             ↻
           </button>
           <button className="close" aria-label="Close" onClick={() => setOpen(false)}>
@@ -91,28 +111,41 @@ export default function PullRequestsPanel(): React.JSX.Element | null {
       </div>
 
       <div className="panel-scroll">
-        {loading && prs.length === 0 && <div className="empty">{`Loading ${words.lower}…`}</div>}
+        {loading && prs.length === 0 && !hostError && (
+          <div className="empty">{`Loading ${words.lower}…`}</div>
+        )}
 
-        {!loading && auth && (!auth.authed || !auth.isRepo) && (
+        {/* A caught IPC error used to be swallowed, leaving this panel entirely
+            blank — no message, no empty state, and a ↻ that visibly did
+            nothing (#24). */}
+        {hostError && (
+          <div className="pr-unavailable">
+            <p>{hostError}</p>
+            <p className="pr-hint">Press ↻ to try again.</p>
+          </div>
+        )}
+
+        {!loading && !hostError && auth && (!auth.authed || !auth.isRepo) && (
           <div className="pr-unavailable">
             <p>{auth.reason}</p>
-            {/* only name a CLI once we know which forge this is — an unknown
-                host means no GitHub or GitLab remote, and installing gh does
-                not give a repo one */}
-            {!auth.available && auth.host !== 'unknown' && (
+            {/* The hint comes from where the cause is known. Deriving it here
+                from available/authed is what told an offline user to re-run
+                gh auth login, and a self-hosted GitLab user to install gh. */}
+            {hintOf(auth) === 'install' && auth.host !== 'unknown' && (
               <p className="pr-hint">
                 Install it from <span className="mono">{words.install}</span>, then run{' '}
                 <span className="mono">{words.login}</span>.
               </p>
             )}
-            {auth.host === 'unknown' && (
+            {hintOf(auth) === 'login' && (
               <p className="pr-hint">
-                Pull requests appear here for repositories hosted on GitHub or GitLab.
+                Run <span className="mono">{words.login}</span> in a terminal, then press ↻.
               </p>
             )}
-            {auth.available && !auth.authed && (
+            {hintOf(auth) === 'retry' && <p className="pr-hint">Press ↻ to try again.</p>}
+            {hintOf(auth) === 'none' && auth.host === 'unknown' && (
               <p className="pr-hint">
-                Run <span className="mono">{words.login}</span> in a terminal, then refresh.
+                Pull requests appear here for repositories hosted on GitHub or GitLab.
               </p>
             )}
           </div>
@@ -160,6 +193,7 @@ export default function PullRequestsPanel(): React.JSX.Element | null {
                     <input
                       type="text"
                       className="pr-base"
+                      placeholder="default branch"
                       value={base}
                       onChange={(e) => setBase(e.target.value)}
                     />
@@ -179,7 +213,10 @@ export default function PullRequestsPanel(): React.JSX.Element | null {
 
             <section>
               <div className="section-head">
-                <span>Open ({prs.length})</span>
+                {/* the cap used to be presented as the complete list (#24) */}
+                <span>
+                  Open ({truncated ? `${prs.length}+, showing first ${prs.length}` : prs.length})
+                </span>
               </div>
               {prs.length === 0 && !loading && (
                 <div className="empty">{`No open ${words.lower}`}</div>

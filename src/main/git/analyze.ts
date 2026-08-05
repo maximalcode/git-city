@@ -1,7 +1,22 @@
 import { basename } from 'path'
-import type { FileState, ProgressInfo, RepoAnalysis, RepoSize, Snapshot } from '../../shared/types'
+import type {
+  CompactSnapshot,
+  FileState,
+  GitVersion,
+  ProgressInfo,
+  RepoAnalysis,
+  RepoSize
+} from '../../shared/types'
+import {
+  compactSnapshot,
+  createInterner,
+  materializeSnapshot,
+  type Interner
+} from '../../shared/snapshots'
 import { runGit, runGitLines, runGitResult } from './exec'
 import { FriendlyError } from './result'
+import { describeGitVersion } from '../../shared/gitVersion'
+import { BARE_REPOSITORY, gitComplaint, INSIDE_GIT_DIR, NOT_A_REPOSITORY } from './openErrors'
 
 /**
  * Repo analysis built from a single streaming pass of
@@ -15,10 +30,15 @@ import { FriendlyError } from './result'
 
 const SENTINEL = '\x01'
 
-export async function checkGitInstalled(): Promise<string | null> {
+/**
+ * Ask the git on PATH what it is. null means there isn't one — the renderer
+ * distinguishes that (install git) from a version we can't work with (update
+ * git), because they are different instructions.
+ */
+export async function checkGitInstalled(): Promise<GitVersion | null> {
   try {
     const v = await runGit(process.cwd(), ['--version'])
-    return v.trim()
+    return describeGitVersion(v.trim())
   } catch {
     return null
   }
@@ -66,11 +86,12 @@ async function replayRange(
   repoPath: string,
   range: string,
   state: Map<string, FileState>,
+  interner: Interner,
   startIndex: number,
   shouldSnapshot: (index: number) => boolean,
   onCommitDone?: (index: number) => void
-): Promise<Snapshot[]> {
-  const snapshots: Snapshot[] = []
+): Promise<CompactSnapshot[]> {
+  const snapshots: CompactSnapshot[] = []
   let commitIndex = startIndex - 1
   let current: PendingCommit | null = null
 
@@ -94,14 +115,22 @@ async function replayRange(
       if (ch.binary) f.binary = true
     }
     if (shouldSnapshot(commitIndex)) {
-      snapshots.push({
-        hash: current.hash,
-        date: current.date,
-        author: current.author,
-        message: current.message,
-        index: commitIndex,
-        files: Array.from(state.values(), (f) => ({ ...f }))
-      })
+      // columnar capture straight off the live state — the object form of a
+      // snapshot never exists here, which is the point of #62
+      snapshots.push(
+        compactSnapshot(
+          interner,
+          {
+            hash: current.hash,
+            date: current.date,
+            author: current.author,
+            message: current.message,
+            index: commitIndex
+          },
+          state.values(),
+          state.size
+        )
+      )
     }
     onCommitDone?.(commitIndex)
     current = null
@@ -211,21 +240,38 @@ export async function repoSize(repoPath: string): Promise<RepoSize> {
   return { commits, files }
 }
 
+/**
+ * `--is-inside-work-tree` said no. Ask git what the folder actually is before
+ * telling the user it isn't a repository, because for a bare clone and for a
+ * `.git` directory that answer is simply false (#25).
+ *
+ * Order matters: `--is-bare-repository` is true for both, so it has to be asked
+ * first, and `--is-inside-git-dir` then separates the `.git` of a normal
+ * checkout from a genuinely bare one.
+ */
+async function explainNotAWorkTree(repoPath: string, stderr: string): Promise<string> {
+  const bare = await runGitResult(repoPath, ['rev-parse', '--is-bare-repository'])
+  if (bare.stdout.trim() === 'true') return BARE_REPOSITORY
+
+  const inGitDir = await runGitResult(repoPath, ['rev-parse', '--is-inside-git-dir'])
+  if (inGitDir.stdout.trim() === 'true') return INSIDE_GIT_DIR
+
+  // git's own words, when it had any — the dubious-ownership refusal carries
+  // the exact command the user needs to run.
+  return gitComplaint(stderr) ?? NOT_A_REPOSITORY
+}
+
 export async function analyzeRepo(
   repoPath: string,
   sampleTarget: number,
   onProgress: (p: ProgressInfo) => void
 ): Promise<RepoAnalysis> {
-  const inside = (
-    await runGit(repoPath, ['rev-parse', '--is-inside-work-tree']).catch((err) => {
-      // "git isn't installed" must not be swallowed into "not a repository" —
-      // it is the one failure here the user can actually do something about
-      if (err instanceof FriendlyError) throw err
-      return 'false'
-    })
-  ).trim()
-  if (inside !== 'true') {
-    throw new Error('The selected folder is not a git repository.')
+  // "git isn't installed", "that folder is gone" and "you can't read it" are
+  // FriendlyErrors from exec and must not be swallowed into "not a repository" —
+  // they are the failures the user can actually act on.
+  const probe = await runGitResult(repoPath, ['rev-parse', '--is-inside-work-tree'])
+  if (probe.stdout.trim() !== 'true') {
+    throw new FriendlyError(await explainNotAWorkTree(repoPath, probe.stderr))
   }
 
   onProgress({ phase: 'counting', done: 0, total: 1 })
@@ -250,6 +296,8 @@ export async function analyzeRepo(
     ).trim()
     const empty: RepoAnalysis = {
       info: { path: repoPath, name: basename(repoPath), branch: unborn || 'main', commitCount: 0 },
+      paths: [],
+      authors: [],
       snapshots: []
     }
     analysisCache.set(repoPath, empty)
@@ -265,10 +313,12 @@ export async function analyzeRepo(
   const sampleIdx = pickSampleIndices(commitCount, sampleTarget)
 
   const state = new Map<string, FileState>()
+  const interner = createInterner()
   const snapshots = await replayRange(
     repoPath,
     'HEAD',
     state,
+    interner,
     0,
     (i) => sampleIdx.has(i),
     (i) => {
@@ -282,6 +332,8 @@ export async function analyzeRepo(
 
   const analysis: RepoAnalysis = {
     info: { path: repoPath, name: basename(repoPath), branch, commitCount },
+    paths: interner.paths,
+    authors: interner.authors,
     snapshots
   }
   analysisCache.set(repoPath, analysis)
@@ -322,12 +374,16 @@ export async function analyzeIncremental(repoPath: string): Promise<RepoAnalysis
 
   // seed exact HEAD state from the last snapshot (it is a full-state capture)
   const state = new Map<string, FileState>(
-    prev.snapshots[prev.snapshots.length - 1].files.map((f) => [f.path, { ...f }])
+    materializeSnapshot(prev, prev.snapshots.length - 1).files.map((f) => [f.path, f])
   )
+  // resume the interning tables append-only, so the old snapshots' ids stay
+  // valid and the new ones share them
+  const interner = createInterner(prev.paths, prev.authors)
   const newSnaps = await replayRange(
     repoPath,
     `${prevHead}..${head}`,
     state,
+    interner,
     prev.info.commitCount,
     () => true // snapshot every new commit — there are few
   )
@@ -338,6 +394,8 @@ export async function analyzeIncremental(repoPath: string): Promise<RepoAnalysis
       branch,
       commitCount: prev.info.commitCount + added
     },
+    paths: interner.paths,
+    authors: interner.authors,
     snapshots: [...prev.snapshots, ...newSnaps]
   }
   analysisCache.set(repoPath, analysis)

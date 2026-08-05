@@ -4,6 +4,7 @@ import { join } from 'path'
 import { afterAll, describe, expect, it } from 'vitest'
 import { analyzeRepo } from './analyze'
 import { cloneRepo } from './clone'
+import { materializeSnapshot } from '../../shared/snapshots'
 
 /**
  * Network end-to-end test: clones a real public GitHub repo and analyzes it.
@@ -30,7 +31,7 @@ describe.skipIf(!enabled)('clone + analyze a real GitHub repo', () => {
     expect(result.info.commitCount).toBeGreaterThan(3000)
     expect(result.snapshots.length).toBeGreaterThanOrEqual(50)
 
-    const head = result.snapshots[result.snapshots.length - 1]
+    const head = materializeSnapshot(result, result.snapshots.length - 1)
     const paths = new Set(head.files.map((f) => f.path))
     expect(paths.has('package.json')).toBe(true)
     expect(paths.has('lib/express.js')).toBe(true)
@@ -39,7 +40,7 @@ describe.skipIf(!enabled)('clone + analyze a real GitHub repo', () => {
     const pkg = head.files.find((f) => f.path === 'package.json')!
     expect(pkg.loc).toBeGreaterThan(30)
     expect(pkg.commits).toBeGreaterThan(100)
-    const first = result.snapshots[0]
+    const first = materializeSnapshot(result, 0)
     expect(first.files.length).toBeLessThan(head.files.length)
   }, 240_000)
 })

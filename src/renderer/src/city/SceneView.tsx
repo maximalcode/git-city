@@ -6,6 +6,7 @@ import SceneBoundary from '../lib/SceneBoundary'
 import { useStore } from '../store'
 import { playStepMs } from '../lib/playback'
 import { hotspots as computeHotspots } from '../lib/hotspots'
+import { materializeSnapshot } from '../../../shared/snapshots'
 import { getTheme } from './themes'
 import { getMode } from './modes'
 import Hud from './Hud'
@@ -71,7 +72,12 @@ export default function SceneView(): React.JSX.Element {
     setCanvasKey((k) => k + 1)
   }
 
-  const snapshot = analysis.snapshots[Math.min(snapshotIndex, analysis.snapshots.length - 1)]
+  // The analysis stores snapshots columnar (#62); only the timeline position
+  // actually on screen is ever materialized back into objects.
+  const snapshot = useMemo(
+    () => materializeSnapshot(analysis, Math.min(snapshotIndex, analysis.snapshots.length - 1)),
+    [analysis, snapshotIndex]
+  )
 
   const hotspotPaths = useMemo(
     () => (showHotspots ? computeHotspots(snapshot) : []),

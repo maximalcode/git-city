@@ -1,12 +1,18 @@
 import { basename } from 'path'
 import type {
+  CompactSnapshot,
   FileState,
   GitVersion,
   ProgressInfo,
   RepoAnalysis,
-  RepoSize,
-  Snapshot
+  RepoSize
 } from '../../shared/types'
+import {
+  compactSnapshot,
+  createInterner,
+  materializeSnapshot,
+  type Interner
+} from '../../shared/snapshots'
 import { runGit, runGitLines, runGitResult } from './exec'
 import { FriendlyError } from './result'
 import { describeGitVersion } from '../../shared/gitVersion'
@@ -80,11 +86,12 @@ async function replayRange(
   repoPath: string,
   range: string,
   state: Map<string, FileState>,
+  interner: Interner,
   startIndex: number,
   shouldSnapshot: (index: number) => boolean,
   onCommitDone?: (index: number) => void
-): Promise<Snapshot[]> {
-  const snapshots: Snapshot[] = []
+): Promise<CompactSnapshot[]> {
+  const snapshots: CompactSnapshot[] = []
   let commitIndex = startIndex - 1
   let current: PendingCommit | null = null
 
@@ -108,14 +115,22 @@ async function replayRange(
       if (ch.binary) f.binary = true
     }
     if (shouldSnapshot(commitIndex)) {
-      snapshots.push({
-        hash: current.hash,
-        date: current.date,
-        author: current.author,
-        message: current.message,
-        index: commitIndex,
-        files: Array.from(state.values(), (f) => ({ ...f }))
-      })
+      // columnar capture straight off the live state — the object form of a
+      // snapshot never exists here, which is the point of #62
+      snapshots.push(
+        compactSnapshot(
+          interner,
+          {
+            hash: current.hash,
+            date: current.date,
+            author: current.author,
+            message: current.message,
+            index: commitIndex
+          },
+          state.values(),
+          state.size
+        )
+      )
     }
     onCommitDone?.(commitIndex)
     current = null
@@ -281,6 +296,8 @@ export async function analyzeRepo(
     ).trim()
     const empty: RepoAnalysis = {
       info: { path: repoPath, name: basename(repoPath), branch: unborn || 'main', commitCount: 0 },
+      paths: [],
+      authors: [],
       snapshots: []
     }
     analysisCache.set(repoPath, empty)
@@ -296,10 +313,12 @@ export async function analyzeRepo(
   const sampleIdx = pickSampleIndices(commitCount, sampleTarget)
 
   const state = new Map<string, FileState>()
+  const interner = createInterner()
   const snapshots = await replayRange(
     repoPath,
     'HEAD',
     state,
+    interner,
     0,
     (i) => sampleIdx.has(i),
     (i) => {
@@ -313,6 +332,8 @@ export async function analyzeRepo(
 
   const analysis: RepoAnalysis = {
     info: { path: repoPath, name: basename(repoPath), branch, commitCount },
+    paths: interner.paths,
+    authors: interner.authors,
     snapshots
   }
   analysisCache.set(repoPath, analysis)
@@ -353,12 +374,16 @@ export async function analyzeIncremental(repoPath: string): Promise<RepoAnalysis
 
   // seed exact HEAD state from the last snapshot (it is a full-state capture)
   const state = new Map<string, FileState>(
-    prev.snapshots[prev.snapshots.length - 1].files.map((f) => [f.path, { ...f }])
+    materializeSnapshot(prev, prev.snapshots.length - 1).files.map((f) => [f.path, f])
   )
+  // resume the interning tables append-only, so the old snapshots' ids stay
+  // valid and the new ones share them
+  const interner = createInterner(prev.paths, prev.authors)
   const newSnaps = await replayRange(
     repoPath,
     `${prevHead}..${head}`,
     state,
+    interner,
     prev.info.commitCount,
     () => true // snapshot every new commit — there are few
   )
@@ -369,6 +394,8 @@ export async function analyzeIncremental(repoPath: string): Promise<RepoAnalysis
       branch,
       commitCount: prev.info.commitCount + added
     },
+    paths: interner.paths,
+    authors: interner.authors,
     snapshots: [...prev.snapshots, ...newSnaps]
   }
   analysisCache.set(repoPath, analysis)

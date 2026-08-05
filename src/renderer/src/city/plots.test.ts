@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { RepoAnalysis, Snapshot } from '../../../shared/types'
+import type { RepoAnalysis } from '../../../shared/types'
+import { buildAnalysis } from '../../../shared/snapshots'
 import { buildFarmModel } from '../layout/farm'
 import { buildCityModel } from './cityData'
 import type { PlotSource } from './plots'
@@ -13,12 +14,9 @@ function analysis(): RepoAnalysis {
     lastAuthor: 'a',
     binary: false
   }))
-  return {
-    info: { name: 'r', path: '/r', branch: 'main', commitCount: 1 },
-    snapshots: [
-      { hash: 'h0', date: 1_700_000_000_000, author: 'a', message: 'c0', index: 0, files }
-    ] as Snapshot[]
-  }
+  return buildAnalysis({ name: 'r', path: '/r', branch: 'main', commitCount: 1 }, [
+    { hash: 'h0', date: 1_700_000_000_000, author: 'a', message: 'c0', index: 0, files }
+  ])
 }
 
 /**

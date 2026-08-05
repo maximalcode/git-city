@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { RepoAnalysis, Snapshot } from '../../../shared/types'
+import type { RepoAnalysis } from '../../../shared/types'
+import { buildAnalysis, materializeSnapshot } from '../../../shared/snapshots'
 import { DEFAULT_MODE, MODES, getMode, isViewMode, nextMode } from './modes'
 
 function analysis(): RepoAnalysis {
@@ -11,12 +12,9 @@ function analysis(): RepoAnalysis {
     lastAuthor: 'a',
     binary: false
   }))
-  return {
-    info: { name: 'r', path: '/r', branch: 'main', commitCount: 1 },
-    snapshots: [
-      { hash: 'h0', date: 1_700_000_000_000, author: 'a', message: 'c0', index: 0, files }
-    ] as Snapshot[]
-  }
+  return buildAnalysis({ name: 'r', path: '/r', branch: 'main', commitCount: 1 }, [
+    { hash: 'h0', date: 1_700_000_000_000, author: 'a', message: 'c0', index: 0, files }
+  ])
 }
 
 /**
@@ -99,7 +97,7 @@ describe('mode registry', () => {
    */
   it('hands back the same dot array for one analysis', () => {
     const a = analysis()
-    const snapshot = a.snapshots[0]
+    const snapshot = materializeSnapshot(a, 0)
     for (const mode of MODES) {
       const first = mode.prepare(a, snapshot, 'language').dots()
       const again = mode.prepare(a, snapshot, 'activity').dots()

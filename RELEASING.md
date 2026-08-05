@@ -28,8 +28,8 @@ You get five files:
 | `git-city-1.0.0-setup.exe`    | Windows                                    |
 | `git-city-1.0.0-arm64.dmg`    | Apple Silicon (M1 onward)                  |
 | `git-city-1.0.0-x64.dmg`      | Intel Macs                                 |
-| `git-city-1.0.0-x64.AppImage` | Any Linux (`chmod +x` and run — no install) |
-| `git-city-1.0.0-x64.deb`      | Debian / Ubuntu / Mint                     |
+| `git-city-1.0.0-x86_64.AppImage` | Any Linux (`chmod +x` and run — no install) |
+| `git-city-1.0.0-amd64.deb`   | Debian / Ubuntu / Mint                     |
 
 Linux needs no signing: there is no SmartScreen or Gatekeeper equivalent, so the unsigned-build
 caveats below apply to Windows and macOS only.

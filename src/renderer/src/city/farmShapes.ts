@@ -278,6 +278,11 @@ function chickenGeometry(): BufferGeometry {
   return merge([body, head, comb, beak, ...legs(0.14, 0.12, H, 0.85, 0.62, 0.18, 0.035)])
 }
 
+/**
+ * Cached per kind, like trafficShapes' geometryFor: herds remount on every
+ * mode switch, and rebuilding four merged geometries each time would leak the
+ * old ones. Cached geometries are shared — consumers must never dispose them.
+ */
 const animalCache = new Map<AnimalKind, BufferGeometry>()
 
 export function animalGeometry(kind: AnimalKind): BufferGeometry {

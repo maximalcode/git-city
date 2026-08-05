@@ -1,8 +1,8 @@
 # Releasing Git City
 
 Installers are built in CI by the [`Release`](.github/workflows/release.yml) workflow: an NSIS
-`.exe` on `windows-latest`, and two DMGs on `macos-latest` (arm64 and a cross-built x64, since
-Intel Macs are still common). Linux is not packaged — build from source.
+`.exe` on `windows-latest`, two DMGs on `macos-latest` (arm64 and a cross-built x64, since
+Intel Macs are still common), and an AppImage + `.deb` on `ubuntu-latest`.
 
 ## Cut a release
 
@@ -21,13 +21,18 @@ A third job then collects every artifact into one **GitHub Release** at
 `https://github.com/maximalcode/git-city/releases` with auto-generated notes. The build jobs
 never create the Release themselves, so the platforms cannot race each other for it.
 
-You get three files:
+You get five files:
 
-| File                       | For                       |
-| -------------------------- | ------------------------- |
-| `git-city-1.0.0-setup.exe` | Windows                   |
-| `git-city-1.0.0-arm64.dmg` | Apple Silicon (M1 onward) |
-| `git-city-1.0.0-x64.dmg`   | Intel Macs                |
+| File                          | For                                        |
+| ----------------------------- | ------------------------------------------ |
+| `git-city-1.0.0-setup.exe`    | Windows                                    |
+| `git-city-1.0.0-arm64.dmg`    | Apple Silicon (M1 onward)                  |
+| `git-city-1.0.0-x64.dmg`      | Intel Macs                                 |
+| `git-city-1.0.0-x64.AppImage` | Any Linux (`chmod +x` and run — no install) |
+| `git-city-1.0.0-x64.deb`      | Debian / Ubuntu / Mint                     |
+
+Linux needs no signing: there is no SmartScreen or Gatekeeper equivalent, so the unsigned-build
+caveats below apply to Windows and macOS only.
 
 > The tag must equal `v` + the `package.json` version, or the build fails on purpose.
 

@@ -37,3 +37,16 @@ mac:
         - x64
 dmg:
   artifactName: ${name}-${version}-${arch}.${ext}
+linux:
+  executableName: git-city
+  icon: build/icon.png
+  category: Development
+  # fpm requires a maintainer for the .deb; the noreply alias keeps the
+  # package metadata as pseudonymous as the commit history
+  maintainer: maximalcode <213183497+maximalcode@users.noreply.github.com>
+  # AppImage runs on any distro with no install step; deb covers the apt
+  # family. rpm/snap/flatpak deliberately left out until someone asks (#64).
+  target:
+    - AppImage
+    - deb
+  artifactName: ${name}-${version}-${arch}.${ext}

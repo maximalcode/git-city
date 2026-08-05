@@ -20,8 +20,8 @@ the holding.
 ## Download
 
 Grab the latest build from **[Releases](https://github.com/maximalcode/git-city/releases/latest)**
-— a Windows installer and DMGs for both Apple Silicon and Intel Macs. Linux:
-build from source (see [Development](#development)).
+— a Windows installer, DMGs for both Apple Silicon and Intel Macs, and an
+AppImage + `.deb` for Linux (the AppImage just needs `chmod +x`, no install).
 
 Git City shells out to `git`, so you need **git on your PATH**. It never asks
 for a token and stores nothing: pull requests go through the `gh` / `glab` CLI,
@@ -31,7 +31,8 @@ signing stays with gpg-agent / ssh-agent, and there is no telemetry.
 > publisher" — choose _More info → Run anyway_. macOS is blunter and calls the
 > app _"damaged"_: right-click the app → **Open**, or run
 > `xattr -d com.apple.quarantine "/Applications/Git City.app"`. Signing is on
-> the roadmap; it needs a paid certificate.
+> the roadmap; it needs a paid certificate. Linux has no equivalent gate — the
+> AppImage and deb run as-is.
 
 Anything else that goes wrong on first run is in
 **[Troubleshooting](docs/troubleshooting.md)**.

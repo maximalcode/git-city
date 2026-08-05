@@ -9,6 +9,7 @@
  * regressions comparable across sessions.
  */
 import type { FileState, RepoAnalysis, Snapshot, WorkingStatus } from '../../../shared/types'
+import { buildAnalysis as compactAnalysis, materializeSnapshot } from '../../../shared/snapshots'
 import { hasApi, useStore } from '../store'
 
 const DIRS = [
@@ -112,19 +113,19 @@ function buildAnalysis(): RepoAnalysis {
     })
   }
 
-  return {
-    info: {
+  return compactAnalysis(
+    {
       name: 'mock-repo',
       path: 'C:/mock/mock-repo',
       branch: 'main',
       commitCount: SNAPSHOT_COUNT
     },
     snapshots
-  }
+  )
 }
 
 function buildStatus(analysis: RepoAnalysis): WorkingStatus {
-  const head = analysis.snapshots[analysis.snapshots.length - 1]
+  const head = materializeSnapshot(analysis, analysis.snapshots.length - 1)
   const paths = head.files.map((f) => f.path)
   return {
     branch: 'main',

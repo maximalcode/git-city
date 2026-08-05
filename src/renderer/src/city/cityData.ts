@@ -1,5 +1,6 @@
 import { Color } from 'three'
 import type { RepoAnalysis, Snapshot } from '../../../shared/types'
+import { peakLocByPath } from '../../../shared/snapshots'
 import { cityLayout, type CityLayout } from '../layout/treemap'
 import { buildRoadGraph, type RoadGraph } from '../layout/roads'
 import { capFiles } from '../layout/cap'
@@ -39,12 +40,10 @@ export function heightFor(loc: number): number {
 }
 
 export function buildCityModel(analysis: RepoAnalysis): CityModel {
+  // peak LOC per path straight off the columns — no snapshot materialized (#62)
   const weights = new Map<string, number>()
-  for (const snap of analysis.snapshots) {
-    for (const f of snap.files) {
-      const w = Math.max(f.loc, 1)
-      if ((weights.get(f.path) ?? 0) < w) weights.set(f.path, w)
-    }
+  for (const [path, peak] of peakLocByPath(analysis)) {
+    weights.set(path, Math.max(peak, 1))
   }
   // Past the ceiling we draw the largest files and say so, rather than
   // spending 80 seconds building a scene whose streets have already

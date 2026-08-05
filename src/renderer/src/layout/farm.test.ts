@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { RepoAnalysis, Snapshot } from '../../../shared/types'
+import type { RepoAnalysis } from '../../../shared/types'
+import { buildAnalysis, materializeSnapshot } from '../../../shared/snapshots'
 import { buildFarmModel, cropHeightFor, cropKindFor, farmTargets, CROP_KINDS } from './farm'
 
 function file(path: string, loc: number) {
@@ -7,17 +8,17 @@ function file(path: string, loc: number) {
 }
 
 function analysis(snapshots: { files: ReturnType<typeof file>[] }[]): RepoAnalysis {
-  return {
-    info: { name: 'r', path: '/r', branch: 'main', commitCount: snapshots.length },
-    snapshots: snapshots.map((s, i) => ({
+  return buildAnalysis(
+    { name: 'r', path: '/r', branch: 'main', commitCount: snapshots.length },
+    snapshots.map((s, i) => ({
       hash: `h${i}`,
       date: 1_700_000_000_000 + i * 1000,
       author: 'a',
       message: `c${i}`,
       index: i,
       files: s.files
-    })) as Snapshot[]
-  }
+    }))
+  )
 }
 
 describe('cropKindFor', () => {
@@ -124,21 +125,21 @@ describe('farmTargets', () => {
   const model = buildFarmModel(a)
 
   it('leaves a field bare until its file exists', () => {
-    const first = farmTargets(model, a.snapshots[0], 'language')
+    const first = farmTargets(model, materializeSnapshot(a, 0), 'language')
     const b = model.indexOf.get('src/b.ts')!
     expect(first.heights[b]).toBe(0)
   })
 
   it('raises the crop once the file appears, and with its size', () => {
-    const first = farmTargets(model, a.snapshots[0], 'language')
-    const second = farmTargets(model, a.snapshots[1], 'language')
+    const first = farmTargets(model, materializeSnapshot(a, 0), 'language')
+    const second = farmTargets(model, materializeSnapshot(a, 1), 'language')
     const idx = model.indexOf.get('src/a.ts')!
     expect(second.heights[idx]).toBeGreaterThan(first.heights[idx])
     expect(second.heights[model.indexOf.get('src/b.ts')!]).toBeGreaterThan(0)
   })
 
   it('emits one rgb triplet per field', () => {
-    const t = farmTargets(model, a.snapshots[1], 'language')
+    const t = farmTargets(model, materializeSnapshot(a, 1), 'language')
     expect(t.colors.length).toBe(model.paths.length * 3)
     for (const v of t.colors) expect(v).toBeGreaterThanOrEqual(0)
   })

@@ -9,7 +9,7 @@ export interface FileState {
   binary: boolean
 }
 
-/** The full repo state at one sampled commit. */
+/** The full repo state at one sampled commit, materialized for consumption. */
 export interface Snapshot {
   hash: string
   /** unix ms */
@@ -19,6 +19,37 @@ export interface Snapshot {
   /** 0-based index of this commit along first-parent history */
   index: number
   files: FileState[]
+}
+
+/**
+ * The same capture, columnar: parallel typed arrays where entry i describes
+ * the file `paths[pathId[i]]` (interning tables live on RepoAnalysis).
+ *
+ * This is the wire and resting format (#62). A monorepo's analysis holds
+ * ~50 captures × every file as a JS object — over half a gigabyte resident,
+ * twice (main-process cache + renderer copy). As columns the same data is
+ * ~25 bytes per file entry, structured-clones cheaply over IPC, and one
+ * materializeSnapshot call rebuilds the object form for the capture actually
+ * being viewed.
+ */
+export interface CompactSnapshot {
+  hash: string
+  /** unix ms */
+  date: number
+  author: string
+  message: string
+  /** 0-based index of this commit along first-parent history */
+  index: number
+  /** index into RepoAnalysis.paths */
+  pathId: Uint32Array
+  loc: Uint32Array
+  commits: Uint32Array
+  /** unix ms of the last commit touching this file */
+  lastTouched: Float64Array
+  /** index into RepoAnalysis.authors */
+  authorId: Uint32Array
+  /** 0 | 1 — a boolean per entry */
+  binary: Uint8Array
 }
 
 export interface RepoInfo {
@@ -31,8 +62,12 @@ export interface RepoInfo {
 
 export interface RepoAnalysis {
   info: RepoInfo
+  /** interned path table — CompactSnapshot.pathId indexes into this */
+  paths: string[]
+  /** interned author table — CompactSnapshot.authorId indexes into this */
+  authors: string[]
   /** ordered oldest → newest; the last snapshot is HEAD */
-  snapshots: Snapshot[]
+  snapshots: CompactSnapshot[]
 }
 
 /** Cheap size probe, read before committing to a full history replay. */

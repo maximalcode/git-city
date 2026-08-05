@@ -15,6 +15,7 @@
 import { Color } from 'three'
 import type { RepoAnalysis, Snapshot } from '../../../shared/types'
 import { cityLayout, type CityLayout, type Rect } from './treemap'
+import { buildRoadGraph, type RoadGraph } from './roads'
 import { capFiles } from './cap'
 import { languageOf } from '../lib/languages'
 import { buildColorer, type ColorMode } from '../city/colorModes'
@@ -46,6 +47,11 @@ export interface FarmModel {
   parcelOf: Uint16Array
   /** the shared treemap layout, for parcel ground, fences and tracks */
   layout: CityLayout
+  /**
+   * The dirt-track graph, same construction as the city's streets. The farm
+   * always laid the tracks and then left them empty (#52).
+   */
+  roadGraph: RoadGraph
   /** the parcels that get a farmstead — the top-level directories */
   steads: { rect: Rect; parcel: number }[]
   worldSize: number
@@ -91,6 +97,7 @@ export function buildFarmModel(analysis: RepoAnalysis): FarmModel {
   const worldSize = Math.max(110, Math.min(340, Math.sqrt(files.length) * 12))
 
   const layout = cityLayout(files, worldSize)
+  const roadGraph = buildRoadGraph(layout.roads)
   const paths = layout.plots.map((p) => p.path)
   const n = paths.length
   const rects = layout.plots.map((p) => p.rect)
@@ -133,6 +140,7 @@ export function buildFarmModel(analysis: RepoAnalysis): FarmModel {
     langColors,
     parcelOf,
     layout,
+    roadGraph,
     steads,
     worldSize,
     totalFiles: total,

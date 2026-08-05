@@ -10,6 +10,7 @@ import SkyDome from './SkyDome'
 import Fields from './Fields'
 import Farmstead from './Farmstead'
 import Livestock from './Livestock'
+import Tractors from './Tractors'
 import Hotspots from './Hotspots'
 import Highlight from './Highlight'
 import StatusOverlay from './StatusOverlay'
@@ -106,6 +107,7 @@ export default function FarmScene({
       <Fields model={model} targets={targets} theme={theme} />
       <Farmstead model={model} />
       <Livestock model={model} />
+      <Tractors model={model} />
       {/* crop stands a fraction of a building's height, so both marker layers
           get a floor — otherwise a selected field is a bright smear on the soil
           rather than a box you can see from the default camera */}

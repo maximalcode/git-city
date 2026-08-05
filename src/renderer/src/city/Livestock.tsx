@@ -6,6 +6,8 @@ import { useStore } from '../store'
 import { ANIMAL_KINDS, ANIMAL_SPEED, animalGeometry, type AnimalKind } from './farmShapes'
 
 const dummy = new Object3D()
+// YXZ: yaw about Y first, so the gait roll happens about the animal's own spine
+dummy.rotation.order = 'YXZ'
 
 /**
  * The herds. Animals graze inside a parcel, wandering to a new spot, pausing to
@@ -31,6 +33,8 @@ interface Animal {
   /** seconds left of the current pause; walks when 0 */
   rest: number
   speed: number
+  /** eased 0..1 walk-cycle amplitude, so the gait fades in and out */
+  gait: number
 }
 
 /** How many of each kind. Bigger holdings carry more stock, up to a cap. */
@@ -94,20 +98,23 @@ function Herd({ kind, model }: { kind: AnimalKind; model: FarmModel }): React.JS
         tz: hz,
         heading: rand(i, salt + 80) * Math.PI * 2,
         rest: rand(i, salt + 120) * 6,
-        speed: ANIMAL_SPEED[kind] * (0.75 + rand(i, salt + 160) * 0.5)
+        speed: ANIMAL_SPEED[kind] * (0.75 + rand(i, salt + 160) * 0.5),
+        gait: 0
       })
     }
     return out
   }, [kind, model])
 
-  useFrame((_state, dt) => {
+  useFrame((state, dt) => {
     const mesh = ref.current
     if (!mesh || herd.length === 0) return
     // grazing, but standing still — see the note in Traffic
     const step = reduceMotion ? 0 : Math.min(dt, 0.05)
+    const t = state.clock.elapsedTime
 
     for (let i = 0; i < herd.length; i++) {
       const a = herd[i]
+      let walking = false
       if (a.rest > 0) {
         a.rest -= step
       } else {
@@ -122,6 +129,7 @@ function Herd({ kind, model }: { kind: AnimalKind; model: FarmModel }): React.JS
           a.tx = a.hx + Math.cos(ang) * r
           a.tz = a.hz + Math.sin(ang) * r
         } else {
+          walking = step > 0
           a.x += (dx / dist) * a.speed * step
           a.z += (dz / dist) * a.speed * step
           // turn toward travel; atan2(dx, dz) because the models face +X
@@ -132,8 +140,16 @@ function Herd({ kind, model }: { kind: AnimalKind; model: FarmModel }): React.JS
           a.heading += turn * Math.min(1, 6 * step)
         }
       }
-      dummy.position.set(a.x, 0, a.z)
-      dummy.rotation.set(0, -a.heading, 0)
+      // The gait: a footfall bob and a side-to-side waddle, eased in and out so
+      // an animal settles rather than snapping still. Eased on real time (not
+      // `step`) so reduce-motion lets a mid-stride animal come to rest flat
+      // instead of freezing tilted (#58).
+      a.gait += ((walking ? 1 : 0) - a.gait) * Math.min(1, 5 * Math.min(dt, 0.1))
+      const cycle = t * (6 + a.speed * 5) + i * 1.9
+      const bob = Math.abs(Math.sin(cycle)) * (0.02 + a.speed * 0.05) * a.gait
+      const roll = Math.sin(cycle) * 0.08 * a.gait
+      dummy.position.set(a.x, bob, a.z)
+      dummy.rotation.set(roll, -a.heading, 0)
       dummy.scale.setScalar(1)
       dummy.updateMatrix()
       mesh.setMatrixAt(i, dummy.matrix)

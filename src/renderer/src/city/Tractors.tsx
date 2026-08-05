@@ -6,6 +6,8 @@ import { useStore } from '../store'
 import { tractorCount, tractorGeometry } from './farmShapes'
 
 const dummy = new Object3D()
+// YXZ: yaw about Y first, so the rut roll and pitch happen in the cab's frame
+dummy.rotation.order = 'YXZ'
 
 interface Tractor {
   edge: number
@@ -102,10 +104,19 @@ export default function Tractors({ model }: { model: FarmModel }): React.JSX.Ele
       while (delta < -Math.PI) delta += Math.PI * 2
       t.angle += delta * steer
 
+      // Dirt-track jiggle: a slow roll and pitch out of phase, plus a shallow
+      // bounce — enough to say the ground is rough, not that the axle is bent.
+      // Gone entirely under reduce motion, where the tractor is parked (#58).
+      const rut = step > 0 ? 1 : 0
+      const ph = state.clock.elapsedTime * 6.5 + i * 2.3
+      const roll = Math.sin(ph) * 0.028 * rut
+      const pitch = Math.sin(ph * 0.77) * 0.02 * rut
+      const bob = (Math.sin(ph * 1.31) * 0.5 + 0.5) * 0.02 * rut
+
       // offset to the right of travel, so two tractors pass rather than collide
       const off = 0.35
-      dummy.position.set(x + Math.sin(t.angle) * off, 0, z - Math.cos(t.angle) * off)
-      dummy.rotation.set(0, -t.angle, 0)
+      dummy.position.set(x + Math.sin(t.angle) * off, bob, z - Math.cos(t.angle) * off)
+      dummy.rotation.set(roll, -t.angle, pitch)
       dummy.scale.setScalar(1)
       dummy.updateMatrix()
       mesh.setMatrixAt(i, dummy.matrix)

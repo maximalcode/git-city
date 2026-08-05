@@ -303,3 +303,48 @@ export const ANIMAL_SPEED: Record<AnimalKind, number> = {
   pig: 0.42,
   chicken: 0.75
 }
+
+/**
+ * A tractor: green body, yellow cab, and the big-rear-small-front wheels that
+ * are the whole silhouette. Faces +X like everything else here, so the track
+ * walker only has to place and turn it.
+ *
+ * Built at roughly a car's scale so it reads at the same camera distance the
+ * city's traffic does.
+ */
+export function tractorGeometry(): BufferGeometry {
+  const body = paint(box(1.5, 0.5, 0.72, 0, 0.34, 0), 0.13, 0.42, 0.16)
+  const bonnet = paint(box(0.72, 0.3, 0.6, 0.42, 0.62, 0), 0.13, 0.42, 0.16)
+  const cab = paint(box(0.56, 0.56, 0.62, -0.3, 0.62, 0), 0.85, 0.72, 0.12)
+  // exhaust stack — small, but it is what makes the shape read as a tractor
+  const stack = paint(box(0.09, 0.42, 0.09, 0.2, 1.0, 0.22), 0.22, 0.22, 0.24)
+
+  const wheel = (x: number, z: number, r: number): BufferGeometry => {
+    const g = new CylinderGeometry(r, r, 0.16, 10)
+    g.rotateX(Math.PI / 2)
+    g.translate(x, r, z)
+    return paint(g, 0.11, 0.11, 0.12)
+  }
+  return merge([
+    body,
+    bonnet,
+    cab,
+    stack,
+    wheel(-0.36, 0.42, 0.44),
+    wheel(-0.36, -0.42, 0.44),
+    wheel(0.52, 0.38, 0.24),
+    wheel(0.52, -0.38, 0.24)
+  ])
+}
+
+/**
+ * How many tractors work a holding, from the number of tracks.
+ *
+ * Deliberately far sparser than the city's traffic, which scales at 0.4 agents
+ * per street segment. A farm with rush-hour density would read as a depot, not
+ * a farm — the point is that the tracks are *used*, not busy (#52).
+ */
+export function tractorCount(trackCount: number): number {
+  if (trackCount < 4) return 0
+  return Math.min(12, Math.max(1, Math.round(trackCount * 0.02)))
+}

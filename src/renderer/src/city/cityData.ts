@@ -2,6 +2,7 @@ import { Color } from 'three'
 import type { RepoAnalysis, Snapshot } from '../../../shared/types'
 import { cityLayout, type CityLayout } from '../layout/treemap'
 import { buildRoadGraph, type RoadGraph } from '../layout/roads'
+import { capFiles } from '../layout/cap'
 import { languageOf } from '../lib/languages'
 import { buildColorer, type ColorMode } from './colorModes'
 
@@ -21,6 +22,9 @@ export interface CityModel {
   /** per-building language color */
   langColors: Color[]
   citySize: number
+  /** files the repository has, which is more than `paths` when capped (#12) */
+  totalFiles: number
+  capped: boolean
 }
 
 export interface Targets {
@@ -42,14 +46,20 @@ export function buildCityModel(analysis: RepoAnalysis): CityModel {
       if ((weights.get(f.path) ?? 0) < w) weights.set(f.path, w)
     }
   }
-  const files = Array.from(weights, ([path, weight]) => ({ path, weight }))
+  // Past the ceiling we draw the largest files and say so, rather than
+  // spending 80 seconds building a scene whose streets have already
+  // vanished (#12). `weights` is peak LOC per path, so the kept set is the
+  // same for every frame of the timeline.
+  const { files, total, capped } = capFiles(
+    Array.from(weights, ([path, weight]) => ({ path, weight }))
+  )
   const citySize = Math.max(80, Math.min(280, Math.sqrt(files.length) * 9))
   const layout = cityLayout(files, citySize)
   const roadGraph = buildRoadGraph(layout.roads)
   const paths = layout.plots.map((p) => p.path)
   const indexOf = new Map(paths.map((p, i) => [p, i]))
   const langColors = paths.map((p) => new Color(languageOf(p).color))
-  return { layout, roadGraph, paths, indexOf, langColors, citySize }
+  return { layout, roadGraph, paths, indexOf, langColors, citySize, totalFiles: total, capped }
 }
 
 const scratch = new Color()

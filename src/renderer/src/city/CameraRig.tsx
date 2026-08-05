@@ -90,7 +90,14 @@ export default function CameraRig({
   // to input after a view-mode switch (the regression this rig guards against).
   useEffect(() => {
     if (import.meta.env.DEV) {
-      ;(window as unknown as { __gitCityCam?: unknown }).__gitCityCam = camera
+      const w = window as unknown as { __gitCityCam?: unknown; __gitCitySceneReadyMs?: number }
+      w.__gitCityCam = camera
+      // Milliseconds from navigation start to the scene being interactive.
+      // The scale work in #12 needed this and had to infer it from a polling
+      // probe, which is not sound — the rig does not remount when the model
+      // changes, so the sentinel never resets. One timestamp makes the cost
+      // directly readable instead.
+      w.__gitCitySceneReadyMs = performance.now()
     }
   }, [camera])
 

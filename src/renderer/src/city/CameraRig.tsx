@@ -34,6 +34,7 @@ export default function CameraRig({
 }): null {
   const camera = useThree((s) => s.camera)
   const gl = useThree((s) => s.gl)
+  const scene = useThree((s) => s.scene)
   const selected = useStore((s) => s.selected)
   const reduceMotion = useStore((s) => s.reduceMotion)
 
@@ -90,8 +91,16 @@ export default function CameraRig({
   // to input after a view-mode switch (the regression this rig guards against).
   useEffect(() => {
     if (import.meta.env.DEV) {
-      const w = window as unknown as { __gitCityCam?: unknown; __gitCitySceneReadyMs?: number }
+      const w = window as unknown as {
+        __gitCityCam?: unknown
+        __gitCityScene?: unknown
+        __gitCitySceneReadyMs?: number
+      }
       w.__gitCityCam = camera
+      // The scene root too: it is what lets a headless probe ask "which
+      // instanced meshes actually moved this second?" — the only sound way to
+      // verify animation from outside the canvas (#58).
+      w.__gitCityScene = scene
       // Milliseconds from navigation start to the scene being interactive.
       // The scale work in #12 needed this and had to infer it from a polling
       // probe, which is not sound — the rig does not remount when the model
@@ -99,7 +108,7 @@ export default function CameraRig({
       // directly readable instead.
       w.__gitCitySceneReadyMs = performance.now()
     }
-  }, [camera])
+  }, [camera, scene])
 
   // fly-to when the selection changes to something the scene can locate
   useEffect(() => {

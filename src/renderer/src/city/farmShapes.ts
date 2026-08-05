@@ -119,9 +119,15 @@ export function fenceGeometry(): BufferGeometry {
   return merge([post, railLow, railHigh])
 }
 
+/** Height of the rotor's axle above the ground — where Farmstead hangs it. */
+export const WIND_PUMP_HUB_Y = 5.3
+
 /**
- * A wind pump — the tall lattice tower that says "this is a big holding" from
- * across the map, and gives the farm a vertical accent the fields cannot.
+ * A wind pump's tower — the tall lattice that says "this is a big holding"
+ * from across the map, and gives the farm a vertical accent the fields cannot.
+ *
+ * The rotor is windPumpRotorGeometry, kept out of the merge so it can be its
+ * own instanced mesh and actually turn (#58).
  */
 export function windPumpGeometry(): BufferGeometry {
   const parts: BufferGeometry[] = []
@@ -140,16 +146,26 @@ export function windPumpGeometry(): BufferGeometry {
     parts.push(paint(leg, 0.42, 0.4, 0.36))
   }
   parts.push(paint(box(1.0, 0.08, 1.0, 0, 2.4, 0), 0.42, 0.4, 0.36))
+  return merge(parts)
+}
+
+/**
+ * Hub and blade fan, centred on its axle (which runs along +X, like every
+ * facing here). Place an instance at WIND_PUMP_HUB_Y with the tower's yaw and
+ * roll it about local X to spin — the fan is symmetric about the axle, so the
+ * spin has no wobble.
+ */
+export function windPumpRotorGeometry(): BufferGeometry {
+  const parts: BufferGeometry[] = []
   const hub = paint(new CylinderGeometry(0.22, 0.22, 0.24, 8), 0.5, 0.48, 0.44)
   hub.rotateZ(Math.PI / 2)
-  hub.translate(0, 5.3, 0)
   parts.push(hub)
   // blades as a fan of thin plates around the hub
   for (let i = 0; i < 6; i++) {
     const blade = new BoxGeometry(0.06, 1.5, 0.34)
     blade.translate(0, 0.85, 0)
     blade.rotateX((i / 6) * Math.PI * 2)
-    blade.translate(0.14, 5.3, 0)
+    blade.translate(0.14, 0, 0)
     parts.push(paint(blade, 0.72, 0.72, 0.68))
   }
   return merge(parts)
@@ -278,6 +294,11 @@ function chickenGeometry(): BufferGeometry {
   return merge([body, head, comb, beak, ...legs(0.14, 0.12, H, 0.85, 0.62, 0.18, 0.035)])
 }
 
+/**
+ * Cached per kind, like trafficShapes' geometryFor: herds remount on every
+ * mode switch, and rebuilding four merged geometries each time would leak the
+ * old ones. Cached geometries are shared — consumers must never dispose them.
+ */
 const animalCache = new Map<AnimalKind, BufferGeometry>()
 
 export function animalGeometry(kind: AnimalKind): BufferGeometry {

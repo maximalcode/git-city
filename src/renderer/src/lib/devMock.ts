@@ -41,6 +41,18 @@ function mockFileCount(): number {
   return Number.isFinite(n) && n > 0 ? n : DEFAULT_FILE_COUNT
 }
 
+/**
+ * The synthetic repository, without a browser.
+ *
+ * Exported so scene-build cost can be measured in Node against the same input
+ * the preview draws — see `city/sceneBuildPerf.test.ts`. Measuring it through
+ * an automated browser produces fiction: the pane is hidden, so rAF is
+ * suspended and react-three-fiber never commits (#82).
+ */
+export function buildMockAnalysis(fileCount: number): RepoAnalysis {
+  return buildAnalysisOf(fileCount)
+}
+
 function mulberry32(seed: number): () => number {
   let s = seed
   return () => {
@@ -52,9 +64,12 @@ function mulberry32(seed: number): () => number {
 }
 
 function buildAnalysis(): RepoAnalysis {
+  return buildAnalysisOf(mockFileCount())
+}
+
+function buildAnalysisOf(fileCount: number): RepoAnalysis {
   const rand = mulberry32(20260718)
   const authors = ['Alice', 'Bob', 'Chen', 'Dana']
-  const fileCount = mockFileCount()
 
   interface SeedFile {
     path: string

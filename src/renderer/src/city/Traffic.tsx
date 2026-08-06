@@ -5,6 +5,7 @@ import type { Snapshot } from '../../../shared/types'
 import { useStore } from '../store'
 import { getTheme, type Theme } from './themes'
 import type { CityModel } from './cityData'
+import { buildPointGrid, nearest } from '../layout/nearest'
 import { roadY } from './roadGeometry'
 import { LANE_OFFSET_CAP } from './streetFurniture'
 import { geometryFor, type AgentKind } from './trafficShapes'
@@ -105,27 +106,26 @@ export default function Traffic({
   const theme = getTheme(useStore((s) => s.themeId))
   const graph = model.roadGraph
 
-  // nearest plot per edge midpoint — static per model, feeds commit weighting
+  // nearest plot per edge midpoint — static per model, feeds commit weighting.
+  // Via a grid rather than a scan per edge: at the drawn cap that is 52k edges
+  // against 20k plots, a billion distance checks on the main thread (#12).
   const nearestPlot = useMemo(() => {
-    const out = new Int32Array(graph.edges.length)
     const plots = model.layout.plots
+    const cx = new Float64Array(plots.length)
+    const cz = new Float64Array(plots.length)
+    for (let pi = 0; pi < plots.length; pi++) {
+      const r = plots[pi].rect
+      cx[pi] = r.x + r.w / 2
+      cz[pi] = r.y + r.h / 2
+    }
+    const grid = buildPointGrid(cx, cz)
+
+    const out = new Int32Array(graph.edges.length)
     for (let ei = 0; ei < graph.edges.length; ei++) {
       const e = graph.edges[ei]
       const mx = (graph.nodes[e.a].x + graph.nodes[e.b].x) / 2
       const mz = (graph.nodes[e.a].z + graph.nodes[e.b].z) / 2
-      let best = 0
-      let bestD = Infinity
-      for (let pi = 0; pi < plots.length; pi++) {
-        const r = plots[pi].rect
-        const dx = r.x + r.w / 2 - mx
-        const dz = r.y + r.h / 2 - mz
-        const d = dx * dx + dz * dz
-        if (d < bestD) {
-          bestD = d
-          best = pi
-        }
-      }
-      out[ei] = best
+      out[ei] = nearest(grid, mx, mz)
     }
     return out
   }, [model, graph])

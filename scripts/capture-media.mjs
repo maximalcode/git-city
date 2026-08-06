@@ -33,7 +33,8 @@ const STILLS = [
   { name: 'city-night', theme: 'realistic-night', view: 'city', color: 'language' },
   { name: 'city-neon', theme: 'neon', view: 'city', color: 'activity' },
   { name: 'city-author', theme: 'golden-hour', view: 'city', color: 'author' },
-  { name: 'farm', theme: 'realistic-day', view: 'farm', color: 'language' }
+  { name: 'farm', theme: 'realistic-day', view: 'farm', color: 'language' },
+  { name: 'farm-night', theme: 'realistic-night', view: 'farm', color: 'language' }
 ]
 
 const ONLY = process.argv.includes('--stills') ? 'stills' : null

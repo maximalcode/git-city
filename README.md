@@ -14,8 +14,9 @@ cherry-pick and tag without leaving the city.
 
 Prefer something calmer? Press `V` and the same repository becomes a **farm**:
 files are fields of crop that rise and fall with the line count, folders are
-fenced parcels with their own barn and silo, and livestock work their way across
-the holding.
+fenced parcels with their own barn and silo, herds graze their way across the
+holding, and a tractor or two works the dirt tracks. After dark the farmsteads
+light up.
 
 ## Download
 
@@ -43,8 +44,8 @@ Anything else that goes wrong on first run is in
 | ------------------------------------------------------------------- | ------------------------------------------------------- |
 | ![Night, coloured by language](docs/media/city-night.jpg)           | ![Neon, coloured by activity](docs/media/city-neon.jpg) |
 | **Realistic Night**, coloured by language                           | **Neon**, coloured by how often files change            |
-| ![Golden Hour, coloured by author](docs/media/city-author.jpg)      |                                                         |
-| **Golden Hour**, coloured by who touched each file last             |                                                         |
+| ![Golden Hour, coloured by author](docs/media/city-author.jpg)      | ![The farm at night](docs/media/farm-night.jpg)         |
+| **Golden Hour**, coloured by who touched each file last             | The same farm at **night**, its steadings lit           |
 | ![Farm view](docs/media/farm.jpg)                                   |                                                         |
 | **Farm view** — fields of crop, fenced parcels, barns and livestock |                                                         |
 
@@ -84,11 +85,18 @@ Anything else that goes wrong on first run is in
   live line count, and whose **crop class follows the file's size** — leafy rows
   for small files, standing cereal for mid-size, orchards of fruit trees for the
   largest. Folders are fenced parcels, each with a barn and silo (wind pumps on
-  the big ones), worked by grazing herds of cattle, sheep, pigs and chickens
+  the big ones, rotors turning in their own wind), worked by grazing herds of
+  cattle, sheep, pigs and chickens that walk with a footfall bob and a waddle,
+  and by **tractors on the dirt tracks** — one or two, not city traffic, because
+  the point is that the tracks are used rather than busy. Under the dark themes
+  the steadings light up: hayloft windows, the spill under the big door, and a
+  yard lamp on a post — drawn emissive like the city's window grids, and built
+  only when a theme asks for it
 - Timeline playback: scrub or play the entire history (a full replay fits in
   ~10 seconds)
 - 5 themes (Realistic Day/Night, Neon, Golden Hour, Midnight Ink) with
-  procedural lit windows, sky gradients and ambient occlusion
+  procedural lit windows, sky gradients and ambient occlusion — a theme that
+  lights the city lights the farm too, held together by a test
 - 6 color modes — language, activity, author, recency, size, file type — each
   with an always-visible legend explaining the encoding, identical in both
   view modes
@@ -157,7 +165,9 @@ Anything else that goes wrong on first run is in
 - Recent repos, drag-drop a folder to open, file search with fly-to
 - **Settings** panel (`,`) gathering every preference in one place — theme,
   view, time of day, sky-follows-commit, a **reduce-motion** toggle (skips the
-  intro orbit and stills the wind), activity hotspots, the default diff layout,
+  intro orbit, stills the wind, and parks the traffic and tractors where they
+  stand — a mid-stride animal settles flat rather than freezing tilted),
+  activity hotspots, the default diff layout,
   plus re-show the first-run guide, clear recent repositories and reset all
   preferences
 - **Update check**: on launch Git City asks GitHub Releases whether a newer
@@ -223,7 +233,9 @@ The draw ceiling exists because past it the scene stops being worth building: a
 interactive with every file drawn, against ~25 with the cap — and above ~60,000
 files the streets have already stopped being drawn anyway, because the plots are
 too small to fit a road between them. The history pass is separate and scales
-with commit count: 14,271 first-parent commits takes about 130 seconds.
+with commit count: 14,271 first-parent commits takes about 133 seconds, and the
+sampled snapshots it keeps are stored columnar — 73 MB of typed arrays over
+interned path and author tables, rather than 541 MB of per-file objects.
 
 Collapsing deep directories, so a monorepo is genuinely _readable_ rather than
 merely fast, is still open — the cap keeps the app usable, it does not make a
@@ -286,9 +298,10 @@ signing cert / Apple Developer ID + notarization).
 - `src/preload/` — typed `window.gitCity` bridge.
 - `src/renderer/` — React + react-three-fiber UI. `layout/` holds the pure,
   unit-tested scene math: the squarified treemap, the street graph derived
-  from it, and the farm layout. `city/` renders both scenes (instanced
-  buildings, district plates, streets with sidewalks, traffic, street furniture,
-  trees, effects) behind a mode-agnostic `SceneView` shell; `panels/` holds the
+  from it, and the farm layout. `city/` renders both scenes — instanced
+  buildings, district plates, streets with sidewalks, traffic, street furniture
+  and trees for the city; fields, steadings, livestock and tractors for the
+  farm — behind a mode-agnostic `SceneView` shell; `panels/` holds the
   git client UI; `store.ts` (zustand) is the single state funnel.
 - `src/shared/types.ts` — types shared across all three.
 

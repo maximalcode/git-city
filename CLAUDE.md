@@ -24,13 +24,46 @@ The loop for a piece of work:
    — naming is `<type>/<issue-number>-<slug>` with type one of
    `feat` / `fix` / `refactor` / `docs` / `infra` / `chore`.
 3. Build it. Reference the issue in commit messages (`#12`).
-4. `npm run typecheck && npm run lint && npm test` — same three checks CI runs.
-5. Open a PR **targeting `develop`** with `Closes #12` in the body.
+4. **Update the docs in the same PR.** If the change is user-visible, it is not
+   finished until the prose says so — see below.
+5. `npm run typecheck && npm run lint && npm test` — same three checks CI runs.
+6. Open a PR **targeting `develop`** with `Closes #12` in the body.
 
 `main` is release-only. It moves through `develop` → `main` PRs, and a release is
 a `v*` tag matching `package.json` on top of that — see [RELEASING.md](RELEASING.md).
 Both branches are protected: `main` requires a PR plus a green `ci` check,
 `develop` blocks only deletion and force-push (direct pushes are fine there).
+
+### Step 4, spelled out
+
+Nothing in CI can check whether prose is accurate, so this step is the only
+thing standing between the app and a README that describes an older version of
+it. It has failed before: the farm shipped night lighting, tractors and motion
+across three PRs and the README described none of them (#87).
+
+A user-visible change means: something you could screenshot, something a user
+could press, or a number a user might rely on. For those, check —
+
+- **[README.md](README.md)** — the short feature list and the collapsed complete
+  one. A new capability goes in both if it is headline-worthy, the long one at
+  minimum.
+- **`docs/`** — [troubleshooting](docs/troubleshooting.md),
+  [colour-modes](docs/colour-modes.md), [shortcuts](docs/shortcuts.md). A new
+  key binding belongs in the README table _and_ the shortcuts page.
+- **`docs/media/`** — if the scene looks different, the screenshots are now
+  wrong. Regenerate with `node scripts/capture-media.mjs` against the preview
+  (`--stills` skips the GIF, which needs gifski). They are captured rather than
+  hand-cropped precisely so this is cheap.
+- **Measured numbers** — the repo-size table and timings in the README are
+  claims. If you remeasured, update them; if you made something faster or
+  smaller, say so with the figure.
+
+Write it as part of the change, not as a follow-up PR. Docs landing separately
+(`docs/41-align-with-25`, `docs/release-artifact-names`) is the symptom this
+step exists to stop.
+
+`.github/pull_request_template.md` asks the same question at the moment the PR
+is opened, so the answer has to be given rather than remembered.
 
 ## Commands
 

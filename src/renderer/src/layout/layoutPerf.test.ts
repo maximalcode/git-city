@@ -42,7 +42,10 @@ describe('layout cost by repo size', () => {
     it(`lays out ${n.toLocaleString()} files`, () => {
       const files = synthFiles(n)
       const started = performance.now()
-      const layout = cityLayout(files, 140)
+      // the size the scene actually lays out at — `cityData` uses
+      // `min(280, sqrt(files) * 9)`, which is 280 from 1,000 files up. Benching
+      // at 140 halved the surviving road segments and so understated the cost.
+      const layout = cityLayout(files, Math.max(80, Math.min(280, Math.sqrt(n) * 9)))
       const laidOut = performance.now()
       const graph = buildRoadGraph(layout.roads)
       const done = performance.now()

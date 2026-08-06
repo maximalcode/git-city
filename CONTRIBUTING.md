@@ -39,6 +39,15 @@ npm run format     # Prettier
 CI runs the first three on every push and pull request, so running them locally
 just saves you a round trip.
 
+Then update the docs, in the same pull request. If your change is user-visible —
+something you could screenshot, something a user could press, or a number a user
+might rely on — it belongs in [README.md](README.md)'s feature list and in
+whichever `docs/` page covers it. If the scene looks different, the screenshots
+in `docs/media/` are now wrong; regenerate them from the browser preview with
+`node scripts/capture-media.mjs --stills` rather than cropping by hand.
+
+No check can verify prose, which is exactly why it is written down here.
+
 ## Branches and pull requests
 
 - `develop` is the working branch. Branch from it, and target your pull request

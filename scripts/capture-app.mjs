@@ -32,6 +32,7 @@
  *   pay the history replay over again each time.
  */
 import { _electron as electron } from 'playwright'
+import { execFileSync } from 'node:child_process'
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
@@ -48,7 +49,8 @@ const QUALITY = 88
 
 /**
  * @typedef {object} Shot
- * @property {string}   name     output basename → docs/media/<name>.<jpg|png>
+ * @property {string}   name     output basename → docs/media/<name>.<jpg|png|gif>
+ * @property {'hero'}   [kind]   replay history into a GIF instead of a still
  * @property {string}   [theme]  theme id (default 'realistic-night')
  * @property {'city'|'farm'} [view]  (default 'city')
  * @property {string}   [color]  colour-mode id, see COLORS (default 'language')
@@ -61,6 +63,9 @@ const QUALITY = 88
 
 /** @type {Shot[]} */
 const SHOTS = [
+  // ── Hero ─────────────────────────────────────────────────────────────────
+  { name: 'app-hero', kind: 'hero', theme: 'realistic-night', color: 'language' },
+
   // ── Scene ────────────────────────────────────────────────────────────────
   { name: 'app-city-night', theme: 'realistic-night', color: 'language' },
   { name: 'app-city-activity', theme: 'neon', color: 'activity' },
@@ -167,6 +172,105 @@ async function pick(page, picker, item) {
   await page.waitForTimeout(900) // colour and height lerps are timed eases, no signal to await
 }
 
+/** Hero animation. Width and frame count are the two levers that move file size. */
+const HERO = { frames: 48, fps: 12, width: 720, quality: 80 }
+
+/**
+ * Move the timeline to `index`.
+ *
+ * The slider is a controlled React input, so assigning .value directly is
+ * dropped on the next render. Going through the prototype's setter is what
+ * makes React's onChange see it.
+ */
+async function scrubTo(page, index) {
+  await page.evaluate((i) => {
+    const el = document.querySelector('.timeline-row input[type=range]')
+    const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set
+    set.call(el, String(i))
+    el.dispatchEvent(new Event('input', { bubbles: true }))
+    el.dispatchEvent(new Event('change', { bubbles: true }))
+  }, index)
+}
+
+/**
+ * Replay history into a GIF.
+ *
+ * Frames are scrubbed rather than played, so the result is evenly spaced
+ * regardless of how the machine was loaded at the time. GIF is the only format
+ * GitHub renders inline from a repository path — it strips <video> from
+ * READMEs, and the user-attachments URL that does work is not versioned with
+ * the repo.
+ */
+async function captureHero(page, shot) {
+  const frameDir = join(stage, '.frames')
+  mkdirSync(frameDir, { recursive: true })
+
+  const max = Number(await page.locator('.timeline-row input[type=range]').getAttribute('max'))
+  // The last third is where a repository changes fastest, so it earns the most
+  // visible growth per byte. Start a little in rather than at commit zero.
+  const from = Math.floor(max * 0.15)
+
+  const frames = []
+  for (let f = 0; f < HERO.frames; f++) {
+    const idx = Math.round(from + ((max - from) * f) / (HERO.frames - 1))
+    await scrubTo(page, idx)
+    await page.waitForTimeout(110) // the height and colour lerps are timed eases
+    const p = join(frameDir, `f${String(f).padStart(3, '0')}.png`)
+    await page.screenshot({ path: p, scale: 'css' })
+    frames.push(p)
+  }
+
+  const out = join(stage, `${shot.name}.gif`)
+  encodeGif(frames, out)
+}
+
+/** gifski if it is installed, ffmpeg otherwise. Both are external; neither is a dependency. */
+function encodeGif(frames, out) {
+  const attempts = [
+    [
+      'gifski',
+      [
+        '-W',
+        String(HERO.width),
+        '--fps',
+        String(HERO.fps),
+        '--quality',
+        String(HERO.quality),
+        '-o',
+        out,
+        ...frames
+      ]
+    ],
+    [
+      'ffmpeg',
+      [
+        '-y',
+        '-framerate',
+        String(HERO.fps),
+        '-pattern_type',
+        'glob',
+        '-i',
+        join(dirname(frames[0]), '*.png'),
+        '-vf',
+        `fps=${HERO.fps},scale=${HERO.width}:-1:flags=lanczos,split[a][b];` +
+          `[a]palettegen=stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=3`,
+        '-loop',
+        '0',
+        out
+      ]
+    ]
+  ]
+  for (const [bin, args] of attempts) {
+    try {
+      execFileSync(bin, args, { stdio: 'pipe' })
+      return
+    } catch {
+      // try the next encoder
+    }
+  }
+  throw new Error('neither gifski nor ffmpeg could encode the hero (brew install gifski)')
+}
+
 /** Dismiss whatever is open, innermost first, so shots do not leak into each other. */
 async function reset(page) {
   for (let i = 0; i < 4; i++) {
@@ -254,6 +358,12 @@ try {
       if (shot.setup) await shot.setup(page)
       await page.waitForTimeout(shot.hold ?? 900)
 
+      if (shot.kind === 'hero') {
+        await captureHero(page, shot)
+        console.log(`  ✓ ${shot.name}.gif`)
+        continue
+      }
+
       const ext = shot.png ? 'png' : 'jpg'
       const path = join(stage, `${shot.name}.${ext}`)
       await page.screenshot({
@@ -271,7 +381,9 @@ try {
   await app.close()
 }
 
-for (const f of readdirSync(stage)) copyFileSync(join(stage, f), join(outDir, f))
+for (const f of readdirSync(stage, { withFileTypes: true })) {
+  if (f.isFile()) copyFileSync(join(stage, f.name), join(outDir, f.name))
+}
 rmSync(stage, { recursive: true, force: true })
 
 if (failed) {

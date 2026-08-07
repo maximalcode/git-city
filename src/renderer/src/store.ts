@@ -256,6 +256,31 @@ const REPO_STATE_RESET: Partial<GitCityState> = {
 /** Cheap fingerprint so identical statuses (editor atomic-save churn) don't re-render.
  *  Must cover every field the HUD renders: omitting one (e.g. upstream) makes ops whose
  *  only effect is that field (publish) invisible to refreshStatus. Exported for tests. */
+/**
+ * Has HEAD actually moved away from the commit the current analysis was built
+ * from? Exported for tests.
+ *
+ * The watcher reports 'refs' for anything in .git that is not HEAD or the index
+ * (watcher.ts), and the app's own reaction to an event — refreshing branches,
+ * stashes, tags, and the host — runs git commands that touch .git again. So
+ * raising the reload pill on the bare event made it re-arm the moment it was
+ * cleared, and it never went down again (#98). analyzeIncremental compares the
+ * same two hashes to decide whether there is anything to replay at all.
+ *
+ * Unknown either side means "assume it moved": a pill that should not be there
+ * costs a click, and a missing one silently shows history that is out of date.
+ *
+ * Compared by prefix, like isLiveState, because a snapshot hash can be
+ * abbreviated where headHash is full. Comparing them strictly would report
+ * every event as a move and leave the pill permanently up — the bug this fixes.
+ */
+export function headMoved(s: Pick<GitCityState, 'analysis' | 'workingStatus'>): boolean {
+  const analysed = s.analysis?.snapshots[s.analysis.snapshots.length - 1]?.hash
+  const head = s.workingStatus?.headHash
+  if (!analysed || !head) return true
+  return !head.startsWith(analysed)
+}
+
 export function statusFingerprint(s: WorkingStatus | null): string {
   if (!s) return ''
   return `${s.headHash}|${s.opState}|${s.ahead},${s.behind}|${s.branch}|${s.upstream ?? ''}|${
@@ -537,8 +562,10 @@ export const useStore = create<GitCityState>((set, get) => ({
     // absent when the renderer runs in a plain browser (vite preview) instead of Electron
     if (!hasApi()) return
     window.gitCity.onProgress((p) => set({ progress: p }))
-    window.gitCity.onRepoChanged((reasons) => {
-      void get().refreshStatus()
+    window.gitCity.onRepoChanged(async (reasons) => {
+      // awaited, not fired and forgotten, because the reload pill below is
+      // decided by comparing the HEAD this brings back against the analysis
+      await get().refreshStatus()
       if (reasons.includes('head') || reasons.includes('refs')) {
         void get().refreshBranches()
         void get().refreshStashes()
@@ -560,7 +587,7 @@ export const useStore = create<GitCityState>((set, get) => ({
           // indefinitely while the Changes panel beside it showed a clean tree.
           // Only closing and reopening the repository fixed it (#29).
           if ((s.analysis?.snapshots.length ?? 0) === 0) void s.refreshAnalysis()
-          else set({ historyStale: true })
+          else if (headMoved(s)) set({ historyStale: true })
         }
       }
     })

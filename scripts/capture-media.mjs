@@ -107,7 +107,9 @@ async function main() {
   const snapshots = await page.evaluate(
     () => window.__gitCityMock.store.getState().analysis.snapshots.length
   )
-  const FRAME_COUNT = 60
+  // 48 at 720px lands the GIF around 2 MB. At the old 60/900 it was 5.4 MB,
+  // which every visitor to the README downloads before reading a word.
+  const FRAME_COUNT = 48
   for (let i = 0; i < FRAME_COUNT; i++) {
     const index = Math.min(snapshots - 1, Math.round((i / (FRAME_COUNT - 1)) * (snapshots - 1)))
     await page.evaluate((i) => window.__gitCityMock.store.getState().setSnapshotIndex(i), index)
@@ -124,9 +126,11 @@ async function main() {
       .filter((f) => f.endsWith('.png'))
       .sort()
       .map((f) => join(FRAMES, f))
-    execFileSync('gifski', ['-W', '900', '--fps', '12', '-o', join(OUT, 'demo.gif'), ...frames], {
-      stdio: 'inherit'
-    })
+    execFileSync(
+      'gifski',
+      ['-W', '720', '--fps', '12', '--quality', '80', '-o', join(OUT, 'demo.gif'), ...frames],
+      { stdio: 'inherit' }
+    )
     rmSync(FRAMES, { recursive: true, force: true })
     console.log('hero: docs/media/demo.gif')
   } catch (err) {

@@ -23,13 +23,13 @@ never create the Release themselves, so the platforms cannot race each other for
 
 You get five files:
 
-| File                          | For                                        |
-| ----------------------------- | ------------------------------------------ |
-| `git-city-1.0.0-setup.exe`    | Windows                                    |
-| `git-city-1.0.0-arm64.dmg`    | Apple Silicon (M1 onward)                  |
-| `git-city-1.0.0-x64.dmg`      | Intel Macs                                 |
+| File                             | For                                         |
+| -------------------------------- | ------------------------------------------- |
+| `git-city-1.0.0-setup.exe`       | Windows                                     |
+| `git-city-1.0.0-arm64.dmg`       | Apple Silicon (M1 onward)                   |
+| `git-city-1.0.0-x64.dmg`         | Intel Macs                                  |
 | `git-city-1.0.0-x86_64.AppImage` | Any Linux (`chmod +x` and run — no install) |
-| `git-city-1.0.0-amd64.deb`   | Debian / Ubuntu / Mint                     |
+| `git-city-1.0.0-amd64.deb`       | Debian / Ubuntu / Mint                      |
 
 Linux needs no signing: there is no SmartScreen or Gatekeeper equivalent, so the unsigned-build
 caveats below apply to Windows and macOS only.
@@ -39,16 +39,12 @@ caveats below apply to Windows and macOS only.
 ### Dry run (build without releasing)
 
 Use the **Run workflow** button on the Actions tab (`workflow_dispatch`). It builds and tests on
-both platforms, then uploads the installers as **run artifacts** (Actions run page, 90-day
+all three platforms, then uploads the installers as **run artifacts** (Actions run page, 90-day
 retention) — no Release is created. Good for smoke-testing the packaged app before you commit to
 a version tag.
 
-### Cost note (private repo)
-
-Against the private-repo free tier (2,000 min/month), Windows runners bill at **2x** minutes and
-macOS at **10x** — so a macOS build is by far the expensive half, and dry runs are worth using
-sparingly while the repo is private. On a **public** repo, Actions minutes are free on standard
-runners, so this stops mattering the moment the repo goes public.
+The repository is public, so Actions minutes are free on standard runners. Dry-run as often as
+you like.
 
 ---
 
@@ -110,8 +106,9 @@ config change in `electron-builder.yml` needed. Verify by right-clicking the dow
 The DMGs are built but **unsigned**, and macOS treats that harder than Windows does: Gatekeeper
 does not merely warn, it reports a downloaded unsigned app as _"damaged and can't be opened"_,
 which reads like a corrupt download rather than a security prompt. The workaround is right-click
--> **Open** (or `xattr -d com.apple.quarantine`), and the README needs to say so plainly next to
-the download link, or Mac users will assume the build is broken.
+-> **Open** (or `xattr -d com.apple.quarantine`). The README says so next to the download link,
+and [docs/troubleshooting.md](docs/troubleshooting.md) covers it at length, because otherwise Mac
+users assume the build is broken.
 
 Fixing it properly needs an **Apple Developer account ($99/yr)** for signing + notarization. Same
 pattern as Windows: store `APPLE_ID` / `APPLE_APP_SPECIFIC_PASSWORD` / the signing certificate as

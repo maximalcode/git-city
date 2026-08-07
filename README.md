@@ -246,7 +246,7 @@ merely fast, is still open — the cap keeps the app usable, it does not make a
 ```bash
 npm install
 npm run dev        # launch the Electron app with hot reload
-npm test           # vitest: git backend, parsers, layout, themes (~380 tests)
+npm test           # vitest: git backend, parsers, layout, themes (~570 tests)
 npm run typecheck
 npm run lint       # ESLint (typescript-eslint + react-hooks)
 npm run format     # Prettier
@@ -325,7 +325,8 @@ primitives, no external models.
 
 Development happens through GitHub issues — see [CONTRIBUTING.md](CONTRIBUTING.md)
 for the setup and the branch/PR flow. Bug reports and feature requests are
-welcome; there are issue templates for both.
+welcome; there are issue templates for both. Taking part means agreeing to the
+[Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## License
 

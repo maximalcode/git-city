@@ -44,16 +44,20 @@ across three PRs and the README described none of them (#87).
 A user-visible change means: something you could screenshot, something a user
 could press, or a number a user might rely on. For those, check —
 
-- **[README.md](README.md)** — the short feature list and the collapsed complete
-  one. A new capability goes in both if it is headline-worthy, the long one at
-  minimum.
+- **[README.md](README.md)** — the pitch, shown with pictures. Only headline
+  capabilities earn a section there.
+- **[docs/features.md](docs/features.md)** — the complete inventory. Every new
+  capability goes here, whether or not it is headline-worthy.
 - **`docs/`** — [troubleshooting](docs/troubleshooting.md),
   [colour-modes](docs/colour-modes.md), [shortcuts](docs/shortcuts.md). A new
   key binding belongs in the README table _and_ the shortcuts page.
 - **`docs/media/`** — if the scene looks different, the screenshots are now
-  wrong. Regenerate with `node scripts/capture-media.mjs` against the preview
-  (`--stills` skips the GIF, which needs gifski). They are captured rather than
-  hand-cropped precisely so this is cheap.
+  wrong. Every image in the README is `app-*`, captured from the real app on
+  this repository: `npm run media:app`, or `-- --only=<name>` for one. It needs
+  a current `npm run build`, since it launches `out/main/index.js`.
+  `npm run media` is the older browser-preview capture against synthetic data —
+  deterministic, and still the right tool for scene work, but its output is not
+  what the README shows.
 - **Measured numbers** — the repo-size table and timings in the README are
   claims. If you remeasured, update them; if you made something faster or
   smaller, say so with the figure.

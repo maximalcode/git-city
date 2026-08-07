@@ -98,4 +98,43 @@ describe('analyzeIncremental', () => {
     expect(locOf(lastInc, 'side.txt')).toBe(locOf(lastFull, 'side.txt'))
     expect(incremental!.info.commitCount).toBe(full.info.commitCount)
   })
+
+  it('returns null when prevHead is reachable only as a merge parent', async () => {
+    // main:    A ── B ── C          (f.txt grows 10 → 17)
+    // feature: A ── D ─────── M     (M's first parent is D, second is C)
+    //
+    // C is an ancestor of M, so the old reachability gate let the splice
+    // through — but the replay walks M's first parents, and M's diff against
+    // D re-adds every line B and C put into f.txt on top of a state seeded
+    // from C. Reachable in one click: check out a PR branch that has merged
+    // main (#70).
+    const r = makeTempRepo()
+    cleanups.push(r.path)
+    const lines = (n: number): string =>
+      Array.from({ length: n }, (_, i) => `line ${i + 1}\n`).join('')
+
+    r.write('f.txt', lines(10))
+    r.commitAll('A')
+    r.git('switch', '-c', 'feature')
+    r.write('g.txt', 'g one\ng two\n')
+    r.commitAll('D: feature work')
+    r.git('switch', 'main')
+    r.write('f.txt', lines(13))
+    r.commitAll('B')
+    r.write('f.txt', lines(17))
+    r.commitAll('C')
+
+    await analyzeRepo(r.path, 1000, noop) // caches main @ C
+    r.git('switch', 'feature')
+    r.git('merge', '--no-edit', 'main')
+
+    expect(await analyzeIncremental(r.path)).toBeNull()
+
+    const full = await analyzeRepo(r.path, 1000, noop)
+    expect(full.info.commitCount).toBe(3) // A, D, M along first parents
+    const last = materializeSnapshot(full, full.snapshots.length - 1)
+    const locOf = (p: string): number | undefined => last.files.find((f) => f.path === p)?.loc
+    expect(locOf('f.txt')).toBe(17) // not 17 + 7 double-counted
+    expect(locOf('g.txt')).toBe(2)
+  })
 })

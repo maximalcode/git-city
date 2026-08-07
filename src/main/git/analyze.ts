@@ -372,6 +372,19 @@ export async function analyzeIncremental(repoPath: string): Promise<RepoAnalysis
   )
   if (!Number.isFinite(added) || added === 0) return null
 
+  // Reachability is not enough. replayRange walks --first-parent and the
+  // numstat deltas telescope only against the previous first-parent state, so
+  // prevHead has to sit on head's *first-parent chain* — not merely somewhere
+  // in its ancestry. It does not when prevHead came in as a second parent:
+  // analyse main, then switch to a branch that has merged main, and the
+  // merge's diff-against-first-parent lands on a base that already contains
+  // it, double-counting every line main added (#70).
+  //
+  // `head~added` follows first parents only, so it is prevHead exactly when
+  // the chain is the one replayRange is about to walk.
+  const chainBase = await runGitResult(repoPath, ['rev-parse', '--verify', `${head}~${added}`])
+  if (chainBase.code !== 0 || chainBase.stdout.trim() !== prevHead) return null
+
   // seed exact HEAD state from the last snapshot (it is a full-state capture)
   const state = new Map<string, FileState>(
     materializeSnapshot(prev, prev.snapshots.length - 1).files.map((f) => [f.path, f])

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { WorkingStatus } from '../../shared/types'
-import { isLiveState, shouldSurfaceError, statusFingerprint, useStore } from './store'
+import { headMoved, isLiveState, shouldSurfaceError, statusFingerprint, useStore } from './store'
 
 function baseStatus(): WorkingStatus {
   return {
@@ -138,5 +138,46 @@ describe('isLiveState during a reanalyse', () => {
     expect(isLiveState({ analysis: null } as unknown as Parameters<typeof isLiveState>[0])).toBe(
       false
     )
+  })
+})
+
+describe('headMoved — what raises the reload pill', () => {
+  function stateWith(snapshotHashes: string[], headHash: string) {
+    return {
+      analysis: snapshotHashes.length
+        ? { snapshots: snapshotHashes.map((hash) => ({ hash })) }
+        : null,
+      workingStatus: { ...baseStatus(), headHash }
+    } as unknown as Parameters<typeof headMoved>[0]
+  }
+
+  it('says no when HEAD is the commit the analysis ends at', () => {
+    // The watcher reports 'refs' for anything in .git that is not HEAD or the
+    // index, and the app's own refreshes touch .git in reacting to it. Raising
+    // the pill on the bare event made it re-arm the instant it was cleared, so
+    // it never went down again (#98).
+    expect(headMoved(stateWith(['old111', 'new333'], 'new333'))).toBe(false)
+  })
+
+  it('says yes when HEAD has genuinely moved past the analysis', () => {
+    expect(headMoved(stateWith(['old111', 'old222'], 'new333'))).toBe(true)
+  })
+
+  it('matches an abbreviated snapshot hash against a full HEAD', () => {
+    // hashes are compared by prefix; comparing them strictly reports every
+    // event as a move, which is the whole bug
+    expect(headMoved(stateWith(['old111', 'new333'], 'new333abcdef'))).toBe(false)
+  })
+
+  it('does not treat a shared prefix in the other direction as a match', () => {
+    expect(headMoved(stateWith(['old111', 'new333abcdef'], 'new333'))).toBe(true)
+  })
+
+  it('assumes movement with no analysis yet', () => {
+    expect(headMoved(stateWith([], 'new333'))).toBe(true)
+  })
+
+  it('assumes movement before the first commit, when there is no HEAD', () => {
+    expect(headMoved(stateWith(['old111'], ''))).toBe(true)
   })
 })

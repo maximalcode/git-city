@@ -8,7 +8,7 @@
 [![Latest release](https://img.shields.io/github/v/release/maximalcode/git-city?display_name=tag&sort=semver)](https://github.com/maximalcode/git-city/releases/latest)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-![Git City replaying a repository's history](docs/media/app-hero.gif)
+![Git City replaying a repository's history](docs/media/demo.gif)
 
 ### [⬇ Download for macOS, Windows or Linux](https://github.com/maximalcode/git-city/releases/latest)
 
@@ -22,13 +22,15 @@
 - 🗺 **Districts are folders.** Nested plots follow your directory tree.
 - 🎨 **Colour is yours to choose.** Six encodings, each with a legend.
 
-![The city at night, coloured by language](docs/media/app-city-night.jpg)
+![The city at night, coloured by language](docs/media/city-night.jpg)
 
 Press play and the city grows commit by commit. A whole history replays in about
 ten seconds. The sky tracks each commit's local hour, so scrubbing walks you from
 a morning commit's light into a late-night one's dark.
 
-Every screenshot on this page is Git City open on its own source code.
+The scenes here are a demo repository, so the shape stays readable. The git
+client below is Git City open on its own source, so every path, commit and
+branch in those shots is real.
 
 ## Colour it by the question you are asking
 
@@ -36,10 +38,15 @@ Language tells you what a repository is made of. Activity tells you where the
 work is. A large red building is big and permanently in flux, often the one worth
 splitting up.
 
-![The same city in Neon, coloured by how often each file changes](docs/media/app-city-activity.jpg)
+![The same city in Neon, coloured by how often each file changes](docs/media/city-neon.jpg)
 
-Four more encodings cover author, recency, size and kind.
-[What the colours mean](docs/colour-modes.md) explains all six.
+Author gives every person a colour. A district in one colour is code with one
+owner. A speckled one is shared ground.
+
+![The city in Golden Hour, coloured by who touched each file last](docs/media/city-author.jpg)
+
+Recency, size and kind round out the six.
+[What the colours mean](docs/colour-modes.md) explains them all.
 
 ## Or make it a farm
 
@@ -47,7 +54,9 @@ Press `V`. Files become fields whose crop rises and falls with the line count.
 Folders become fenced parcels, each with a barn and silo. Herds graze across the
 holding and a tractor works the tracks. After dark the steadings light up.
 
-![The same repository as a farm at night](docs/media/app-farm-night.jpg)
+![The same repository as a farm](docs/media/farm.jpg)
+
+![The farm after dark, its steadings lit](docs/media/farm-night.jpg)
 
 ## It is a real git client
 

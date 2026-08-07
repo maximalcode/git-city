@@ -11,3 +11,6 @@ playwright-report/
 
 # Local Claude Code settings (per-machine, not shared)
 .claude/settings.local.json
+
+# Frames left behind when the hero encoder fails
+docs/media/.frames/

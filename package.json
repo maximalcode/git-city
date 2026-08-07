@@ -17,7 +17,9 @@
     "test:e2e": "playwright test",
     "dist:win": "electron-vite build && electron-builder --win --publish never",
     "dist:mac": "electron-vite build && electron-builder --mac --publish never",
-    "dist:linux": "electron-vite build && electron-builder --linux --publish never"
+    "dist:linux": "electron-vite build && electron-builder --linux --publish never",
+    "media": "node scripts/capture-media.mjs",
+    "media:app": "node scripts/capture-app.mjs"
   },
   "dependencies": {
     "simple-git": "^3.27.0"

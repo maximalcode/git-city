@@ -3,18 +3,35 @@ import type { RepoAnalysis } from '../../../shared/types'
 import { buildAnalysis, materializeSnapshot } from '../../../shared/snapshots'
 import { DEFAULT_MODE, MODES, getMode, isViewMode, nextMode } from './modes'
 
+/** One snapshot per frame; each frame is the files and their sizes at it. */
+function analysisFrom(frames: { path: string; loc: number }[][]): RepoAnalysis {
+  return buildAnalysis(
+    { name: 'r', path: '/r', branch: 'main', commitCount: frames.length },
+    frames.map((files, index) => ({
+      hash: `h${index}`,
+      date: 1_700_000_000_000 + index,
+      author: 'a',
+      message: `c${index}`,
+      index,
+      files: files.map((f) => ({
+        ...f,
+        commits: 1,
+        lastTouched: 0,
+        lastAuthor: 'a',
+        binary: false
+      }))
+    }))
+  )
+}
+
+const THREE_FILES = [
+  { path: 'a.ts', loc: 100 },
+  { path: 'b/c.ts', loc: 100 },
+  { path: 'b/d.css', loc: 100 }
+]
+
 function analysis(): RepoAnalysis {
-  const files = ['a.ts', 'b/c.ts', 'b/d.css'].map((path) => ({
-    path,
-    loc: 100,
-    commits: 1,
-    lastTouched: 0,
-    lastAuthor: 'a',
-    binary: false
-  }))
-  return buildAnalysis({ name: 'r', path: '/r', branch: 'main', commitCount: 1 }, [
-    { hash: 'h0', date: 1_700_000_000_000, author: 'a', message: 'c0', index: 0, files }
-  ])
+  return analysisFrom([THREE_FILES])
 }
 
 /**
@@ -104,5 +121,52 @@ describe('mode registry', () => {
       expect(first.length).toBeGreaterThan(0)
       expect(again).toBe(first)
     }
+  })
+})
+
+/**
+ * The model was cached on the analysis *object*, and analyzeIncremental hands
+ * back a fresh one after every commit — so the treemap was recomputed each
+ * time, and since plot positions come out of a squarified treemap over the
+ * weights, one commit moved 49,365 of 81,368 plots on the repo measured in #69.
+ *
+ * The layout depends on the peak weights and nothing else, so those decide
+ * whether the model survives. Model identity is observable through dots(),
+ * which is memoised per model.
+ */
+describe('model reuse across analyses', () => {
+  const dotsFor = (mode: (typeof MODES)[number], a: RepoAnalysis): unknown =>
+    mode.prepare(a, materializeSnapshot(a, a.snapshots.length - 1), 'language').dots()
+
+  it('keeps the model when a commit left every peak alone', () => {
+    const one = analysisFrom([THREE_FILES])
+    // a second commit in which all three files shrank: same peaks, new object
+    const two = analysisFrom([THREE_FILES, THREE_FILES.map((f) => ({ ...f, loc: 5 }))])
+    for (const mode of MODES) {
+      expect(dotsFor(mode, two)).toBe(dotsFor(mode, one))
+    }
+  })
+
+  it('rebuilds when a commit grows a file past its old peak', () => {
+    const one = analysisFrom([THREE_FILES])
+    const two = analysisFrom([THREE_FILES, [{ path: 'a.ts', loc: 4000 }, ...THREE_FILES.slice(1)]])
+    for (const mode of MODES) {
+      expect(dotsFor(mode, two)).not.toBe(dotsFor(mode, one))
+    }
+  })
+
+  it('rebuilds when a commit adds a file', () => {
+    const one = analysisFrom([THREE_FILES])
+    const two = analysisFrom([THREE_FILES, [...THREE_FILES, { path: 'new.ts', loc: 30 }]])
+    for (const mode of MODES) {
+      expect(dotsFor(mode, two)).not.toBe(dotsFor(mode, one))
+    }
+  })
+
+  it('still keeps each mode its own model, so switching back does not relayout', () => {
+    const a = analysis()
+    const city = dotsFor(MODES[0], a)
+    dotsFor(MODES[1], a)
+    expect(dotsFor(MODES[0], a)).toBe(city)
   })
 })

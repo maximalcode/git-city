@@ -105,6 +105,28 @@ export function materializeSnapshot(analysis: RepoAnalysis, index: number): Snap
 }
 
 /**
+ * Array position of the capture closest to a commit index.
+ *
+ * Snapshots are a sample of history, and re-sampling on splice (#71) moves
+ * where the stops fall — so "the position the user was looking at" cannot be
+ * carried across an analysis as an array index. The commit index survives;
+ * this maps it back. Clamps rather than returning -1: every caller wants a
+ * position it can show.
+ */
+export function snapshotAtCommit(analysis: RepoAnalysis, commitIndex: number): number {
+  let best = 0
+  let bestGap = Infinity
+  for (let i = 0; i < analysis.snapshots.length; i++) {
+    const gap = Math.abs(analysis.snapshots[i].index - commitIndex)
+    if (gap < bestGap) {
+      best = i
+      bestGap = gap
+    }
+  }
+  return best
+}
+
+/**
  * Peak line count per path across the whole history — the union pass the
  * city and farm layouts are built from, straight off the columns so no
  * snapshot has to be materialized for it.

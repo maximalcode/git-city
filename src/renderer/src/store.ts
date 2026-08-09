@@ -22,6 +22,7 @@ import { DEFAULT_THEME_ID } from './city/themes'
 import { DEFAULT_MODE, isViewMode, type ViewMode } from './city/modes'
 import { repoWarning, type RepoWarning } from './lib/repoScale'
 import { opMessage } from '../../shared/opMessages'
+import { snapshotAtCommit } from '../../shared/snapshots'
 import type { ColorMode } from './city/colorModes'
 
 export type { ColorMode }
@@ -1037,8 +1038,13 @@ export const useStore = create<GitCityState>((set, get) => ({
       if (!analysis) analysis = await window.gitCity.analyzeRepo(repoPath, 50)
       set((s) => ({
         analysis,
-        // if the user was watching the latest state, keep them there
-        snapshotIndex: wasLive ? analysis!.snapshots.length - 1 : s.snapshotIndex
+        // If the user was watching the latest state, keep them there. Otherwise
+        // hold their place by *commit*, not by array position: re-sampling
+        // moves where the timeline's stops fall, so the old index can now point
+        // at a different commit — or past the end of a shorter array (#71).
+        snapshotIndex: wasLive
+          ? analysis!.snapshots.length - 1
+          : snapshotAtCommit(analysis!, before.analysis!.snapshots[s.snapshotIndex]?.index ?? 0)
       }))
     } catch (err) {
       set({ opError: { message: cleanError(err) } })

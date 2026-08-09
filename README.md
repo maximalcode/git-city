@@ -132,7 +132,8 @@ every mainline commit, with no checkouts and no per-file git calls. About 50
 evenly spaced snapshots feed the timeline, re-spaced every time you commit from
 inside the app so the stops never bunch up at the end. The treemap layout is
 computed once over every file that ever existed, so buildings rise, shrink and
-vanish, but never move while you scrub.
+vanish, but never move while you scrub — and the same city survives a commit,
+unless that commit changed the peak sizes the layout is built from.
 
 Git operations run in the Electron main process behind a per-repo lock, so two of
 our own commands never race for `index.lock`. A file watcher keeps the UI live

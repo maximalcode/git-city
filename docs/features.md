@@ -25,6 +25,11 @@ footfall bob. One or two tractors work the dirt tracks. After dark the
 steadings light up: hayloft windows, the spill under the big door, a yard lamp
 on a post.
 
+**A layout that stays put.** Plots are placed by each file's peak size across
+the whole history rather than its size right now, so buildings rise, shrink and
+vanish as you scrub but never move. That holds across commits you make in the
+app too: the city is re-laid-out only when a commit changes those peak sizes.
+
 **Timeline playback.** Scrub or play the whole history. A full replay takes
 about ten seconds.
 

@@ -14,7 +14,7 @@
 
 import { Color } from 'three'
 import type { RepoAnalysis, Snapshot } from '../../../shared/types'
-import { peakLocByPath } from '../../../shared/snapshots'
+import { layoutWeights } from './weights'
 import { cityLayout, type CityLayout, type Rect } from './treemap'
 import { buildRoadGraph, type RoadGraph } from './roads'
 import { capFiles } from './cap'
@@ -80,12 +80,8 @@ export function cropHeightFor(loc: number): number {
 }
 
 export function buildFarmModel(analysis: RepoAnalysis): FarmModel {
-  // union weights, exactly like buildCityModel — peak LOC per path, read
-  // straight off the columnar snapshots (#62)
-  const weights = new Map<string, number>()
-  for (const [path, peak] of peakLocByPath(analysis)) {
-    weights.set(path, Math.max(peak, 1))
-  }
+  // the same union weights the city lays out from
+  const weights = layoutWeights(analysis)
   // same ceiling as the city — a monorepo's fields are unreadable long before
   // the scene finishes building, so draw the largest and say so (#12)
   const { files, total, capped } = capFiles(

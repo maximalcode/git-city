@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { analyzeRepo, pickSampleIndices } from './analyze'
+import { analyzeRepo, pickSampleIndices, resampleIndices } from './analyze'
 import { materializeSnapshot } from '../../shared/snapshots'
 
 let repo: string
@@ -129,5 +129,56 @@ describe('pickSampleIndices', () => {
 
   it('samples every commit for small repos', () => {
     expect(pickSampleIndices(5, 50).size).toBe(5)
+  })
+})
+
+describe('resampleIndices', () => {
+  it('snaps each ideal stop onto the nearest capture that exists', () => {
+    // 20 commits sampled at target 5 gave 0,5,10,14,19; three commits arrive.
+    // A full re-analysis at 23 would want 0,6,11,17,22 — but 6, 11 and 17 were
+    // never captured and we are not re-reading that history, so each one lands
+    // on the nearest index we actually hold.
+    const keep = resampleIndices([0, 5, 10, 14, 19], 20, 23, 5)
+    expect([...keep].sort((a, b) => a - b)).toEqual([0, 5, 10, 19, 22])
+  })
+
+  it('keeps at most one stop more than the target', () => {
+    // target + 1, the same bound pickSampleIndices has: the tip is added
+    // unconditionally, and on a total that does not divide evenly it can land
+    // beside a stop rather than on one
+    const keep = resampleIndices([0, 5, 10, 14, 19], 20, 23, 5)
+    expect(keep.size).toBeLessThanOrEqual(6)
+  })
+
+  it('always keeps the tip — the next splice re-seeds its state from it', () => {
+    // target 2 wants only the ends, and the tip is one of them; target 1 is
+    // clamped to 2 by pickSampleIndices. Either way the tip has to survive.
+    expect(resampleIndices([0, 9], 10, 14, 2).has(13)).toBe(true)
+    expect(resampleIndices([0, 9], 10, 14, 1).has(13)).toBe(true)
+  })
+
+  it('takes new commits at the ideal index, since any of them can be captured', () => {
+    // the whole new region is replayable, so nothing snaps there
+    const keep = resampleIndices([0, 4], 5, 45, 5)
+    expect(keep.has(22)).toBe(true)
+    expect(keep.has(33)).toBe(true)
+    expect(keep.has(44)).toBe(true)
+  })
+
+  it('stays evenly spaced after ten rounds of splicing', () => {
+    // The ratchet in #71: ten sessions of five commits each. Re-snapping every
+    // round has to stay stable — erosion would pile the survivors up at one end.
+    let keep = [0, 5, 10, 14, 19]
+    let total = 20
+    for (let round = 0; round < 10; round++) {
+      const next = resampleIndices(keep, total, total + 5, 5)
+      total += 5
+      keep = [...next].sort((a, b) => a - b)
+      expect(keep.length).toBeLessThanOrEqual(6)
+    }
+    expect(keep[keep.length - 1]).toBe(total - 1)
+    const gaps = keep.slice(1).map((v, i) => v - keep[i])
+    // a full analysis of 70 commits at target 5 spaces them 17 apart
+    expect(Math.max(...gaps)).toBeLessThanOrEqual(2 * Math.ceil(total / 5))
   })
 })

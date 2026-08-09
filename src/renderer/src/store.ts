@@ -22,6 +22,7 @@ import { DEFAULT_THEME_ID } from './city/themes'
 import { DEFAULT_MODE, isViewMode, type ViewMode } from './city/modes'
 import { repoWarning, type RepoWarning } from './lib/repoScale'
 import { opMessage } from '../../shared/opMessages'
+import { snapshotAtCommit } from '../../shared/snapshots'
 import type { ColorMode } from './city/colorModes'
 
 export type { ColorMode }
@@ -1031,15 +1032,24 @@ export const useStore = create<GitCityState>((set, get) => ({
       !before.analysis ||
       before.analysis.snapshots.length === 0 ||
       before.snapshotIndex === before.analysis.snapshots.length - 1
+    // Which commit they were looking at, asked of the analysis that index still
+    // belongs to. Held by commit rather than by array position because
+    // re-sampling moves where the timeline's stops fall, so afterwards the same
+    // index names a different commit — or nothing at all, the array having got
+    // shorter (#71).
+    const viewingCommit = before.analysis?.snapshots[before.snapshotIndex]?.index
     set({ reanalyzing: true, historyStale: false })
     try {
       let analysis = await window.gitCity.analyzeIncremental(repoPath)
       if (!analysis) analysis = await window.gitCity.analyzeRepo(repoPath, 50)
-      set((s) => ({
+      set({
         analysis,
-        // if the user was watching the latest state, keep them there
-        snapshotIndex: wasLive ? analysis!.snapshots.length - 1 : s.snapshotIndex
-      }))
+        // watching the latest state (or nowhere in particular) → stay at the tip
+        snapshotIndex:
+          wasLive || viewingCommit === undefined
+            ? analysis.snapshots.length - 1
+            : snapshotAtCommit(analysis, viewingCommit)
+      })
     } catch (err) {
       set({ opError: { message: cleanError(err) } })
     } finally {

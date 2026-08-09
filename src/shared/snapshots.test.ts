@@ -6,7 +6,9 @@ import {
   compactSnapshot,
   createInterner,
   materializeSnapshot,
-  peakLocByPath
+  nearestPosition,
+  peakLocByPath,
+  snapshotAtCommit
 } from './snapshots'
 
 const file = (path: string, loc: number, extra: Partial<FileState> = {}): FileState => ({
@@ -109,5 +111,42 @@ describe('analysisBytes', () => {
     // 25 bytes of columns per entry plus the interned path strings
     expect(bytes).toBeGreaterThan(1000 * 25)
     expect(bytes).toBeLessThan(1000 * 60)
+  })
+})
+
+describe('snapshotAtCommit', () => {
+  const analysis = buildAnalysis(info, [
+    snap(0, [file('a.ts', 1)]),
+    snap(5, [file('a.ts', 2)]),
+    snap(19, [file('a.ts', 3)])
+  ])
+
+  it('finds the exact stop when there is one', () => {
+    expect(snapshotAtCommit(analysis, 5)).toBe(1)
+  })
+
+  it('falls to the nearest stop when the commit was never captured', () => {
+    expect(snapshotAtCommit(analysis, 3)).toBe(1) // 5 is closer than 0
+    expect(snapshotAtCommit(analysis, 2)).toBe(0)
+    expect(snapshotAtCommit(analysis, 30)).toBe(2)
+  })
+
+  it('clamps rather than going out of range', () => {
+    expect(snapshotAtCommit(analysis, -4)).toBe(0)
+    expect(snapshotAtCommit(buildAnalysis(info, []), 7)).toBe(0)
+  })
+})
+
+describe('nearestPosition', () => {
+  it('answers the position, not the value', () => {
+    expect(nearestPosition([0, 5, 19], 17)).toBe(2)
+  })
+
+  it('gives a tie to the earlier value', () => {
+    expect(nearestPosition([10, 20], 15)).toBe(0)
+  })
+
+  it('answers 0 for an empty list', () => {
+    expect(nearestPosition([], 5)).toBe(0)
   })
 })

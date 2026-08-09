@@ -11,6 +11,7 @@ import {
   compactSnapshot,
   createInterner,
   materializeSnapshot,
+  nearestPosition,
   type Interner
 } from '../../shared/snapshots'
 import { runGit, runGitLines, runGitResult } from './exec'
@@ -54,6 +55,46 @@ export function pickSampleIndices(total: number, target: number): Set<number> {
   }
   picks.add(total - 1)
   return picks
+}
+
+/**
+ * Where a spliced analysis should keep its captures.
+ *
+ * pickSampleIndices says where the stops belong for the new commit count, but
+ * the old region can only offer indices it already captured — not re-reading
+ * that history is the entire point of splicing. So every ideal stop below
+ * `firstNew` snaps to the nearest index we actually hold, while stops at or
+ * above it are taken as-is: those commits are about to be replayed and can be
+ * captured wherever we like.
+ *
+ * Without this the splice appended a capture per new commit and dropped none,
+ * so the timeline ratcheted — 200 stops where a full analysis has 50, the
+ * scrubber's last quarter covering a third of history, and it never came back
+ * down (#71).
+ *
+ * Dropping captures also drops what they contributed to peakLocByPath, so a
+ * building's footprint can change across a splice. That is the same thing a
+ * full analysis does with the same sample set — converging on it is the point.
+ */
+export function resampleIndices(
+  existing: number[],
+  firstNew: number,
+  total: number,
+  target: number
+): Set<number> {
+  const keep = new Set<number>()
+  for (const want of pickSampleIndices(total, target)) {
+    if (want >= firstNew) {
+      keep.add(want)
+    } else if (existing.length > 0) {
+      keep.add(existing[nearestPosition(existing, want)])
+    }
+  }
+  // The tip is what the *next* splice re-seeds its file state from, so it has
+  // to survive the sampling. pickSampleIndices always includes it; this says so
+  // where the invariant lives rather than relying on it from a distance.
+  keep.add(total - 1)
+  return keep
 }
 
 interface PendingCommit {
@@ -208,8 +249,16 @@ async function replayRange(
  * Last full analysis per repo, kept so analyzeIncremental can splice new
  * commits without re-reading the whole history. Analyses are too big to
  * round-trip over IPC, so the renderer only ever asks by repoPath.
+ *
+ * The sample target rides along because the splice has to re-sample to it, and
+ * it is an argument to analyzeRepo that never reaches analyzeIncremental (#71).
  */
-const analysisCache = new Map<string, RepoAnalysis>()
+interface CachedAnalysis {
+  analysis: RepoAnalysis
+  sampleTarget: number
+}
+
+const analysisCache = new Map<string, CachedAnalysis>()
 
 /**
  * Commit and file counts, cheaply — two counting calls, no history replay.
@@ -300,7 +349,7 @@ export async function analyzeRepo(
       authors: [],
       snapshots: []
     }
-    analysisCache.set(repoPath, empty)
+    analysisCache.set(repoPath, { analysis: empty, sampleTarget })
     return empty
   }
 
@@ -336,7 +385,7 @@ export async function analyzeRepo(
     authors: interner.authors,
     snapshots
   }
-  analysisCache.set(repoPath, analysis)
+  analysisCache.set(repoPath, { analysis, sampleTarget })
   return analysis
 }
 
@@ -347,8 +396,9 @@ export async function analyzeRepo(
  * full analyzeRepo.
  */
 export async function analyzeIncremental(repoPath: string): Promise<RepoAnalysis | null> {
-  const prev = analysisCache.get(repoPath)
-  if (!prev || prev.snapshots.length === 0) return null
+  const cached = analysisCache.get(repoPath)
+  if (!cached || cached.analysis.snapshots.length === 0) return null
+  const { analysis: prev, sampleTarget } = cached
   const prevHead = prev.snapshots[prev.snapshots.length - 1].hash
 
   const head = (await runGit(repoPath, ['rev-parse', 'HEAD'])).trim()
@@ -356,7 +406,7 @@ export async function analyzeIncremental(repoPath: string): Promise<RepoAnalysis
   if (head === prevHead) {
     // HEAD unchanged (e.g. branch metadata only) — refresh the branch name
     const analysis = { ...prev, info: { ...prev.info, branch } }
-    analysisCache.set(repoPath, analysis)
+    analysisCache.set(repoPath, { analysis, sampleTarget })
     return analysis
   }
 
@@ -392,25 +442,34 @@ export async function analyzeIncremental(repoPath: string): Promise<RepoAnalysis
   // resume the interning tables append-only, so the old snapshots' ids stay
   // valid and the new ones share them
   const interner = createInterner(prev.paths, prev.authors)
+  const commitCount = prev.info.commitCount + added
+  // Re-sample across the whole timeline, old region included: capture the new
+  // commits the sampling asks for, and drop the old captures it no longer wants.
+  const keep = resampleIndices(
+    prev.snapshots.map((s) => s.index),
+    prev.info.commitCount,
+    commitCount,
+    sampleTarget
+  )
   const newSnaps = await replayRange(
     repoPath,
     `${prevHead}..${head}`,
     state,
     interner,
     prev.info.commitCount,
-    () => true // snapshot every new commit — there are few
+    (i) => keep.has(i)
   )
 
   const analysis: RepoAnalysis = {
     info: {
       ...prev.info,
       branch,
-      commitCount: prev.info.commitCount + added
+      commitCount
     },
     paths: interner.paths,
     authors: interner.authors,
-    snapshots: [...prev.snapshots, ...newSnaps]
+    snapshots: [...prev.snapshots.filter((s) => keep.has(s.index)), ...newSnaps]
   }
-  analysisCache.set(repoPath, analysis)
+  analysisCache.set(repoPath, { analysis, sampleTarget })
   return analysis
 }

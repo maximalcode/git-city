@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { RepoAnalysis } from '../../../shared/types'
 import { buildAnalysis, materializeSnapshot } from '../../../shared/snapshots'
-import { DEFAULT_MODE, MODES, getMode, isViewMode, nextMode } from './modes'
+import { DEFAULT_MODE, MODES, getMode, isViewMode, nextMode, type PreparedScene } from './modes'
 
 /** One snapshot per frame; each frame is the files and their sizes at it. */
 function analysisFrom(frames: { path: string; loc: number }[][]): RepoAnalysis {
@@ -125,33 +125,27 @@ describe('mode registry', () => {
 })
 
 /**
- * The model was cached on the analysis *object*, and analyzeIncremental hands
- * back a fresh one after every commit — so the treemap was recomputed each
- * time, and since plot positions come out of a squarified treemap over the
- * weights, one commit moved 49,365 of 81,368 plots on the repo measured in #69.
+ * Every mode goes through the layout-keyed model cache, so a commit that did
+ * not move anything reuses the city it already had (#69). The cache's own
+ * behaviour is tested in modelCache.test.ts; this is the wiring — that
+ * `prepare` consults it at all, for every mode.
  *
- * The layout depends on the peak weights and nothing else, so those decide
- * whether the model survives. Model identity is observable through dots(),
- * which is memoised per model.
+ * Model identity is observable through dots(), which is memoised per model. The
+ * scenes are held in locals across the assertion because the cache holds its
+ * model weakly, exactly as a mounted SceneView holds it.
  */
 describe('model reuse across analyses', () => {
-  const dotsFor = (mode: (typeof MODES)[number], a: RepoAnalysis): unknown =>
-    mode.prepare(a, materializeSnapshot(a, a.snapshots.length - 1), 'language').dots()
+  const sceneFor = (mode: (typeof MODES)[number], a: RepoAnalysis): PreparedScene =>
+    mode.prepare(a, materializeSnapshot(a, a.snapshots.length - 1), 'language')
 
   it('keeps the model when a commit left every peak alone', () => {
     const one = analysisFrom([THREE_FILES])
     // a second commit in which all three files shrank: same peaks, new object
     const two = analysisFrom([THREE_FILES, THREE_FILES.map((f) => ({ ...f, loc: 5 }))])
     for (const mode of MODES) {
-      expect(dotsFor(mode, two)).toBe(dotsFor(mode, one))
-    }
-  })
-
-  it('rebuilds when a commit grows a file past its old peak', () => {
-    const one = analysisFrom([THREE_FILES])
-    const two = analysisFrom([THREE_FILES, [{ path: 'a.ts', loc: 4000 }, ...THREE_FILES.slice(1)]])
-    for (const mode of MODES) {
-      expect(dotsFor(mode, two)).not.toBe(dotsFor(mode, one))
+      const before = sceneFor(mode, one)
+      const after = sceneFor(mode, two)
+      expect(after.dots()).toBe(before.dots())
     }
   })
 
@@ -159,14 +153,17 @@ describe('model reuse across analyses', () => {
     const one = analysisFrom([THREE_FILES])
     const two = analysisFrom([THREE_FILES, [...THREE_FILES, { path: 'new.ts', loc: 30 }]])
     for (const mode of MODES) {
-      expect(dotsFor(mode, two)).not.toBe(dotsFor(mode, one))
+      const before = sceneFor(mode, one)
+      const after = sceneFor(mode, two)
+      expect(after.dots()).not.toBe(before.dots())
     }
   })
 
-  it('still keeps each mode its own model, so switching back does not relayout', () => {
+  it('keeps each mode its own model, so switching back does not relayout', () => {
     const a = analysis()
-    const city = dotsFor(MODES[0], a)
-    dotsFor(MODES[1], a)
-    expect(dotsFor(MODES[0], a)).toBe(city)
+    const city = sceneFor(MODES[0], a)
+    const farm = sceneFor(MODES[1], a)
+    expect(farm.dots()).not.toBe(city.dots())
+    expect(sceneFor(MODES[0], a).dots()).toBe(city.dots())
   })
 })

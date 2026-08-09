@@ -5,7 +5,7 @@ import type { ColorMode } from './colorModes'
 import type { IconName } from '../lib/icons'
 import { buildCityModel, snapshotTargets, type CityModel } from './cityData'
 import { buildFarmModel, farmTargets, type FarmModel } from '../layout/farm'
-import { layoutDigest, layoutWeights } from '../layout/weights'
+import { cacheByLayout } from './modelCache'
 import CityScene from './CityScene'
 import FarmScene from './FarmScene'
 
@@ -90,53 +90,10 @@ function commonRows(colorName: string): { icon: IconName; title: string; body: s
   ]
 }
 
-/**
- * What the analysis lays out to, memoised on the analysis object.
- *
- * `prepare` runs on every scrub step, so this has to be a lookup and not a
- * measurement in the common case — an analysis object never changes what it
- * weighs, which makes identity the right key here even though it is the wrong
- * key for the models below.
- */
-const digestCache = new WeakMap<RepoAnalysis, string>()
-
-function layoutKey(analysis: RepoAnalysis): string {
-  let key = digestCache.get(analysis)
-  if (key === undefined) {
-    key = layoutDigest(layoutWeights(analysis))
-    digestCache.set(analysis, key)
-  }
-  return key
-}
-
-/**
- * Model caches, one per mode so switching modes back and forth never re-runs a
- * layout algorithm.
- *
- * Keyed on what the layout is computed *from*, not on the analysis object:
- * analyzeIncremental returns a fresh object after every commit, so identity
- * missed every time and rebuilt the treemap — which moved 49,365 of 81,368
- * plots on the repository in #69, the one thing the layout exists to prevent.
- *
- * One entry deep, because the sequence is a repo's analysis being replaced by
- * its successor. Holding more would keep a superseded city's buffers alive for
- * a repo nobody is looking at any more.
- */
-function modelCache<T>(build: (analysis: RepoAnalysis) => T): (analysis: RepoAnalysis) => T {
-  let key: string | null = null
-  let model: T | null = null
-  return (analysis) => {
-    const k = layoutKey(analysis)
-    if (model === null || k !== key) {
-      model = build(analysis)
-      key = k
-    }
-    return model
-  }
-}
-
-const cityModelFor = modelCache<CityModel>(buildCityModel)
-const farmModelFor = modelCache<FarmModel>(buildFarmModel)
+// One cache per mode, so switching modes back and forth never re-runs a layout
+// algorithm. See modelCache.ts for what they are keyed on and why.
+const cityModelFor = cacheByLayout<CityModel>(buildCityModel)
+const farmModelFor = cacheByLayout<FarmModel>(buildFarmModel)
 
 /**
  * Minimap dots, cached per model.

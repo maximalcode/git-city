@@ -21,20 +21,16 @@ export function layoutWeights(analysis: RepoAnalysis): Map<string, number> {
 }
 
 /**
- * A short value that changes whenever the weights would lay out differently.
- *
- * The model used to be cached on the analysis *object*, and analyzeIncremental
- * returns a fresh one after every commit — so the treemap was recomputed from
- * scratch each time, moving 49,365 of 81,368 plots on the repository measured
- * in #69. Comparing the inputs instead is what lets an analysis that did not
- * touch the layout keep the model it already had.
+ * A short value that changes whenever these weights would lay out differently —
+ * what the scene models are cached on, so a commit that did not move anything
+ * keeps the city it already had (#69; see city/modelCache.ts).
  *
  * Combined with `+` and `^`, both commutative, so iteration order does not
  * matter — a full re-analysis and a splice intern their paths in different
- * orders and must still agree. The count goes in the string because
- * commutative accumulators alone cannot tell a set from one that cancels out,
- * and the weight is mixed into the path's hash rather than accumulated beside
- * it, so two files swapping sizes is not a no-op.
+ * orders and must still agree. The count goes in the string because commutative
+ * accumulators alone cannot tell a set from one that cancels out, and the weight
+ * is mixed into the path's hash rather than accumulated beside it, so two files
+ * swapping sizes is not a no-op.
  */
 export function layoutDigest(weights: Map<string, number>): string {
   let sum = 0

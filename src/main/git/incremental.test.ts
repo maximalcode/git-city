@@ -36,7 +36,7 @@ function addCommits(r: FixtureRepo, from: number, count: number): void {
   }
 }
 
-const byPath = (files: { path: string }[]): unknown =>
+const sortedByPath = <T extends { path: string }>(files: T[]): T[] =>
   [...files].sort((x, y) => x.path.localeCompare(y.path))
 
 describe('analyzeIncremental', () => {
@@ -168,6 +168,16 @@ describe('analyzeIncremental', () => {
     // analysis has five, and the last three commits crowding the scrubber's
     // right edge (#71).
     expect(inc!.snapshots.map((s) => s.index)).toEqual([0, 5, 10, 19, 22])
+
+    // Not the *same* stops as a full analysis — it would want 0,6,11,17,22, and
+    // 6, 11 and 17 were never captured. Splicing exists so that history is not
+    // re-read, so the achievable claim is the one that matters to the scrubber:
+    // as many stops as a full analysis, ending on the same commit.
+    const full = await analyzeRepo(r.path, 5, noop)
+    expect(inc!.snapshots.length).toBe(full.snapshots.length)
+    expect(inc!.snapshots[inc!.snapshots.length - 1].hash).toBe(
+      full.snapshots[full.snapshots.length - 1].hash
+    )
   })
 
   it('stays bounded and exact across ten sessions of commits', async () => {
@@ -190,7 +200,7 @@ describe('analyzeIncremental', () => {
     const lastInc = materializeSnapshot(inc!, inc!.snapshots.length - 1)
     const lastFull = materializeSnapshot(full, full.snapshots.length - 1)
     expect(lastInc.hash).toBe(lastFull.hash)
-    expect(byPath(lastInc.files)).toEqual(byPath(lastFull.files))
+    expect(sortedByPath(lastInc.files)).toEqual(sortedByPath(lastFull.files))
   })
 
   it('keeps sampling at the target the analysis was opened with', async () => {

@@ -11,6 +11,7 @@ import {
   compactSnapshot,
   createInterner,
   materializeSnapshot,
+  nearestPosition,
   type Interner
 } from '../../shared/snapshots'
 import { runGit, runGitLines, runGitResult } from './exec'
@@ -70,6 +71,10 @@ export function pickSampleIndices(total: number, target: number): Set<number> {
  * so the timeline ratcheted — 200 stops where a full analysis has 50, the
  * scrubber's last quarter covering a third of history, and it never came back
  * down (#71).
+ *
+ * Dropping captures also drops what they contributed to peakLocByPath, so a
+ * building's footprint can change across a splice. That is the same thing a
+ * full analysis does with the same sample set — converging on it is the point.
  */
 export function resampleIndices(
   existing: number[],
@@ -81,13 +86,9 @@ export function resampleIndices(
   for (const want of pickSampleIndices(total, target)) {
     if (want >= firstNew) {
       keep.add(want)
-      continue
+    } else if (existing.length > 0) {
+      keep.add(existing[nearestPosition(existing, want)])
     }
-    let best: number | undefined
-    for (const have of existing) {
-      if (best === undefined || Math.abs(have - want) < Math.abs(best - want)) best = have
-    }
-    if (best !== undefined) keep.add(best)
   }
   // The tip is what the *next* splice re-seeds its file state from, so it has
   // to survive the sampling. pickSampleIndices always includes it; this says so

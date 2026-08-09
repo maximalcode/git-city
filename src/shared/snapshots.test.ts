@@ -6,6 +6,7 @@ import {
   compactSnapshot,
   createInterner,
   materializeSnapshot,
+  nearestPosition,
   peakLocByPath,
   snapshotAtCommit
 } from './snapshots'
@@ -133,5 +134,19 @@ describe('snapshotAtCommit', () => {
   it('clamps rather than going out of range', () => {
     expect(snapshotAtCommit(analysis, -4)).toBe(0)
     expect(snapshotAtCommit(buildAnalysis(info, []), 7)).toBe(0)
+  })
+})
+
+describe('nearestPosition', () => {
+  it('answers the position, not the value', () => {
+    expect(nearestPosition([0, 5, 19], 17)).toBe(2)
+  })
+
+  it('gives a tie to the earlier value', () => {
+    expect(nearestPosition([10, 20], 15)).toBe(0)
+  })
+
+  it('answers 0 for an empty list', () => {
+    expect(nearestPosition([], 5)).toBe(0)
   })
 })

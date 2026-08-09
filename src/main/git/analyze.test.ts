@@ -142,7 +142,10 @@ describe('resampleIndices', () => {
     expect([...keep].sort((a, b) => a - b)).toEqual([0, 5, 10, 19, 22])
   })
 
-  it('never keeps more stops than a full analysis would', () => {
+  it('keeps at most one stop more than the target', () => {
+    // target + 1, the same bound pickSampleIndices has: the tip is added
+    // unconditionally, and on a total that does not divide evenly it can land
+    // beside a stop rather than on one
     const keep = resampleIndices([0, 5, 10, 14, 19], 20, 23, 5)
     expect(keep.size).toBeLessThanOrEqual(6)
   })

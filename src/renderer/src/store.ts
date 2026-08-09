@@ -1032,20 +1032,24 @@ export const useStore = create<GitCityState>((set, get) => ({
       !before.analysis ||
       before.analysis.snapshots.length === 0 ||
       before.snapshotIndex === before.analysis.snapshots.length - 1
+    // Which commit they were looking at, asked of the analysis that index still
+    // belongs to. Held by commit rather than by array position because
+    // re-sampling moves where the timeline's stops fall, so afterwards the same
+    // index names a different commit — or nothing at all, the array having got
+    // shorter (#71).
+    const viewingCommit = before.analysis?.snapshots[before.snapshotIndex]?.index
     set({ reanalyzing: true, historyStale: false })
     try {
       let analysis = await window.gitCity.analyzeIncremental(repoPath)
       if (!analysis) analysis = await window.gitCity.analyzeRepo(repoPath, 50)
-      set((s) => ({
+      set({
         analysis,
-        // If the user was watching the latest state, keep them there. Otherwise
-        // hold their place by *commit*, not by array position: re-sampling
-        // moves where the timeline's stops fall, so the old index can now point
-        // at a different commit — or past the end of a shorter array (#71).
-        snapshotIndex: wasLive
-          ? analysis!.snapshots.length - 1
-          : snapshotAtCommit(analysis!, before.analysis!.snapshots[s.snapshotIndex]?.index ?? 0)
-      }))
+        // watching the latest state (or nowhere in particular) → stay at the tip
+        snapshotIndex:
+          wasLive || viewingCommit === undefined
+            ? analysis.snapshots.length - 1
+            : snapshotAtCommit(analysis, viewingCommit)
+      })
     } catch (err) {
       set({ opError: { message: cleanError(err) } })
     } finally {

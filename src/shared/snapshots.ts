@@ -105,25 +105,37 @@ export function materializeSnapshot(analysis: RepoAnalysis, index: number): Snap
 }
 
 /**
- * Array position of the capture closest to a commit index.
- *
- * Snapshots are a sample of history, and re-sampling on splice (#71) moves
- * where the stops fall — so "the position the user was looking at" cannot be
- * carried across an analysis as an array index. The commit index survives;
- * this maps it back. Clamps rather than returning -1: every caller wants a
- * position it can show.
+ * Position of the value closest to `want`. Ties go to the earlier one, and an
+ * empty list answers 0 rather than -1 — both callers are asking "which of the
+ * commits we captured is nearest to this one", and want an answer they can use
+ * without a second branch.
  */
-export function snapshotAtCommit(analysis: RepoAnalysis, commitIndex: number): number {
+export function nearestPosition(values: number[], want: number): number {
   let best = 0
   let bestGap = Infinity
-  for (let i = 0; i < analysis.snapshots.length; i++) {
-    const gap = Math.abs(analysis.snapshots[i].index - commitIndex)
+  for (let i = 0; i < values.length; i++) {
+    const gap = Math.abs(values[i] - want)
     if (gap < bestGap) {
       best = i
       bestGap = gap
     }
   }
   return best
+}
+
+/**
+ * Array position of the capture closest to a commit index.
+ *
+ * Snapshots are a sample of history, and re-sampling on splice (#71) moves
+ * where the stops fall — so "the position the user was looking at" cannot be
+ * carried across an analysis as an array index. The commit index survives;
+ * this maps it back.
+ */
+export function snapshotAtCommit(analysis: RepoAnalysis, commitIndex: number): number {
+  return nearestPosition(
+    analysis.snapshots.map((s) => s.index),
+    commitIndex
+  )
 }
 
 /**

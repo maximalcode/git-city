@@ -20,11 +20,12 @@ describe('analyzeRepo git invocation', () => {
       return ''
     })
     runGitLines.mockImplementation(async (_repoPath: string, _args: string[], onLine) => {
+      // One record in analyze.ts's `\x01%H\t%at\t%an\t%s` streaming log format.
       onLine('\x01hash\t1\tTest\tinitial')
     })
   })
 
-  it('pins Myers even when the user configures a different diff algorithm', async () => {
+  it('pins Myers on the streaming history command', async () => {
     await analyzeRepo('/fixture', 50, () => {})
 
     expect(runGitLines).toHaveBeenCalledWith(

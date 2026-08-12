@@ -194,6 +194,8 @@ async function replayRange(
     [
       '-c',
       'core.quotepath=false',
+      '-c',
+      'diff.algorithm=myers',
       'log',
       '--first-parent',
       '--reverse',

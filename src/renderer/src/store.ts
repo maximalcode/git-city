@@ -20,6 +20,7 @@ import type {
 } from '../../shared/types'
 import { DEFAULT_THEME_ID } from './city/themes'
 import { DEFAULT_MODE, isViewMode, type ViewMode } from './city/modes'
+import { cleanError, hasApi } from './lib/bridge'
 import { repoWarning, type RepoWarning } from './lib/repoScale'
 import { opMessage } from '../../shared/opMessages'
 import { snapshotAtCommit } from '../../shared/snapshots'
@@ -203,15 +204,6 @@ export interface MergeViewState {
 }
 
 export type EffectKind = 'commit-settle' | 'push' | 'pull' | 'rewind'
-
-export function cleanError(err: unknown): string {
-  const msg = err instanceof Error ? err.message : String(err)
-  // Electron prefixes IPC errors with "Error invoking remote method '...': Error:"
-  return msg.replace(/^Error invoking remote method '[^']+':\s*(Error:\s*)?/, '')
-}
-
-/** Whether the preload API exists (absent when the renderer runs in a plain browser). */
-export const hasApi = (): boolean => 'gitCity' in window
 
 /**
  * Everything scoped to one open repo. Applied on BOTH leaving the city and

@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import type { GitVersion } from '../../../shared/types'
 import { tooOldMessage } from '../../../shared/gitVersion'
-import { hasApi, useStore } from '../store'
+import { bridge } from '../lib/bridge'
+import { useStore } from '../store'
 
 /** Last path segment, for showing a repo's folder name. */
 function baseName(p: string): string {
@@ -38,10 +39,11 @@ export default function Welcome(): React.JSX.Element {
   const onDrop = (e: React.DragEvent): void => {
     e.preventDefault()
     setDragging(false)
-    if (blocked || !hasApi()) return
+    const api = bridge()
+    if (blocked || !api) return
     const file = e.dataTransfer.files?.[0]
     if (!file) return
-    const path = window.gitCity.pathForFile(file)
+    const path = api.pathForFile(file)
     if (path) void openPath(path)
   }
 

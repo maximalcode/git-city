@@ -179,6 +179,9 @@ export async function commitDetail(repoPath: string, hash: string): Promise<Comm
   const numstat = await runGitResult(repoPath, [
     '-c',
     'core.quotepath=false',
+    '-c',
+    // counts shown in the UI must not depend on the user's diff.algorithm
+    'diff.algorithm=myers',
     'show',
     '--numstat',
     '--format=',

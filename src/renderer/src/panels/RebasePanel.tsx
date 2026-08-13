@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { RebaseEntry } from '../../../shared/types'
-import { cleanError, hasApi, useStore } from '../store'
+import { useRepoQuery } from '../lib/repoQuery'
+import { useStore } from '../store'
 
 const LOAD_COUNT = 15
 
@@ -17,32 +18,21 @@ export default function RebasePanel(): React.JSX.Element | null {
   const askConfirm = useStore((s) => s.askConfirm)
   const runRebase = useStore((s) => s.runInteractiveRebase)
 
-  const [entries, setEntries] = useState<RebaseEntry[]>([])
-  const [base, setBase] = useState<string | null>(null)
-  const [hasMerges, setHasMerges] = useState(false)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [retryNonce, setRetryNonce] = useState(0)
+  const {
+    data: todo,
+    loading,
+    error,
+    reload
+  } = useRepoQuery(rebaseOpen && repoPath ? ([repoPath] as const) : null, (api, [repo]) =>
+    api.rebaseTodo(repo, LOAD_COUNT)
+  )
 
-  useEffect(() => {
-    if (!rebaseOpen || !repoPath || !hasApi()) return
-    let cancelled = false
-    setLoading(true)
-    setError(null)
-    void window.gitCity
-      .rebaseTodo(repoPath, LOAD_COUNT)
-      .then((r) => {
-        if (cancelled) return
-        setEntries(r.entries)
-        setBase(r.base)
-        setHasMerges(r.hasMerges)
-      })
-      .catch((err) => !cancelled && setError(cleanError(err)))
-      .finally(() => !cancelled && setLoading(false))
-    return () => {
-      cancelled = true
-    }
-  }, [rebaseOpen, repoPath, retryNonce])
+  const base = todo?.base ?? null
+  const hasMerges = todo?.hasMerges ?? false
+  // the todo becomes the user's working copy the moment it lands — they reorder
+  // and re-action it in place, so it is local state seeded from the read
+  const [entries, setEntries] = useState<RebaseEntry[]>([])
+  useEffect(() => setEntries(todo?.entries ?? []), [todo])
 
   if (!rebaseOpen) return null
 
@@ -98,7 +88,7 @@ export default function RebasePanel(): React.JSX.Element | null {
         {!loading && error && (
           <div className="panel-error">
             <span>{error}</span>
-            <button onClick={() => setRetryNonce((n) => n + 1)}>Retry</button>
+            <button onClick={reload}>Retry</button>
           </div>
         )}
         {!loading &&

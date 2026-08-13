@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { hasApi, useStore } from '../store'
+import { bridge } from '../lib/bridge'
+import { useStore } from '../store'
 import { fuzzyFilter } from '../lib/fuzzy'
 import { formatDate } from '../lib/format'
 import Icon, { type IconName } from '../lib/icons'
@@ -226,7 +227,8 @@ export default function CommandPalette({
       setSearching(false)
       return
     }
-    if (!hasApi() || !repoPath || term.length < 2) {
+    const api = bridge()
+    if (!api || !repoPath || term.length < 2) {
       setHits([])
       setSearching(false)
       return
@@ -236,10 +238,10 @@ export default function CommandPalette({
     const id = setTimeout(() => {
       const run =
         mode === 'commit'
-          ? window.gitCity
+          ? api
               .searchCommits(repoPath, term, 'auto')
               .then((r) => r.hits.map((hit): Result => ({ kind: 'commit', hit })))
-          : window.gitCity
+          : api
               .grepWorkingTree(repoPath, term)
               .then((r) => r.hits.map((hit): Result => ({ kind: 'grep', hit })))
       void run

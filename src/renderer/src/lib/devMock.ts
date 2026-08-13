@@ -10,7 +10,8 @@
  */
 import type { FileState, RepoAnalysis, Snapshot, WorkingStatus } from '../../../shared/types'
 import { buildAnalysis as compactAnalysis, materializeSnapshot } from '../../../shared/snapshots'
-import { hasApi, useStore } from '../store'
+import { hasApi } from './bridge'
+import { useStore } from '../store'
 
 const DIRS = [
   'src/core',

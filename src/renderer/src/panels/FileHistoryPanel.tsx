@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react'
 import type { BlameLine, FileCommit } from '../../../shared/types'
-import { cleanError, hasApi, useStore } from '../store'
+import { useRepoQuery } from '../lib/repoQuery'
+import { useStore } from '../store'
 import { formatDate } from '../lib/format'
+
+type FileRead = { kind: 'history'; commits: FileCommit[] } | { kind: 'blame'; lines: BlameLine[] }
 
 /**
  * Right-side panel showing either a file's commit history or its per-line
@@ -13,30 +15,15 @@ export default function FileHistoryPanel(): React.JSX.Element | null {
   const repoPath = useStore((s) => s.repoPath)
   const setFileView = useStore((s) => s.setFileView)
 
-  const [commits, setCommits] = useState<FileCommit[] | null>(null)
-  const [blame, setBlame] = useState<BlameLine[] | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [retryNonce, setRetryNonce] = useState(0)
-
-  useEffect(() => {
-    if (fileView === 'none' || !selected || !repoPath || !hasApi()) return
-    let cancelled = false
-    setLoading(true)
-    setError(null)
-    setCommits(null)
-    setBlame(null)
-    const job =
-      fileView === 'history'
-        ? window.gitCity.fileHistory(repoPath, selected).then((c) => !cancelled && setCommits(c))
-        : window.gitCity.blame(repoPath, selected).then((b) => !cancelled && setBlame(b))
-    void job
-      .catch((err) => !cancelled && setError(cleanError(err)))
-      .finally(() => !cancelled && setLoading(false))
-    return () => {
-      cancelled = true
-    }
-  }, [fileView, selected, repoPath, retryNonce])
+  const { data, loading, error, reload } = useRepoQuery(
+    fileView !== 'none' && selected && repoPath ? ([repoPath, selected, fileView] as const) : null,
+    async (api, [repo, path, view]): Promise<FileRead> =>
+      view === 'history'
+        ? { kind: 'history', commits: await api.fileHistory(repo, path) }
+        : { kind: 'blame', lines: await api.blame(repo, path) }
+  )
+  const commits = data?.kind === 'history' ? data.commits : null
+  const blame = data?.kind === 'blame' ? data.lines : null
 
   if (fileView === 'none' || !selected) return null
 
@@ -68,7 +55,7 @@ export default function FileHistoryPanel(): React.JSX.Element | null {
         {!loading && error && (
           <div className="panel-error">
             <span>{error}</span>
-            <button onClick={() => setRetryNonce((n) => n + 1)}>Retry</button>
+            <button onClick={reload}>Retry</button>
           </div>
         )}
 

@@ -108,7 +108,16 @@ view modes fully explorable with deterministic mock data.
     `themes.ts` is a data-driven registry — "adding a look = adding an entry".
     `colorModes.ts` handles the six colour encodings.
   - `panels/` — the git client UI. `screens/` — welcome and repo-open flows.
-  - `store.ts` — zustand, the single state funnel between IPC and UI.
+  - `store.ts` — zustand, the funnel for everything that **changes** the repo:
+    an op goes through `runOp`, which resyncs the views it invalidated.
+  - `lib/repoQuery.ts` — the funnel for everything that **reads** it.
+    `useRepoQuery(args, read)` owns cancellation, `cleanError`, loading/error
+    state and `reload()`; `args` is both what `read` is called with and the key
+    that decides when the answer went stale, so a staleness trigger that isn't
+    an argument (HEAD's hash, the working-tree fingerprint) is declared by
+    putting it in the tuple. Panels don't hand-roll read effects (#106).
+  - `lib/bridge.ts` — the only place that touches `window.gitCity`. `setBridge()`
+    injects a fake, which is what makes any of this testable off Electron.
 - **`src/shared/types.ts`** — the `GitCityApi` contract shared across all three.
 
 Contract-first: when adding a capability, land `shared/types.ts` + the IPC handler

@@ -108,8 +108,12 @@ view modes fully explorable with deterministic mock data.
     `themes.ts` is a data-driven registry — "adding a look = adding an entry".
     `colorModes.ts` handles the six colour encodings.
   - `panels/` — the git client UI. `screens/` — welcome and repo-open flows.
-  - `store.ts` — zustand, the funnel for everything that **changes** the repo:
-    an op goes through `runOp`, which resyncs the views it invalidated.
+  - `store.ts` — zustand, the funnel for everything that **changes** the repo.
+    An op goes through `runOp`, which runs it, resyncs, and **returns its
+    `OpResult`** — callers ask the result whether it worked, never the `opError`
+    field. `resync()` owns "the repo changed, reload what that invalidated":
+    the view list lives in `REPO_VIEWS`, so adding a view is one entry, not a
+    line in four places (#107).
   - `lib/repoQuery.ts` — the funnel for everything that **reads** it.
     `useRepoQuery(args, read)` owns cancellation, `cleanError`, loading/error
     state and `reload()`; `args` is both what `read` is called with and the key

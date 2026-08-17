@@ -48,10 +48,8 @@ export default function BranchesPanel(): React.JSX.Element | null {
       confirmLabel: 'Remove',
       danger: true,
       onConfirm: async () => {
-        const before = useStore.getState().opError
-        await removeWorktree(path, false)
-        const err = useStore.getState().opError
-        if (err && err !== before) {
+        const result = await removeWorktree(path, false)
+        if (!result.ok) {
           useStore.getState().dismissError()
           askConfirm({
             title: 'Worktree is dirty or locked',
@@ -78,9 +76,8 @@ export default function BranchesPanel(): React.JSX.Element | null {
       // switching anyway would carry the changes onto the other branch (or
       // fail with a message about the switch, saying nothing about the stash)
       onConfirm: async () => {
-        const before = useStore.getState().opError
-        await stashPush(`switch to ${name}`, true)
-        if (useStore.getState().opError !== before) return
+        const stashed = await stashPush(`switch to ${name}`, true)
+        if (!stashed.ok) return
         await switchBranch(name)
       }
     })
@@ -93,11 +90,11 @@ export default function BranchesPanel(): React.JSX.Element | null {
       confirmLabel: 'Delete',
       danger: true,
       onConfirm: async () => {
-        const before = useStore.getState().opError
-        await deleteBranch(b.name, false)
-        const err = useStore.getState().opError
-        // git refused because it isn't merged → offer force delete
-        if (err && err !== before && /not fully merged/i.test(err.message)) {
+        const result = await deleteBranch(b.name, false)
+        // git refused because it isn't merged → offer force delete. The code is
+        // what the main process already decided; this used to re-derive it by
+        // running a regex over the message on this side of the bridge (#107).
+        if (result.code === 'not-merged') {
           useStore.getState().dismissError()
           askConfirm({
             title: `"${b.name}" is not fully merged`,

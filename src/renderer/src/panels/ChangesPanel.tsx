@@ -115,9 +115,8 @@ export default function ChangesPanel(): React.JSX.Element | null {
    * to a toast explaining the failure (#26).
    */
   const runCommit = async (): Promise<void> => {
-    const before = useStore.getState().opError
-    await commitAction(message, amend, sign)
-    if (useStore.getState().opError !== before) return
+    const result = await commitAction(message, amend, sign)
+    if (!result.ok) return
     setMessage('')
     setAmend(false)
   }

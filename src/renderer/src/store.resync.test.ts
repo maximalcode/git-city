@@ -197,7 +197,7 @@ describe('runOp', () => {
     )
   })
 
-  it('carries the failure code through to opError so the UI can react', async () => {
+it('carries the failure code through to opError so the UI can react', async () => {
     const { api } = fakeBridge({
       deleteBranch: () =>
         Promise.resolve({ ok: false, code: 'not-merged', message: 'raw git text' })

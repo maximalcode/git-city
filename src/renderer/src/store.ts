@@ -1242,7 +1242,7 @@ async function runOp(
     result = await fn(api, repoPath)
   } catch (err) {
     const failure: OpResult = { ok: false, message: cleanError(err) }
-    set({ opInProgress: null, opError: { message: failure.message ?? '', code: failure.code } })
+set({ opInProgress: null, opError: { message: failure.message ?? '', code: failure.code } })
     return failure
   }
   set({ opInProgress: null })

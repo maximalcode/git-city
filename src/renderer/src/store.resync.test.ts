@@ -197,6 +197,19 @@ describe('runOp', () => {
     )
   })
 
+  it('carries the failure code through to opError so the UI can react', async () => {
+    const { api } = fakeBridge({
+      deleteBranch: () =>
+        Promise.resolve({ ok: false, code: 'not-merged', message: 'raw git text' })
+    })
+    setBridge(api)
+
+    await useStore.getState().deleteBranch('feature', false)
+
+    expect(useStore.getState().opError?.code).toBe('not-merged')
+    expect(useStore.getState().opError?.message).toBeTruthy()
+  })
+
   it('never ran with no repository open', async () => {
     const { api, calls } = fakeBridge()
     setBridge(api)

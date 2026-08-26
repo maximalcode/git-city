@@ -354,7 +354,7 @@ interface GitCityState {
    * clean" — the panel shows an error with a Retry instead of an empty list.
    */
   statusError: string | null
-  opError: { message: string; gitOutput?: string } | null
+  opError: { message: string; code?: OpResult['code']; gitOutput?: string } | null
   confirm: ConfirmRequest | null
   mergeView: MergeViewState | null
   historyStale: boolean
@@ -1157,9 +1157,9 @@ const REPO_VIEWS = {
 } as const
 
 /** A view that goes stale when the repository changes. */
-export type RepoView = 'status' | keyof typeof REPO_VIEWS
+type RepoView = 'status' | keyof typeof REPO_VIEWS
 
-export const ALL_VIEWS: readonly RepoView[] = [
+const ALL_VIEWS: readonly RepoView[] = [
   'status',
   'branches',
   'stashes',
@@ -1242,7 +1242,7 @@ async function runOp(
     result = await fn(api, repoPath)
   } catch (err) {
     const failure: OpResult = { ok: false, message: cleanError(err) }
-    set({ opInProgress: null, opError: { message: failure.message ?? '' } })
+    set({ opInProgress: null, opError: { message: failure.message ?? '', code: failure.code } })
     return failure
   }
   set({ opInProgress: null })
@@ -1258,7 +1258,7 @@ async function runOp(
       // opMessage, not result.message: for the codes we recognise, git's own
       // first line is written for someone mid-task in a terminal and reads
       // badly in a toast with no context (#26).
-      set({ opError: { message: opMessage(result), gitOutput: result.gitOutput } })
+      set({ opError: { message: opMessage(result), code: result.code, gitOutput: result.gitOutput } })
     }
     return result
   }

@@ -1,0 +1,3 @@
+{
+  "gate_command": "npm run typecheck && npm run lint"
+}

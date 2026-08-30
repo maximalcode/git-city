@@ -14,3 +14,7 @@ playwright-report/
 
 # Frames left behind when the hero encoder fails
 docs/media/.frames/
+
+# maxi-quality agent guard — per-checkout state, never committed
+.claude/agent-guard-receipt.json
+.claude/agent-guard/__pycache__/

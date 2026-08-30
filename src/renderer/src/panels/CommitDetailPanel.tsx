@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import type { CommitDetail } from '../../../shared/types'
-import { cleanError, hasApi, useStore } from '../store'
+import { useStore } from '../store'
+import { useRepoQuery } from '../lib/repoQuery'
 import { formatDate } from '../lib/format'
 
 const SIG_LABEL: Record<CommitDetail['verification'], string | null> = {
@@ -28,36 +29,13 @@ export default function CommitDetailPanel(): React.JSX.Element | null {
   const cherryPick = useStore((s) => s.cherryPick)
   const branch = useStore((s) => s.workingStatus?.branch ?? null)
 
-  const [detail, setDetail] = useState<CommitDetail | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    if (!hash || !repoPath || !hasApi()) {
-      setDetail(null)
-      return
-    }
-    let cancelled = false
-    setLoading(true)
-    setError(null)
-    void window.gitCity
-      .commitDetail(repoPath, hash)
-      .then((d) => {
-        if (!cancelled) setDetail(d)
-      })
-      .catch((err) => {
-        if (!cancelled) {
-          setDetail(null)
-          setError(cleanError(err))
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [hash, repoPath])
+  const {
+    data: detail,
+    loading,
+    error
+  } = useRepoQuery(hash && repoPath ? ([repoPath, hash] as const) : null, (api, [repo, h]) =>
+    api.commitDetail(repo, h)
+  )
 
   // is this commit one of the sampled snapshots? → offer to fly there
   const snapshotIndex = useMemo(() => {

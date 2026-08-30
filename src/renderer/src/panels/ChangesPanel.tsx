@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { FileStatus, HunkInfo, WorkingStatus } from '../../../shared/types'
-import { cleanError, hasApi, isLiveState, useStore } from '../store'
+import { bridge } from '../lib/bridge'
+import { useRepoQuery } from '../lib/repoQuery'
+import { isLiveState, statusFingerprint, useStore } from '../store'
 
 const STATUS_CHIP: Record<string, { label: string; cls: string }> = {
   modified: { label: 'M', cls: 'chip-mod' },
@@ -37,6 +39,7 @@ function partition(status: WorkingStatus): {
 
 export default function ChangesPanel(): React.JSX.Element | null {
   const panel = useStore((s) => s.panel)
+  const repoPath = useStore((s) => s.repoPath)
   const status = useStore((s) => s.workingStatus)
   const statusError = useStore((s) => s.statusError)
   const refreshStatus = useStore((s) => s.refreshStatus)
@@ -68,23 +71,15 @@ export default function ChangesPanel(): React.JSX.Element | null {
 
   const parts = useMemo(() => (status ? partition(status) : null), [status])
 
-  // default the Sign toggle from the repo's commit.gpgsign config (once)
+  // default the Sign toggle from the repo's commit.gpgsign config
+  const { data: signing } = useRepoQuery(repoPath ? ([repoPath] as const) : null, (api, [repo]) =>
+    api.signingConfig(repo)
+  )
   useEffect(() => {
-    const repo = useStore.getState().repoPath
-    if (!hasApi() || !repo) return
-    let cancelled = false
-    void window.gitCity
-      .signingConfig(repo)
-      .then((c) => {
-        if (cancelled) return
-        setCanSign(true)
-        setSign(c.signByDefault)
-      })
-      .catch(() => {})
-    return () => {
-      cancelled = true
-    }
-  }, [])
+    if (!signing) return
+    setCanSign(true)
+    setSign(signing.signByDefault)
+  }, [signing])
 
   if (panel !== 'changes') return null
 
@@ -104,13 +99,12 @@ export default function ChangesPanel(): React.JSX.Element | null {
   const toggleAmend = (): void => {
     const next = !amend
     setAmend(next)
-    if (next && !message.trim() && status) {
-      const repo = useStore.getState().repoPath
-      if (repo && 'gitCity' in window) {
-        void window.gitCity.lastCommitMessage(repo).then((m) => {
+    if (next && !message.trim() && status && repoPath) {
+      void bridge()
+        ?.lastCommitMessage(repoPath)
+        .then((m) => {
           if (m) setMessage(m)
         })
-      }
     }
   }
 
@@ -121,9 +115,8 @@ export default function ChangesPanel(): React.JSX.Element | null {
    * to a toast explaining the failure (#26).
    */
   const runCommit = async (): Promise<void> => {
-    const before = useStore.getState().opError
-    await commitAction(message, amend, sign)
-    if (useStore.getState().opError !== before) return
+    const result = await commitAction(message, amend, sign)
+    if (!result.ok) return
     setMessage('')
     setAmend(false)
   }
@@ -364,33 +357,21 @@ function Row({
 /** Per-hunk staging for one file. Refetches whenever the working status changes
  *  (i.e. after any hunk op completes via runOp → refreshStatus). */
 function HunkList({ path, staged }: { path: string; staged: boolean }): React.JSX.Element {
-  const status = useStore((s) => s.workingStatus) // refetch trigger
-  const [hunks, setHunks] = useState<HunkInfo[] | null>(null)
-  const [binary, setBinary] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const repoPath = useStore((s) => s.repoPath)
+  // the working tree's fingerprint is the refetch trigger: any hunk op lands
+  // through runOp → refreshStatus, which changes it
+  const fingerprint = useStore((s) => statusFingerprint(s.workingStatus))
 
-  useEffect(() => {
-    const repo = useStore.getState().repoPath
-    if (!hasApi() || !repo) return
-    let cancelled = false
-    setError(null)
-    void window.gitCity
-      .fileHunks(repo, path, staged)
-      .then((r) => {
-        if (cancelled) return
-        setHunks(r.hunks)
-        setBinary(r.binary)
-      })
-      .catch((err) => !cancelled && setError(cleanError(err)))
-    return () => {
-      cancelled = true
-    }
-  }, [path, staged, status])
+  const { data, error } = useRepoQuery(
+    repoPath ? ([repoPath, path, staged, fingerprint] as const) : null,
+    (api, [repo, file, isStaged]) => api.fileHunks(repo, file, isStaged)
+  )
 
   if (error) return <div className="hunk-note">{error}</div>
-  if (binary) return <div className="hunk-note">Binary file — stage the whole file.</div>
-  if (!hunks) return <div className="hunk-note">Loading hunks…</div>
-  if (hunks.length === 0) return <div className="hunk-note">No hunks.</div>
+  if (data?.binary) return <div className="hunk-note">Binary file — stage the whole file.</div>
+  if (!data) return <div className="hunk-note">Loading hunks…</div>
+  if (data.hunks.length === 0) return <div className="hunk-note">No hunks.</div>
+  const hunks = data.hunks
 
   return (
     <div className="hunk-list">

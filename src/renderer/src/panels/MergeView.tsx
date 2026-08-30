@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import type { ConflictFile, ConflictSegment } from '../../../shared/types'
 import { sameConflict } from '../../../shared/conflictFile'
-import { hasApi, useStore } from '../store'
+import { bridge } from '../lib/bridge'
+import { useStore } from '../store'
 
 export type Choice = 'ours' | 'theirs' | 'both' | 'edit'
 
@@ -60,7 +61,8 @@ export default function MergeView(): React.JSX.Element | null {
   const shown = file && file.path === active ? file : null
 
   useEffect(() => {
-    if (!mergeView || !active || !repoPath || !hasApi()) {
+    const api = bridge()
+    if (!mergeView || !active || !repoPath || !api) {
       setFile(null)
       setLoadError(null)
       return
@@ -68,7 +70,7 @@ export default function MergeView(): React.JSX.Element | null {
     let cancelled = false
     setLoadError(null)
     setNotice(null)
-    void window.gitCity
+    void api
       .conflictRead(repoPath, active)
       .then((f) => {
         if (cancelled) return
@@ -99,9 +101,10 @@ export default function MergeView(): React.JSX.Element | null {
    * since alt-tabbing away and back must not throw those away.
    */
   useEffect(() => {
-    if (!mergeView || !active || !repoPath || !hasApi()) return
+    const api = bridge()
+    if (!mergeView || !active || !repoPath || !api) return
     const onFocus = (): void => {
-      void window.gitCity
+      void api
         .conflictRead(repoPath, active)
         .then((f) => {
           if (file && file.path === f.path && sameConflict(file, f)) return
@@ -142,10 +145,11 @@ export default function MergeView(): React.JSX.Element | null {
    * overwritten and staged, and none of it has ever been committed.
    */
   const markResolved = async (): Promise<void> => {
-    if (!shown || shown.binary || !active || !repoPath || !hasApi()) return
+    const api = bridge()
+    if (!shown || shown.binary || !active || !repoPath || !api) return
     let fresh: ConflictFile
     try {
-      fresh = await window.gitCity.conflictRead(repoPath, active)
+      fresh = await api.conflictRead(repoPath, active)
     } catch {
       setFile(null)
       setLoadError(`Could not re-read ${active}, so nothing was written to it.`)
@@ -254,9 +258,7 @@ export default function MergeView(): React.JSX.Element | null {
               <div className="merge-file-foot">
                 <button
                   disabled={busy}
-                  onClick={() =>
-                    repoPath && hasApi() && window.gitCity.openInEditor(repoPath, active)
-                  }
+                  onClick={() => repoPath && void bridge()?.openInEditor(repoPath, active)}
                 >
                   Open in external editor
                 </button>

@@ -10,7 +10,8 @@
  */
 import type { FileState, RepoAnalysis, Snapshot, WorkingStatus } from '../../../shared/types'
 import { buildAnalysis as compactAnalysis, materializeSnapshot } from '../../../shared/snapshots'
-import { hasApi, useStore } from '../store'
+import { hasApi } from './bridge'
+import { useStore } from '../store'
 
 const DIRS = [
   'src/core',
@@ -63,13 +64,64 @@ function mulberry32(seed: number): () => number {
   }
 }
 
+/**
+ * Commit subjects for the synthetic repository.
+ *
+ * These are read in the README screenshots, in the playback ticker and in the
+ * command palette, so they have to look like somebody's actual afternoon.
+ * "mock commit 30: grow the city" was fine while nothing looked at them.
+ */
+const MESSAGES = [
+  'Initial commit',
+  'Add the render loop and a first pass at the frame graph',
+  'Split layout out of the renderer',
+  'Cache the tessellation between frames',
+  'Fix the off-by-one in the row iterator',
+  'Add unit tests for the layout pass',
+  'Wire up the settings panel',
+  'Extract the shader preamble into its own module',
+  'Handle an empty document without dividing by zero',
+  'Speed up the hit test with a coarse grid',
+  'Add keyboard navigation to the sidebar',
+  'Document the plugin surface',
+  'Drop the dead code path behind the old flag',
+  'Fix the flicker when resizing quickly',
+  'Move the parser into its own worker',
+  'Add a progress indicator for slow loads',
+  'Tighten the error message on a bad config',
+  'Refactor the state store into slices',
+  'Support nested groups in the outline',
+  'Fix a leak in the texture pool',
+  'Reduce the bundle by lazy-loading the editor',
+  'Add a dark theme',
+  'Persist window size between sessions',
+  'Fix the crash on a zero-length selection',
+  'Batch the layout invalidations',
+  'Add an escape hatch for custom renderers',
+  'Warn instead of throwing on an unknown field',
+  'Update the contributing guide',
+  'Cut the startup time by deferring the index',
+  'Prepare the release'
+]
+
+/** Deterministic 40-hex hash. Its own stream, so the layout draw order is untouched. */
+function commitHash(index: number): string {
+  const r = mulberry32(0x5eed + index * 7919)
+  let out = ''
+  while (out.length < 40)
+    out += Math.floor(r() * 0x100000000)
+      .toString(16)
+      .padStart(8, '0')
+  return out.slice(0, 40)
+}
+
 function buildAnalysis(): RepoAnalysis {
   return buildAnalysisOf(mockFileCount())
 }
 
 function buildAnalysisOf(fileCount: number): RepoAnalysis {
   const rand = mulberry32(20260718)
-  const authors = ['Alice', 'Bob', 'Chen', 'Dana']
+  const authors = ['Marta Ellis', 'Sam Okonjo', 'Ruth Vasquez', 'Theo Lindqvist']
 
   interface SeedFile {
     path: string
@@ -119,10 +171,10 @@ function buildAnalysisOf(fileCount: number): RepoAnalysis {
       })
     }
     snapshots.push({
-      hash: `mock${s.toString(16).padStart(4, '0')}${'0'.repeat(32)}`,
+      hash: commitHash(s),
       date: commitDate(s),
       author: authors[s % authors.length],
-      message: `mock commit ${s + 1}: grow the city`,
+      message: MESSAGES[s % MESSAGES.length],
       index: s,
       files
     })
@@ -130,8 +182,8 @@ function buildAnalysisOf(fileCount: number): RepoAnalysis {
 
   return compactAnalysis(
     {
-      name: 'mock-repo',
-      path: 'C:/mock/mock-repo',
+      name: 'atlas',
+      path: '/Users/dev/code/atlas',
       branch: 'main',
       commitCount: SNAPSHOT_COUNT
     },

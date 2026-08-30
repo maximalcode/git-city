@@ -2,6 +2,8 @@
 
 Thanks for taking a look. This is a small project with a simple workflow.
 
+By taking part you agree to the [Code of Conduct](CODE_OF_CONDUCT.md).
+
 ## Start with an issue
 
 Every change starts as a GitHub issue — bug reports, features, refactors, chores.

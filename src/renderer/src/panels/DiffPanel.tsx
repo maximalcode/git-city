@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import type { DiffHunk, DiffLine, ImageDiff } from '../../../shared/types'
 import type { DiffFile } from '../../../shared/types'
-import { cleanError, hasApi, isLiveState, useStore } from '../store'
+import { useRepoQuery } from '../lib/repoQuery'
+import { isLiveState, useStore } from '../store'
 import { pairedWordSpans, toSideBySide, type SbsCell, type WordSpan } from '../lib/wordDiff'
 import { isImagePath } from '../../../shared/imageExt'
 
@@ -24,48 +25,23 @@ export default function DiffPanel(): React.JSX.Element | null {
   const split = useStore((s) => s.diffSplit)
   const toggleSplit = useStore((s) => s.toggleDiffSplit)
 
-  const [diff, setDiff] = useState<DiffFile | null>(null)
-  const [imgDiff, setImgDiff] = useState<ImageDiff | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [retryNonce, setRetryNonce] = useState(0)
-
   // An explicit rev (opened from a history commit) wins over the timeline context.
   const rev = diffRev ?? (!live && analysis ? analysis.snapshots[snapshotIndex]?.hash : undefined)
 
-  useEffect(() => {
-    if (!diffOpen || !selected || !repoPath || !hasApi()) {
-      setDiff(null)
-      return
+  const { data, loading, error, reload } = useRepoQuery(
+    diffOpen && selected && repoPath ? ([repoPath, selected, rev ?? null] as const) : null,
+    async (api, [repo, path, at]): Promise<{ diff: DiffFile; image: ImageDiff | null }> => {
+      const diff = await api.getFileDiff(repo, path, at ?? undefined)
+      // a binary image → fetch the before/after bytes for a visual diff
+      const image =
+        diff.binary && isImagePath(path)
+          ? await api.imageDiff(repo, path, at ?? undefined).catch(() => null)
+          : null
+      return { diff, image }
     }
-    let cancelled = false
-    setLoading(true)
-    setError(null)
-    setImgDiff(null)
-    void window.gitCity
-      .getFileDiff(repoPath, selected, rev)
-      .then(async (d) => {
-        if (cancelled) return
-        setDiff(d)
-        // a binary image → fetch the before/after bytes for a visual diff
-        if (d.binary && isImagePath(selected)) {
-          const img = await window.gitCity.imageDiff(repoPath, selected, rev).catch(() => null)
-          if (!cancelled) setImgDiff(img)
-        }
-      })
-      .catch((err) => {
-        if (!cancelled) {
-          setDiff(null)
-          setError(cleanError(err))
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [diffOpen, selected, repoPath, rev, retryNonce])
+  )
+  const diff = data?.diff ?? null
+  const imgDiff = data?.image ?? null
 
   if (!diffOpen || !selected) return null
 
@@ -110,7 +86,7 @@ export default function DiffPanel(): React.JSX.Element | null {
         {!loading && error && (
           <div className="panel-error">
             <span>{error}</span>
-            <button onClick={() => setRetryNonce((n) => n + 1)}>Retry</button>
+            <button onClick={reload}>Retry</button>
           </div>
         )}
         {!loading && diff && diff.binary && imgDiff && (imgDiff.old || imgDiff.new) && (

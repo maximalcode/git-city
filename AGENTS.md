@@ -108,20 +108,7 @@ view modes fully explorable with deterministic mock data.
     `themes.ts` is a data-driven registry — "adding a look = adding an entry".
     `colorModes.ts` handles the six colour encodings.
   - `panels/` — the git client UI. `screens/` — welcome and repo-open flows.
-  - `store.ts` — zustand, the funnel for everything that **changes** the repo.
-    An op goes through `runOp`, which runs it, resyncs, and **returns its
-    `OpResult`** — callers ask the result whether it worked, never the `opError`
-    field. `resync()` owns "the repo changed, reload what that invalidated":
-    the view list lives in `REPO_VIEWS`, so adding a view is one entry, not a
-    line in four places (#107).
-  - `lib/repoQuery.ts` — the funnel for everything that **reads** it.
-    `useRepoQuery(args, read)` owns cancellation, `cleanError`, loading/error
-    state and `reload()`; `args` is both what `read` is called with and the key
-    that decides when the answer went stale, so a staleness trigger that isn't
-    an argument (HEAD's hash, the working-tree fingerprint) is declared by
-    putting it in the tuple. Panels don't hand-roll read effects (#106).
-  - `lib/bridge.ts` — the only place that touches `window.gitCity`. `setBridge()`
-    injects a fake, which is what makes any of this testable off Electron.
+  - `store.ts` — zustand, the single state funnel between IPC and UI.
 - **`src/shared/types.ts`** — the `GitCityApi` contract shared across all three.
 
 Contract-first: when adding a capability, land `shared/types.ts` + the IPC handler
@@ -149,41 +136,3 @@ first, then the renderer side.
 - [RELEASING.md](RELEASING.md) — cutting a release, code signing, macOS notes.
 - [docs/roadmap-git-parity.md](docs/roadmap-git-parity.md) — historical record of
   the v9–v12 milestones (all shipped). Live planning happens in issues now.
-
-<!-- BEGIN maxi-quality agent-guard sha256:1f0a94506e51e28d -->
-
-## The gate, and how a session ends
-
-This repo's quality baseline is enforced by two hooks and one deny rule in
-`.claude/settings.json`. They are not advice — they refuse.
-
-**Run the gate through the recorder, not directly:**
-
-```bash
-python3 .claude/agent-guard/record-gate.py --gate
-```
-
-`--gate` runs the command this repo declares in `.claude/agent-guard.json`,
-whole and through one shell, so a gate written as `a && b` is recorded as a
-gate rather than as its first half. It passes the gate's exit code straight
-through. (`-- <command>` still works for an ad-hoc run, and is what you want
-when the thing you are running is not the declared gate.)
-
-A session cannot end while the working tree holds changes the gate has not
-seen. If it refuses, the message says which of the four cases you are in: never
-ran, ran and failed, ran something that was not this repo's gate, or ran against
-different content.
-
-**Do not write `.claude/agent-guard-receipt.json` by hand.** The `Edit` tool is
-refused on it — that is a deny rule in `.claude/settings.json`, not advice. A
-shell command still reaches the file, and nothing downstream can tell: it is
-the gate's own input, so a hand-written one passes. It is the single action
-here that turns a guard into a lie.
-
-**Do not pass `--no-verify` to `git commit` or `git push`.** That is refused
-too. It switches off this repo's commit hook, which is the last check before
-content the gate has not seen becomes a commit. If the hook is failing for a
-reason that is not your change, say so — do not route around it.
-
-
-<!-- END maxi-quality agent-guard -->

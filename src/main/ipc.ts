@@ -5,6 +5,7 @@ import { analyzeRepo, checkGitInstalled } from './git/analyze'
 import { cloneRepo } from './git/clone'
 import { analysisFailedMessage } from './git/openErrors'
 import { FriendlyError } from './git/result'
+import { withRepoLock } from './git/queue'
 import { registerOpsIpc } from './ipcOps'
 
 const SAMPLE_TARGET = 50
@@ -28,7 +29,9 @@ export function registerIpc(): void {
       if (!event.sender.isDestroyed()) event.sender.send('git-city:progress', p)
     }
     try {
-      return await analyzeRepo(repoPath, samples ?? SAMPLE_TARGET, send)
+      return await withRepoLock(repoPath, () =>
+        analyzeRepo(repoPath, samples ?? SAMPLE_TARGET, send)
+      )
     } catch (err) {
       throw friendly(err, () => analysisFailedMessage(basename(repoPath)), 'analyze')
     }

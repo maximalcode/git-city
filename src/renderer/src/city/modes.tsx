@@ -5,6 +5,7 @@ import type { ColorMode } from './colorModes'
 import type { IconName } from '../lib/icons'
 import { buildCityModel, snapshotTargets, type CityModel } from './cityData'
 import { buildFarmModel, farmTargets, type FarmModel } from '../layout/farm'
+import { cacheByLayout } from './modelCache'
 import CityScene from './CityScene'
 import FarmScene from './FarmScene'
 
@@ -89,10 +90,10 @@ function commonRows(colorName: string): { icon: IconName; title: string; body: s
   ]
 }
 
-// Per-analysis model caches: switching modes back and forth must not re-run the
-// layout algorithms. Kept per mode so each owns its own memoisation.
-const cityCache = new WeakMap<RepoAnalysis, CityModel>()
-const farmCache = new WeakMap<RepoAnalysis, FarmModel>()
+// One cache per mode, so switching modes back and forth never re-runs a layout
+// algorithm. See modelCache.ts for what they are keyed on and why.
+const cityModelFor = cacheByLayout<CityModel>(buildCityModel)
+const farmModelFor = cacheByLayout<FarmModel>(buildFarmModel)
 
 /**
  * Minimap dots, cached per model.
@@ -111,24 +112,6 @@ function cachedDots(model: object, build: () => MinimapDot[]): MinimapDot[] {
     dotsCache.set(model, dots)
   }
   return dots
-}
-
-function cityModelFor(analysis: RepoAnalysis): CityModel {
-  let m = cityCache.get(analysis)
-  if (!m) {
-    m = buildCityModel(analysis)
-    cityCache.set(analysis, m)
-  }
-  return m
-}
-
-function farmModelFor(analysis: RepoAnalysis): FarmModel {
-  let m = farmCache.get(analysis)
-  if (!m) {
-    m = buildFarmModel(analysis)
-    farmCache.set(analysis, m)
-  }
-  return m
 }
 
 const cityMode: ModeDef = {

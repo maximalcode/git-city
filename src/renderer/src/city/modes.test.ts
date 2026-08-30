@@ -1,20 +1,37 @@
 import { describe, expect, it } from 'vitest'
 import type { RepoAnalysis } from '../../../shared/types'
 import { buildAnalysis, materializeSnapshot } from '../../../shared/snapshots'
-import { DEFAULT_MODE, MODES, getMode, isViewMode, nextMode } from './modes'
+import { DEFAULT_MODE, MODES, getMode, isViewMode, nextMode, type PreparedScene } from './modes'
+
+/** One snapshot per frame; each frame is the files and their sizes at it. */
+function analysisFrom(frames: { path: string; loc: number }[][]): RepoAnalysis {
+  return buildAnalysis(
+    { name: 'r', path: '/r', branch: 'main', commitCount: frames.length },
+    frames.map((files, index) => ({
+      hash: `h${index}`,
+      date: 1_700_000_000_000 + index,
+      author: 'a',
+      message: `c${index}`,
+      index,
+      files: files.map((f) => ({
+        ...f,
+        commits: 1,
+        lastTouched: 0,
+        lastAuthor: 'a',
+        binary: false
+      }))
+    }))
+  )
+}
+
+const THREE_FILES = [
+  { path: 'a.ts', loc: 100 },
+  { path: 'b/c.ts', loc: 100 },
+  { path: 'b/d.css', loc: 100 }
+]
 
 function analysis(): RepoAnalysis {
-  const files = ['a.ts', 'b/c.ts', 'b/d.css'].map((path) => ({
-    path,
-    loc: 100,
-    commits: 1,
-    lastTouched: 0,
-    lastAuthor: 'a',
-    binary: false
-  }))
-  return buildAnalysis({ name: 'r', path: '/r', branch: 'main', commitCount: 1 }, [
-    { hash: 'h0', date: 1_700_000_000_000, author: 'a', message: 'c0', index: 0, files }
-  ])
+  return analysisFrom([THREE_FILES])
 }
 
 /**
@@ -104,5 +121,49 @@ describe('mode registry', () => {
       expect(first.length).toBeGreaterThan(0)
       expect(again).toBe(first)
     }
+  })
+})
+
+/**
+ * Every mode goes through the layout-keyed model cache, so a commit that did
+ * not move anything reuses the city it already had (#69). The cache's own
+ * behaviour is tested in modelCache.test.ts; this is the wiring — that
+ * `prepare` consults it at all, for every mode.
+ *
+ * Model identity is observable through dots(), which is memoised per model. The
+ * scenes are held in locals across the assertion because the cache holds its
+ * model weakly, exactly as a mounted SceneView holds it.
+ */
+describe('model reuse across analyses', () => {
+  const sceneFor = (mode: (typeof MODES)[number], a: RepoAnalysis): PreparedScene =>
+    mode.prepare(a, materializeSnapshot(a, a.snapshots.length - 1), 'language')
+
+  it('keeps the model when a commit left every peak alone', () => {
+    const one = analysisFrom([THREE_FILES])
+    // a second commit in which all three files shrank: same peaks, new object
+    const two = analysisFrom([THREE_FILES, THREE_FILES.map((f) => ({ ...f, loc: 5 }))])
+    for (const mode of MODES) {
+      const before = sceneFor(mode, one)
+      const after = sceneFor(mode, two)
+      expect(after.dots()).toBe(before.dots())
+    }
+  })
+
+  it('rebuilds when a commit adds a file', () => {
+    const one = analysisFrom([THREE_FILES])
+    const two = analysisFrom([THREE_FILES, [...THREE_FILES, { path: 'new.ts', loc: 30 }]])
+    for (const mode of MODES) {
+      const before = sceneFor(mode, one)
+      const after = sceneFor(mode, two)
+      expect(after.dots()).not.toBe(before.dots())
+    }
+  })
+
+  it('keeps each mode its own model, so switching back does not relayout', () => {
+    const a = analysis()
+    const city = sceneFor(MODES[0], a)
+    const farm = sceneFor(MODES[1], a)
+    expect(farm.dots()).not.toBe(city.dots())
+    expect(sceneFor(MODES[0], a).dots()).toBe(city.dots())
   })
 })

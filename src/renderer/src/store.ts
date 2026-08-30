@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type {
   BranchInfo,
+  GitCityApi,
   GitVersion,
   HostAuth,
   OpResult,
@@ -20,8 +21,10 @@ import type {
 } from '../../shared/types'
 import { DEFAULT_THEME_ID } from './city/themes'
 import { DEFAULT_MODE, isViewMode, type ViewMode } from './city/modes'
+import { bridge, cleanError } from './lib/bridge'
 import { repoWarning, type RepoWarning } from './lib/repoScale'
 import { opMessage } from '../../shared/opMessages'
+import { snapshotAtCommit } from '../../shared/snapshots'
 import type { ColorMode } from './city/colorModes'
 
 export type { ColorMode }
@@ -203,15 +206,6 @@ export interface MergeViewState {
 
 export type EffectKind = 'commit-settle' | 'push' | 'pull' | 'rewind'
 
-export function cleanError(err: unknown): string {
-  const msg = err instanceof Error ? err.message : String(err)
-  // Electron prefixes IPC errors with "Error invoking remote method '...': Error:"
-  return msg.replace(/^Error invoking remote method '[^']+':\s*(Error:\s*)?/, '')
-}
-
-/** Whether the preload API exists (absent when the renderer runs in a plain browser). */
-export const hasApi = (): boolean => 'gitCity' in window
-
 /**
  * Everything scoped to one open repo. Applied on BOTH leaving the city and
  * loading a repo, so stale panels/dialogs/effects can never leak between repos
@@ -256,6 +250,31 @@ const REPO_STATE_RESET: Partial<GitCityState> = {
 /** Cheap fingerprint so identical statuses (editor atomic-save churn) don't re-render.
  *  Must cover every field the HUD renders: omitting one (e.g. upstream) makes ops whose
  *  only effect is that field (publish) invisible to refreshStatus. Exported for tests. */
+/**
+ * Has HEAD actually moved away from the commit the current analysis was built
+ * from? Exported for tests.
+ *
+ * The watcher reports 'refs' for anything in .git that is not HEAD or the index
+ * (watcher.ts), and the app's own reaction to an event — refreshing branches,
+ * stashes, tags, and the host — runs git commands that touch .git again. So
+ * raising the reload pill on the bare event made it re-arm the moment it was
+ * cleared, and it never went down again (#98). analyzeIncremental compares the
+ * same two hashes to decide whether there is anything to replay at all.
+ *
+ * Unknown either side means "assume it moved": a pill that should not be there
+ * costs a click, and a missing one silently shows history that is out of date.
+ *
+ * Compared by prefix, like isLiveState, because a snapshot hash can be
+ * abbreviated where headHash is full. Comparing them strictly would report
+ * every event as a move and leave the pill permanently up — the bug this fixes.
+ */
+export function headMoved(s: Pick<GitCityState, 'analysis' | 'workingStatus'>): boolean {
+  const analysed = s.analysis?.snapshots[s.analysis.snapshots.length - 1]?.hash
+  const head = s.workingStatus?.headHash
+  if (!analysed || !head) return true
+  return !head.startsWith(analysed)
+}
+
 export function statusFingerprint(s: WorkingStatus | null): string {
   if (!s) return ''
   return `${s.headHash}|${s.opState}|${s.ahead},${s.behind}|${s.branch}|${s.upstream ?? ''}|${
@@ -335,7 +354,7 @@ interface GitCityState {
    * clean" — the panel shows an error with a Retry instead of an empty list.
    */
   statusError: string | null
-  opError: { message: string; gitOutput?: string } | null
+  opError: { message: string; code?: OpResult['code']; gitOutput?: string } | null
   confirm: ConfirmRequest | null
   mergeView: MergeViewState | null
   historyStale: boolean
@@ -403,18 +422,15 @@ interface GitCityState {
   // live actions
   setPanel(panel: Panel): void
   refreshStatus(): Promise<void>
-  refreshBranches(): Promise<void>
-  refreshStashes(): Promise<void>
-  refreshTags(): Promise<void>
-  refreshSubmodules(): Promise<void>
-  refreshWorktrees(): Promise<void>
-  updateSubmodules(path?: string): Promise<void>
-  addWorktree(path: string, ref: string): Promise<void>
-  removeWorktree(path: string, force: boolean): Promise<void>
+  /** Reload the views the repository just invalidated; all of them by default. */
+  resync(views?: readonly RepoView[]): Promise<void>
+  updateSubmodules(path?: string): Promise<OpResult>
+  addWorktree(path: string, ref: string): Promise<OpResult>
+  removeWorktree(path: string, force: boolean): Promise<OpResult>
   setPrPanelOpen(open: boolean): void
   refreshHost(): Promise<void>
-  checkoutPr(number: number): Promise<void>
-  createPr(base: string, title: string, body: string): Promise<void>
+  checkoutPr(number: number): Promise<OpResult>
+  createPr(base: string, title: string, body: string): Promise<OpResult>
   reviewPrInCity(number: number, title: string): Promise<void>
   clearReview(): void
   openExternal(url: string): void
@@ -425,46 +441,46 @@ interface GitCityState {
   endExport(error?: string | null): void
   setRebaseOpen(open: boolean): void
   setReflogOpen(open: boolean): void
-  createTag(name: string, ref?: string): Promise<void>
-  deleteTag(name: string): Promise<void>
+  createTag(name: string, ref?: string): Promise<OpResult>
+  deleteTag(name: string): Promise<OpResult>
   /** Undo the last thing that moved HEAD (reset --keep HEAD@{1}) — never loses uncommitted work. */
-  undoLast(): Promise<void>
-  resetToReflog(ref: string, mode: ResetMode): Promise<void>
-  recoverBranch(name: string, ref: string): Promise<void>
-  runInteractiveRebase(base: string | null, entries: RebaseEntry[]): Promise<boolean>
+  undoLast(): Promise<OpResult>
+  resetToReflog(ref: string, mode: ResetMode): Promise<OpResult>
+  recoverBranch(name: string, ref: string): Promise<OpResult>
+  runInteractiveRebase(base: string | null, entries: RebaseEntry[]): Promise<OpResult>
   refreshAnalysis(): Promise<void>
   jumpToNow(): void
   dismissError(): void
   askConfirm(req: ConfirmRequest): void
   resolveConfirm(go: boolean): void
 
-  stage(paths: string[]): Promise<void>
-  unstage(paths: string[]): Promise<void>
-  discard(paths: string[]): Promise<void>
-  applyHunk(path: string, header: string, mode: HunkMode): Promise<void>
-  applyLines(path: string, header: string, lineIndices: number[], mode: HunkMode): Promise<void>
-  commit(message: string, amend: boolean, sign?: boolean): Promise<void>
-  fetch(): Promise<void>
-  pull(): Promise<void>
-  push(setUpstream: boolean): Promise<void>
+  stage(paths: string[]): Promise<OpResult>
+  unstage(paths: string[]): Promise<OpResult>
+  discard(paths: string[]): Promise<OpResult>
+  applyHunk(path: string, header: string, mode: HunkMode): Promise<OpResult>
+  applyLines(path: string, header: string, lineIndices: number[], mode: HunkMode): Promise<OpResult>
+  commit(message: string, amend: boolean, sign?: boolean): Promise<OpResult>
+  fetch(): Promise<OpResult>
+  pull(): Promise<OpResult>
+  push(setUpstream: boolean): Promise<OpResult>
   cancelOp(): Promise<void>
-  switchBranch(name: string): Promise<void>
-  createBranch(name: string, andSwitch: boolean): Promise<void>
-  deleteBranch(name: string, force: boolean): Promise<void>
-  merge(name: string): Promise<void>
-  rebaseOnto(name: string): Promise<void>
-  cherryPick(hash: string): Promise<void>
-  stashPush(message: string, includeUntracked: boolean): Promise<void>
-  stashPop(index: number): Promise<void>
-  stashApply(index: number): Promise<void>
-  stashDrop(index: number): Promise<void>
+  switchBranch(name: string): Promise<OpResult>
+  createBranch(name: string, andSwitch: boolean): Promise<OpResult>
+  deleteBranch(name: string, force: boolean): Promise<OpResult>
+  merge(name: string): Promise<OpResult>
+  rebaseOnto(name: string): Promise<OpResult>
+  cherryPick(hash: string): Promise<OpResult>
+  stashPush(message: string, includeUntracked: boolean): Promise<OpResult>
+  stashPop(index: number): Promise<OpResult>
+  stashApply(index: number): Promise<OpResult>
+  stashDrop(index: number): Promise<OpResult>
   openMergeView(): void
   closeMergeView(): void
   setMergeActive(path: string | null): void
-  resolveConflict(path: string, text: string): Promise<void>
-  resolveWhole(path: string, side: 'ours' | 'theirs'): Promise<void>
-  abortOp(): Promise<void>
-  continueOp(): Promise<void>
+  resolveConflict(path: string, text: string): Promise<OpResult>
+  resolveWhole(path: string, side: 'ours' | 'theirs'): Promise<OpResult>
+  abortOp(): Promise<OpResult>
+  continueOp(): Promise<OpResult>
 }
 
 let lastFingerprint = ''
@@ -535,14 +551,17 @@ export const useStore = create<GitCityState>((set, get) => ({
 
   init: () => {
     // absent when the renderer runs in a plain browser (vite preview) instead of Electron
-    if (!hasApi()) return
-    window.gitCity.onProgress((p) => set({ progress: p }))
-    window.gitCity.onRepoChanged((reasons) => {
-      void get().refreshStatus()
+    const api = bridge()
+    if (!api) return
+    api.onProgress((p) => set({ progress: p }))
+    api.onRepoChanged(async (reasons) => {
+      // awaited, not fired and forgotten, because the reload pill below is
+      // decided by comparing the HEAD this brings back against the analysis
+      await get().refreshStatus()
       if (reasons.includes('head') || reasons.includes('refs')) {
-        void get().refreshBranches()
-        void get().refreshStashes()
-        void get().refreshTags()
+        // status is already current, and submodules/worktrees don't move on a
+        // ref change — this is the one caller that resyncs less than everything
+        void resync(set, get, ['branches', 'stashes', 'tags'])
         // "This branch" otherwise keeps showing the PR of the branch just
         // left — and that PR is filtered out of the Open list, so it appears
         // in the wrong place and nowhere else. Conversely, after checking out
@@ -560,11 +579,11 @@ export const useStore = create<GitCityState>((set, get) => ({
           // indefinitely while the Changes panel beside it showed a clean tree.
           // Only closing and reopening the repository fixed it (#29).
           if ((s.analysis?.snapshots.length ?? 0) === 0) void s.refreshAnalysis()
-          else set({ historyStale: true })
+          else if (headMoved(s)) set({ historyStale: true })
         }
       }
     })
-    window.gitCity
+    api
       .checkGit()
       .then((v) => set({ gitVersion: v }))
       .catch(() => set({ gitVersion: null }))
@@ -573,14 +592,16 @@ export const useStore = create<GitCityState>((set, get) => ({
   },
 
   openLocal: async () => {
-    if (!hasApi()) return
-    const path = await window.gitCity.selectFolder()
+    const api = bridge()
+    if (!api) return
+    const path = await api.selectFolder()
     if (!path) return
     await get().openPath(path)
   },
 
   openPath: async (path: string) => {
-    if (!hasApi()) return
+    const api = bridge()
+    if (!api) return
     // Probe the size first: a monorepo can take minutes to replay, and a
     // progress bar with no sense of scale reads as a hang (#12). Cheap enough
     // (two counting calls) that the common case is unaffected.
@@ -591,7 +612,7 @@ export const useStore = create<GitCityState>((set, get) => ({
     // second folder dialog (#25).
     set({ pendingProbe: path, error: null })
     try {
-      const warning = repoWarning(await window.gitCity.repoSize(path))
+      const warning = repoWarning(await api.repoSize(path))
       if (warning) {
         set({ pendingRepo: { path, warning } })
         return
@@ -601,14 +622,15 @@ export const useStore = create<GitCityState>((set, get) => ({
     } finally {
       set({ pendingProbe: null })
     }
-    await loadRepo(set, get, () => window.gitCity.analyzeRepo(path, 50), path)
+    await loadRepo(set, get, () => api.analyzeRepo(path, 50), path)
   },
 
   confirmPendingRepo: async () => {
+    const api = bridge()
     const pending = get().pendingRepo
-    if (!pending) return
+    if (!api || !pending) return
     set({ pendingRepo: null })
-    await loadRepo(set, get, () => window.gitCity.analyzeRepo(pending.path, 50), pending.path)
+    await loadRepo(set, get, () => api.analyzeRepo(pending.path, 50), pending.path)
   },
 
   cancelPendingRepo: () => set({ pendingRepo: null }),
@@ -621,11 +643,12 @@ export const useStore = create<GitCityState>((set, get) => ({
   },
 
   openUrl: async (url: string) => {
-    if (!hasApi()) return
+    const api = bridge()
+    if (!api) return
     set({ screen: 'loading', error: null, progress: null })
     try {
-      const path = await window.gitCity.cloneRepo(url)
-      await loadRepo(set, get, () => window.gitCity.analyzeRepo(path, 50), path)
+      const path = await api.cloneRepo(url)
+      await loadRepo(set, get, () => api.analyzeRepo(path, 50), path)
     } catch (err) {
       set({ screen: 'welcome', error: cleanError(err) })
     }
@@ -732,7 +755,7 @@ export const useStore = create<GitCityState>((set, get) => ({
   openCommit: (hash) => set({ commitDetailHash: hash, paletteOpen: false }),
   closeCommit: () => set({ commitDetailHash: null }),
   backToWelcome: () => {
-    if (hasApi()) void window.gitCity.watchStop()
+    void bridge()?.watchStop()
     lastFingerprint = ''
     set({
       ...REPO_STATE_RESET,
@@ -745,10 +768,11 @@ export const useStore = create<GitCityState>((set, get) => ({
   setPanel: (panel) => set((s) => ({ panel: s.panel === panel ? 'none' : panel })),
 
   refreshStatus: async () => {
+    const api = bridge()
     const { repoPath } = get()
-    if (!hasApi() || !repoPath) return
+    if (!api || !repoPath) return
     try {
-      const status = await window.gitCity.status(repoPath)
+      const status = await api.status(repoPath)
       const fp = statusFingerprint(status)
       if (get().statusError !== null) set({ statusError: null })
       if (fp === lastFingerprint) return
@@ -763,87 +787,38 @@ export const useStore = create<GitCityState>((set, get) => ({
     }
   },
 
-  refreshBranches: async () => {
-    const { repoPath } = get()
-    if (!hasApi() || !repoPath) return
-    try {
-      set({ branches: await window.gitCity.branches(repoPath) })
-    } catch {
-      /* ignore */
-    }
-  },
-
-  refreshStashes: async () => {
-    const { repoPath } = get()
-    if (!hasApi() || !repoPath) return
-    try {
-      set({ stashes: await window.gitCity.stashList(repoPath) })
-    } catch {
-      /* ignore */
-    }
-  },
-
-  refreshTags: async () => {
-    const { repoPath } = get()
-    if (!hasApi() || !repoPath) return
-    try {
-      set({ tags: await window.gitCity.tags(repoPath) })
-    } catch {
-      /* ignore */
-    }
-  },
-
-  refreshSubmodules: async () => {
-    const { repoPath } = get()
-    if (!hasApi() || !repoPath) return
-    try {
-      set({ submodules: await window.gitCity.submodules(repoPath) })
-    } catch {
-      /* ignore */
-    }
-  },
-
-  refreshWorktrees: async () => {
-    const { repoPath } = get()
-    if (!hasApi() || !repoPath) return
-    try {
-      set({ worktrees: await window.gitCity.worktrees(repoPath) })
-    } catch {
-      /* ignore */
-    }
-  },
+  resync: (views) => resync(set, get, views),
 
   updateSubmodules: (path) =>
-    runOp(set, get, 'Updating submodules…', (repo) => window.gitCity.updateSubmodules(repo, path)),
+    runOp(set, get, 'Updating submodules…', (api, repo) => api.updateSubmodules(repo, path)),
   addWorktree: (path, ref) =>
-    runOp(set, get, 'Adding worktree…', (repo) => window.gitCity.addWorktree(repo, path, ref)),
+    runOp(set, get, 'Adding worktree…', (api, repo) => api.addWorktree(repo, path, ref)),
   removeWorktree: (path, force) =>
-    runOp(set, get, 'Removing worktree…', (repo) =>
-      window.gitCity.removeWorktree(repo, path, force)
-    ),
+    runOp(set, get, 'Removing worktree…', (api, repo) => api.removeWorktree(repo, path, force)),
 
   setPrPanelOpen: (prPanelOpen) => {
     set({ prPanelOpen })
     if (prPanelOpen) void get().refreshHost()
   },
   refreshHost: async () => {
+    const api = bridge()
     const { repoPath } = get()
-    if (!hasApi() || !repoPath) return
+    if (!api || !repoPath) return
     set({ prLoading: true, hostError: null })
     // A slow gh call from the previous repository could otherwise land in the
     // new one's panel, offering "Check out" for a PR number that doesn't exist
     // there (#29).
     const stillHere = (): boolean => get().repoPath === repoPath
     try {
-      const auth = await window.gitCity.hostStatus(repoPath)
+      const auth = await api.hostStatus(repoPath)
       if (!stillHere()) return
       if (!auth.authed || !auth.isRepo) {
         set({ hostAuth: auth, pullRequests: [], currentPr: null, prsTruncated: false })
         return
       }
       const [list, currentPr] = await Promise.all([
-        window.gitCity.listPullRequests(repoPath),
-        window.gitCity.currentBranchPr(repoPath)
+        api.listPullRequests(repoPath),
+        api.currentBranchPr(repoPath)
       ])
       if (!stillHere()) return
       // A failed list is not an empty list. Rendering it as "No open pull
@@ -868,28 +843,25 @@ export const useStore = create<GitCityState>((set, get) => ({
     }
   },
   checkoutPr: (number) =>
-    runOp(
-      set,
-      get,
-      `Checking out PR #${number}…`,
-      (repo) => window.gitCity.checkoutPr(repo, number),
-      {
-        reanalyze: true
-      }
-    ),
+    runOp(set, get, `Checking out PR #${number}…`, (api, repo) => api.checkoutPr(repo, number), {
+      reanalyze: true
+    }),
   createPr: async (base, title, body) => {
-    await runOp(set, get, 'Creating pull request…', (repo) =>
-      window.gitCity.createPr(repo, base, title, body)
+    const result = await runOp(set, get, 'Creating pull request…', (api, repo) =>
+      api.createPr(repo, base, title, body)
     )
-    if (!get().opError) await get().refreshHost()
+    // was `if (!get().opError)` — the same opError-as-return-value idiom (#107)
+    if (result.ok) await get().refreshHost()
+    return result
   },
   reviewPrInCity: async (number, title) => {
+    const api = bridge()
     const { repoPath } = get()
-    if (!hasApi() || !repoPath) return
+    if (!api || !repoPath) return
     set({ reviewLoading: true, prPanelOpen: false })
     const stillHere = (): boolean => get().repoPath === repoPath
     try {
-      const res = await window.gitCity.pullRequestFiles(repoPath, number)
+      const res = await api.pullRequestFiles(repoPath, number)
       if (!stillHere()) return
       // "Reviewing #42 — 0 files" was asserted whenever the fetch failed: a
       // confident claim that the PR changes nothing (#24).
@@ -906,16 +878,17 @@ export const useStore = create<GitCityState>((set, get) => ({
   },
   clearReview: () => set({ review: null }),
   openExternal: (url) => {
-    if (hasApi()) void window.gitCity.openExternal(url)
+    void bridge()?.openExternal(url)
   },
   checkForUpdate: async (manual = false) => {
-    if (!hasApi()) return
+    const api = bridge()
+    if (!api) return
     // Only a check the user asked for reports itself. The startup one is
     // deliberately invisible — it must not make the Settings button read
     // "No update found" before anyone has pressed it.
     if (manual) set({ updateCheck: 'checking' })
     try {
-      const update = await window.gitCity.checkForUpdate()
+      const update = await api.checkForUpdate()
       if (update) set({ update })
     } catch {
       /* offline / rate-limited — the main process already fails soft */
@@ -933,63 +906,49 @@ export const useStore = create<GitCityState>((set, get) => ({
   setReflogOpen: (reflogOpen) => set({ reflogOpen }),
 
   createTag: (name, ref) =>
-    runOp(set, get, 'Creating tag…', (repo) => window.gitCity.createTag(repo, name, ref)),
-  deleteTag: (name) =>
-    runOp(set, get, 'Deleting tag…', (repo) => window.gitCity.deleteTag(repo, name)),
+    runOp(set, get, 'Creating tag…', (api, repo) => api.createTag(repo, name, ref)),
+  deleteTag: (name) => runOp(set, get, 'Deleting tag…', (api, repo) => api.deleteTag(repo, name)),
 
   // HEAD@{1} is the position before the last HEAD move; --keep refuses rather
   // than clobber uncommitted work, so one-click undo is always safe.
   undoLast: () =>
-    runOp(set, get, 'Undoing…', (repo) => window.gitCity.resetTo(repo, 'HEAD@{1}', 'keep'), {
+    runOp(set, get, 'Undoing…', (api, repo) => api.resetTo(repo, 'HEAD@{1}', 'keep'), {
       reanalyze: true,
       effect: 'rewind'
     }),
   resetToReflog: (ref, mode) =>
-    runOp(set, get, 'Restoring…', (repo) => window.gitCity.resetTo(repo, ref, mode), {
+    runOp(set, get, 'Restoring…', (api, repo) => api.resetTo(repo, ref, mode), {
       reanalyze: true,
       effect: 'rewind'
     }),
   recoverBranch: (name, ref) =>
-    runOp(set, get, 'Recovering…', (repo) => window.gitCity.recoverToBranch(repo, name, ref), {
+    runOp(set, get, 'Recovering…', (api, repo) => api.recoverToBranch(repo, name, ref), {
       reanalyze: true
     }),
 
+  // Was a line-for-line copy of runOp, and had drifted three ways: it resynced
+  // two views of six, it showed git's raw text where every other operation
+  // shows the curated sentence, and it re-inlined shouldSurfaceError. It
+  // existed only because runOp returned void and this had to report an
+  // outcome (#107).
   runInteractiveRebase: async (base, entries) => {
-    const { repoPath } = get()
-    if (!hasApi() || !repoPath) return false
-    set({ opInProgress: { label: 'Rebasing…', cancellable: false }, opError: null })
-    let result: OpResult
-    try {
-      result = await window.gitCity.rebaseInteractive(repoPath, base, entries)
-    } catch (err) {
-      set({ opInProgress: null, opError: { message: cleanError(err) } })
-      return false
-    }
-    set({ opInProgress: null })
-    await get().refreshStatus()
-    await get().refreshBranches()
-    if (!result.ok) {
-      if (result.code === 'conflict') {
-        set({
-          rebaseOpen: false,
-          mergeView: { active: result.conflicts?.[0] ?? null, source: 'rebase' }
-        })
-      } else {
-        set({
-          opError: { message: result.message ?? 'Rebase failed.', gitOutput: result.gitOutput }
-        })
-      }
-      return false
-    }
-    set({ rebaseOpen: false })
-    triggerEffect(set, get, 'commit-settle')
-    await get().refreshAnalysis()
-    return true
+    const result = await runOp(
+      set,
+      get,
+      'Rebasing…',
+      (api, repo) => api.rebaseInteractive(repo, base, entries),
+      { conflictsOpenMerge: true, effect: 'commit-settle', reanalyze: true }
+    )
+    // stopping on a conflict hands the user to the merge view, so the todo
+    // list they were editing is finished with either way
+    if (result.ok || result.code === 'conflict') set({ rebaseOpen: false })
+    return result
   },
 
   refreshAnalysis: async () => {
+    const api = bridge()
     const { repoPath } = get()
-    if (!hasApi() || !repoPath) return
+    if (!api || !repoPath) return
     // Decided up front, and from the timeline alone.
     //
     // isLiveState() also compares the working tree's headHash against the newest
@@ -1004,15 +963,24 @@ export const useStore = create<GitCityState>((set, get) => ({
       !before.analysis ||
       before.analysis.snapshots.length === 0 ||
       before.snapshotIndex === before.analysis.snapshots.length - 1
+    // Which commit they were looking at, asked of the analysis that index still
+    // belongs to. Held by commit rather than by array position because
+    // re-sampling moves where the timeline's stops fall, so afterwards the same
+    // index names a different commit — or nothing at all, the array having got
+    // shorter (#71).
+    const viewingCommit = before.analysis?.snapshots[before.snapshotIndex]?.index
     set({ reanalyzing: true, historyStale: false })
     try {
-      let analysis = await window.gitCity.analyzeIncremental(repoPath)
-      if (!analysis) analysis = await window.gitCity.analyzeRepo(repoPath, 50)
-      set((s) => ({
+      let analysis = await api.analyzeIncremental(repoPath)
+      if (!analysis) analysis = await api.analyzeRepo(repoPath, 50)
+      set({
         analysis,
-        // if the user was watching the latest state, keep them there
-        snapshotIndex: wasLive ? analysis!.snapshots.length - 1 : s.snapshotIndex
-      }))
+        // watching the latest state (or nowhere in particular) → stay at the tip
+        snapshotIndex:
+          wasLive || viewingCommit === undefined
+            ? analysis.snapshots.length - 1
+            : snapshotAtCommit(analysis, viewingCommit)
+      })
     } catch (err) {
       set({ opError: { message: cleanError(err) } })
     } finally {
@@ -1034,9 +1002,9 @@ export const useStore = create<GitCityState>((set, get) => ({
   },
 
   // --- mutating actions (all funnel through runOp) ---
-  stage: (paths) => runOp(set, get, 'Staging…', (repo) => window.gitCity.stage(repo, paths)),
-  unstage: (paths) => runOp(set, get, 'Unstaging…', (repo) => window.gitCity.unstage(repo, paths)),
-  discard: (paths) => runOp(set, get, 'Discarding…', (repo) => window.gitCity.discard(repo, paths)),
+  stage: (paths) => runOp(set, get, 'Staging…', (api, repo) => api.stage(repo, paths)),
+  unstage: (paths) => runOp(set, get, 'Unstaging…', (api, repo) => api.unstage(repo, paths)),
+  discard: (paths) => runOp(set, get, 'Discarding…', (api, repo) => api.discard(repo, paths)),
   applyHunk: (path, header, mode) => {
     const label =
       mode === 'stage'
@@ -1044,7 +1012,7 @@ export const useStore = create<GitCityState>((set, get) => ({
         : mode === 'unstage'
           ? 'Unstaging hunk…'
           : 'Discarding hunk…'
-    return runOp(set, get, label, (repo) => window.gitCity.applyHunk(repo, path, header, mode))
+    return runOp(set, get, label, (api, repo) => api.applyHunk(repo, path, header, mode))
   },
   applyLines: (path, header, lineIndices, mode) => {
     const n = lineIndices.length
@@ -1054,8 +1022,8 @@ export const useStore = create<GitCityState>((set, get) => ({
         : mode === 'unstage'
           ? `Unstaging ${n} line${n === 1 ? '' : 's'}…`
           : `Discarding ${n} line${n === 1 ? '' : 's'}…`
-    return runOp(set, get, label, (repo) =>
-      window.gitCity.applyLines(repo, path, header, lineIndices, mode)
+    return runOp(set, get, label, (api, repo) =>
+      api.applyLines(repo, path, header, lineIndices, mode)
     )
   },
   commit: (message, amend, sign) =>
@@ -1063,73 +1031,66 @@ export const useStore = create<GitCityState>((set, get) => ({
       set,
       get,
       amend ? 'Amending…' : 'Committing…',
-      (repo) => window.gitCity.commit(repo, message, amend, sign),
+      (api, repo) => api.commit(repo, message, amend, sign),
       { reanalyze: true, effect: 'commit-settle' }
     ),
   // fetch never moves HEAD — it only updates remote refs, so no re-analysis;
-  // the payoff is refreshBranches() (runs after every op) surfacing updated remotes
+  // the payoff is the branches view (resynced after every op) surfacing updated remotes
   // cancellable: these three go through simple-git with an AbortSignal, so
   // cancelCurrentOp actually stops them. Nothing else does (#26).
-  fetch: () =>
-    runOp(set, get, 'Fetching…', (repo) => window.gitCity.fetch(repo), { cancellable: true }),
+  fetch: () => runOp(set, get, 'Fetching…', (api, repo) => api.fetch(repo), { cancellable: true }),
   pull: () =>
-    runOp(set, get, 'Pulling…', (repo) => window.gitCity.pull(repo), {
+    runOp(set, get, 'Pulling…', (api, repo) => api.pull(repo), {
       cancellable: true,
       reanalyze: true,
       effect: 'pull',
       conflictsOpenMerge: true
     }),
   push: (setUpstream) =>
-    runOp(set, get, 'Pushing…', (repo) => window.gitCity.push(repo, setUpstream), {
+    runOp(set, get, 'Pushing…', (api, repo) => api.push(repo, setUpstream), {
       cancellable: true,
       effect: 'push'
     }),
   cancelOp: async () => {
-    if (hasApi()) await window.gitCity.cancelOp()
+    await bridge()?.cancelOp()
   },
   switchBranch: (name) =>
-    runOp(set, get, `Switching to ${name}…`, (repo) => window.gitCity.switchBranch(repo, name), {
+    runOp(set, get, `Switching to ${name}…`, (api, repo) => api.switchBranch(repo, name), {
       reanalyze: true
     }),
   createBranch: (name, andSwitch) =>
-    runOp(
-      set,
-      get,
-      'Creating branch…',
-      (repo) => window.gitCity.createBranch(repo, name, andSwitch),
-      { reanalyze: andSwitch }
-    ),
+    runOp(set, get, 'Creating branch…', (api, repo) => api.createBranch(repo, name, andSwitch), {
+      reanalyze: andSwitch
+    }),
   deleteBranch: (name, force) =>
-    runOp(set, get, 'Deleting branch…', (repo) => window.gitCity.deleteBranch(repo, name, force)),
+    runOp(set, get, 'Deleting branch…', (api, repo) => api.deleteBranch(repo, name, force)),
   merge: (name) =>
-    runOp(set, get, `Merging ${name}…`, (repo) => window.gitCity.merge(repo, name), {
+    runOp(set, get, `Merging ${name}…`, (api, repo) => api.merge(repo, name), {
       reanalyze: true,
       conflictsOpenMerge: true
     }),
   rebaseOnto: (name) =>
-    runOp(set, get, `Rebasing onto ${name}…`, (repo) => window.gitCity.rebase(repo, name), {
+    runOp(set, get, `Rebasing onto ${name}…`, (api, repo) => api.rebase(repo, name), {
       reanalyze: true,
       conflictsOpenMerge: true
     }),
   cherryPick: (hash) =>
-    runOp(set, get, 'Cherry-picking…', (repo) => window.gitCity.cherryPick(repo, hash), {
+    runOp(set, get, 'Cherry-picking…', (api, repo) => api.cherryPick(repo, hash), {
       reanalyze: true,
       conflictsOpenMerge: true
     }),
   stashPush: (message, includeUntracked) =>
-    runOp(set, get, 'Stashing…', (repo) =>
-      window.gitCity.stashPush(repo, message, includeUntracked)
-    ),
+    runOp(set, get, 'Stashing…', (api, repo) => api.stashPush(repo, message, includeUntracked)),
   stashPop: (index) =>
-    runOp(set, get, 'Applying stash…', (repo) => window.gitCity.stashPop(repo, index), {
+    runOp(set, get, 'Applying stash…', (api, repo) => api.stashPop(repo, index), {
       conflictsOpenMerge: true
     }),
   stashApply: (index) =>
-    runOp(set, get, 'Applying stash…', (repo) => window.gitCity.stashApply(repo, index), {
+    runOp(set, get, 'Applying stash…', (api, repo) => api.stashApply(repo, index), {
       conflictsOpenMerge: true
     }),
   stashDrop: (index) =>
-    runOp(set, get, 'Dropping stash…', (repo) => window.gitCity.stashDrop(repo, index)),
+    runOp(set, get, 'Dropping stash…', (api, repo) => api.stashDrop(repo, index)),
 
   openMergeView: () => {
     const st = get().workingStatus
@@ -1139,35 +1100,19 @@ export const useStore = create<GitCityState>((set, get) => ({
   setMergeActive: (path) =>
     set((s) => (s.mergeView ? { mergeView: { ...s.mergeView, active: path } } : {})),
   resolveConflict: (path, text) =>
-    runOp(set, get, 'Marking resolved…', (repo) =>
-      window.gitCity.conflictResolve(repo, path, text)
-    ),
+    runOp(set, get, 'Marking resolved…', (api, repo) => api.conflictResolve(repo, path, text)),
   resolveWhole: (path, side) =>
-    runOp(set, get, 'Marking resolved…', (repo) =>
-      window.gitCity.conflictResolveWhole(repo, path, side)
-    ),
+    runOp(set, get, 'Marking resolved…', (api, repo) => api.conflictResolveWhole(repo, path, side)),
   abortOp: () => {
     const source = get().workingStatus?.opState ?? 'merge'
-    const fn =
-      source === 'rebase'
-        ? window.gitCity.rebaseAbort
-        : source === 'cherry-pick'
-          ? window.gitCity.cherryPickAbort
-          : window.gitCity.mergeAbort
-    return runOp(set, get, 'Aborting…', (repo) => fn(repo), {
+    return runOp(set, get, 'Aborting…', (api, repo) => abortFor(api, source, repo), {
       reanalyze: true,
       closeMerge: true
     })
   },
   continueOp: () => {
     const source = get().workingStatus?.opState ?? 'merge'
-    const fn =
-      source === 'rebase'
-        ? window.gitCity.rebaseContinue
-        : source === 'cherry-pick'
-          ? window.gitCity.cherryPickContinue
-          : window.gitCity.mergeContinue
-    return runOp(set, get, 'Continuing…', (repo) => fn(repo), {
+    return runOp(set, get, 'Continuing…', (api, repo) => continueFor(api, source, repo), {
       reanalyze: true,
       conflictsOpenMerge: true,
       closeMergeOnSuccess: true,
@@ -1177,6 +1122,91 @@ export const useStore = create<GitCityState>((set, get) => ({
 }))
 
 // ---------- helpers ----------
+
+/** Which abort an in-progress operation needs. */
+function abortFor(api: GitCityApi, source: RepoOpState, repo: string): Promise<OpResult> {
+  if (source === 'rebase') return api.rebaseAbort(repo)
+  if (source === 'cherry-pick') return api.cherryPickAbort(repo)
+  return api.mergeAbort(repo)
+}
+
+/** ...and which continue. */
+function continueFor(api: GitCityApi, source: RepoOpState, repo: string): Promise<OpResult> {
+  if (source === 'rebase') return api.rebaseContinue(repo)
+  if (source === 'cherry-pick') return api.cherryPickContinue(repo)
+  return api.mergeContinue(repo)
+}
+
+/**
+ * "The repository changed, reload what that invalidated."
+ *
+ * One list, and one way to refresh an entry in it. This was written out four
+ * times at four different widths, over five byte-for-byte copies of the same
+ * eight-line refresher — so an interactive rebase that dropped a stashed
+ * commit left the stash list still showing it (#107). Adding a view is one
+ * entry here, not a line in four places.
+ *
+ * The key is the state field it fills.
+ */
+const REPO_VIEWS = {
+  branches: (api: GitCityApi, repo: string) => api.branches(repo),
+  stashes: (api: GitCityApi, repo: string) => api.stashList(repo),
+  tags: (api: GitCityApi, repo: string) => api.tags(repo),
+  submodules: (api: GitCityApi, repo: string) => api.submodules(repo),
+  worktrees: (api: GitCityApi, repo: string) => api.worktrees(repo)
+} as const
+
+/** A view that goes stale when the repository changes. */
+type RepoView = 'status' | keyof typeof REPO_VIEWS
+
+const ALL_VIEWS: readonly RepoView[] = [
+  'status',
+  'branches',
+  'stashes',
+  'tags',
+  'submodules',
+  'worktrees'
+]
+
+/**
+ * Reload the given views (all of them by default).
+ *
+ * `status` goes first and is awaited on its own, because what comes after
+ * depends on it: `refreshAnalysis` reads the HEAD it brings back, and the
+ * reload pill is decided by comparing that against the analysis. The rest are
+ * independent read-only commands, so they run together rather than queueing six
+ * git spawns end to end behind a click on "Stage".
+ *
+ * A view that fails to load is left as it was rather than surfaced: these run
+ * after every operation, and a `git worktree list` that failed is not worth
+ * replacing the outcome of what the user actually did. `status` is the
+ * exception — it has its own error state, because an unreadable working tree
+ * rendered as an empty one reads as "clean" (#26).
+ */
+async function resync(
+  set: (partial: Partial<GitCityState>) => void,
+  get: () => GitCityState,
+  views: readonly RepoView[] = ALL_VIEWS
+): Promise<void> {
+  if (views.includes('status')) await get().refreshStatus()
+  const api = bridge()
+  const { repoPath } = get()
+  if (!api || !repoPath) return
+  await Promise.all(
+    views
+      .filter((v): v is keyof typeof REPO_VIEWS => v !== 'status')
+      .map(async (view) => {
+        try {
+          set({ [view]: await REPO_VIEWS[view](api, repoPath) } as Partial<GitCityState>)
+        } catch {
+          /* see above: a view that won't load is not worth a toast */
+        }
+      })
+  )
+}
+
+/** What `runOp` returns when there is no repository open, so it never ran. */
+const NOT_RUN: OpResult = { ok: false, message: 'No repository is open.' }
 
 interface RunOpts {
   /** the op honours cancelCurrentOp — fetch/pull/push only */
@@ -1188,32 +1218,36 @@ interface RunOpts {
   closeMergeOnSuccess?: boolean
 }
 
-/** Shared plumbing for every mutating op: guard, spinner, error surfacing, refresh. */
+/**
+ * Shared plumbing for every mutating op: guard, spinner, error surfacing, resync.
+ *
+ * Returns the `OpResult` it already had. Callers that need to know whether the
+ * op worked ask the result — before this they compared `opError` before and
+ * after, which is a state field standing in for a return value, and two of
+ * them then had to `dismissError()` the thing they had just read (#107).
+ */
 async function runOp(
   set: (partial: Partial<GitCityState>) => void,
   get: () => GitCityState,
   label: string,
-  fn: (repoPath: string) => Promise<OpResult>,
+  fn: (api: GitCityApi, repoPath: string) => Promise<OpResult>,
   opts: RunOpts = {}
-): Promise<void> {
+): Promise<OpResult> {
+  const api = bridge()
   const { repoPath } = get()
-  if (!hasApi() || !repoPath) return
+  if (!api || !repoPath) return NOT_RUN
   set({ opInProgress: { label, cancellable: opts.cancellable === true }, opError: null })
   let result: OpResult
   try {
-    result = await fn(repoPath)
+    result = await fn(api, repoPath)
   } catch (err) {
-    set({ opInProgress: null, opError: { message: cleanError(err) } })
-    return
+    const failure: OpResult = { ok: false, message: cleanError(err) }
+set({ opInProgress: null, opError: { message: failure.message ?? '', code: failure.code } })
+    return failure
   }
   set({ opInProgress: null })
 
-  await get().refreshStatus()
-  await get().refreshBranches()
-  await get().refreshStashes()
-  await get().refreshTags()
-  await get().refreshSubmodules()
-  await get().refreshWorktrees()
+  await resync(set, get)
 
   if (!result.ok) {
     if (result.code === 'conflict' && opts.conflictsOpenMerge) {
@@ -1224,14 +1258,15 @@ async function runOp(
       // opMessage, not result.message: for the codes we recognise, git's own
       // first line is written for someone mid-task in a terminal and reads
       // badly in a toast with no context (#26).
-      set({ opError: { message: opMessage(result), gitOutput: result.gitOutput } })
+      set({ opError: { message: opMessage(result), code: result.code, gitOutput: result.gitOutput } })
     }
-    return
+    return result
   }
 
   if (opts.closeMerge || opts.closeMergeOnSuccess) set({ mergeView: null })
   if (opts.effect) triggerEffect(set, get, opts.effect)
   if (opts.reanalyze) await get().refreshAnalysis()
+  return result
 }
 
 function triggerEffect(
@@ -1267,14 +1302,10 @@ async function loadRepo(
       reviewLoading: false,
       screen: 'city'
     })
-    if (hasApi()) {
-      await window.gitCity.watchStart(path)
-      await get().refreshStatus()
-      await get().refreshBranches()
-      await get().refreshStashes()
-      await get().refreshTags()
-      await get().refreshSubmodules()
-      await get().refreshWorktrees()
+    const api = bridge()
+    if (api) {
+      await api.watchStart(path)
+      await resync(set, get)
       // GitHub is a network call — populate the PR/CI state in the background
       void get().refreshHost()
     }

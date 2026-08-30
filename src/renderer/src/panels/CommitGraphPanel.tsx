@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
-import type { CommitGraph, GraphCommit } from '../../../shared/types'
-import { cleanError, hasApi, useStore } from '../store'
+import { useMemo, useState } from 'react'
+import type { GraphCommit } from '../../../shared/types'
+import { useRepoQuery } from '../lib/repoQuery'
+import { useStore } from '../store'
 
 const ROW_H = 34
 const LANE_W = 20
@@ -31,35 +32,22 @@ export default function CommitGraphPanel(): React.JSX.Element | null {
   const cherryPick = useStore((s) => s.cherryPick)
   const switchBranch = useStore((s) => s.switchBranch)
 
-  const [graph, setGraph] = useState<CommitGraph | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [retryNonce, setRetryNonce] = useState(0)
   const [active, setActive] = useState<string | null>(null)
 
-  useEffect(() => {
-    if (!graphOpen || !repoPath || !hasApi()) return
-    let cancelled = false
-    setLoading(true)
-    setError(null)
-    void window.gitCity
-      .commitGraph(repoPath, 500)
-      .then((g) => !cancelled && setGraph(g))
-      .catch((err) => {
-        if (!cancelled) {
-          setGraph(null)
-          setError(cleanError(err))
-        }
-      })
-      .finally(() => !cancelled && setLoading(false))
-    return () => {
-      cancelled = true
-    }
-    // headHash: a commit made while the graph was open never appeared, the
-    // white HEAD ring stayed on the old tip, and a branch chip stayed attached
-    // to the pre-checkout commit — with nothing saying the view was stale and
-    // no refresh control outside the error branch (#29).
-  }, [graphOpen, repoPath, retryNonce, headHash])
+  // headHash is in the key, not an argument: a commit made while the graph was
+  // open never appeared, the white HEAD ring stayed on the old tip, and a
+  // branch chip stayed attached to the pre-checkout commit — with nothing
+  // saying the view was stale and no refresh control outside the error branch
+  // (#29).
+  const {
+    data: graph,
+    loading,
+    error,
+    reload
+  } = useRepoQuery(
+    graphOpen && repoPath ? ([repoPath, headHash ?? null] as const) : null,
+    (api, [repo]) => api.commitGraph(repo, 500)
+  )
 
   const rowIndex = useMemo(() => {
     const m = new Map<string, GraphCommit>()
@@ -86,7 +74,7 @@ export default function CommitGraphPanel(): React.JSX.Element | null {
         {!loading && error && (
           <div className="panel-error">
             <span>{error}</span>
-            <button onClick={() => setRetryNonce((n) => n + 1)}>Retry</button>
+            <button onClick={reload}>Retry</button>
           </div>
         )}
         {!loading && graph && (

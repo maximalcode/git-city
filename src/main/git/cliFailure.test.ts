@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { classifyCliFailure, firstLine, TIMED_OUT } from './cliFailure'
+import { classifyCliFailure, firstCliLine, TIMED_OUT } from './cliFailure'
 
 /**
  * Every 'offline' here is a case where the panel used to say "Not logged in —
@@ -35,23 +35,23 @@ describe('classifyCliFailure', () => {
   })
 })
 
-describe('firstLine', () => {
+describe('firstCliLine', () => {
   it('strips the level prefix the CLIs lead with', () => {
-    expect(firstLine('error: something broke\nmore detail')).toBe('something broke')
+    expect(firstCliLine('error: something broke\nmore detail')).toBe('something broke')
   })
 
   it('skips blank lines rather than returning nothing', () => {
-    expect(firstLine('\n\n  the real message  \n')).toBe('the real message')
+    expect(firstCliLine('\n\n  the real message  \n')).toBe('the real message')
   })
 
   it('caps a CLI that answers with a paragraph', () => {
     const long = 'x'.repeat(400)
-    const out = firstLine(long)
+    const out = firstCliLine(long)
     expect(out.length).toBeLessThanOrEqual(160)
     expect(out.endsWith('…')).toBe(true)
   })
 
   it('returns empty string when there is nothing to show', () => {
-    expect(firstLine('   \n  ')).toBe('')
+    expect(firstCliLine('   \n  ')).toBe('')
   })
 })

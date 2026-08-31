@@ -1,7 +1,7 @@
 import type { OpResult, StashEntry } from '../../shared/types'
 import { runGit, runGitResult } from './exec'
-import { failFrom, ok } from './result'
-import { withConflicts } from './merge'
+import { failFrom, nothingToDo, ok } from './result'
+import { gitOp } from './gitOp'
 
 export async function stashList(repoPath: string): Promise<StashEntry[]> {
   const raw = await runGit(repoPath, ['stash', 'list', '--format=%gd%x09%at%x09%gs'])
@@ -31,25 +31,20 @@ export async function stashPush(
   const res = await runGitResult(repoPath, args)
   if (res.code !== 0) return failFrom(res)
   if (/No local changes to save/i.test(res.stdout + res.stderr)) {
-    return { ok: false, code: 'nothing-to-do', message: 'No local changes to stash.' }
+    return nothingToDo('No local changes to stash.')
   }
   return ok()
 }
 
 /** NOTE: a pop that hits conflicts keeps the stash entry — the UI re-lists and says so. */
 export async function stashPop(repoPath: string, index: number): Promise<OpResult> {
-  const res = await runGitResult(repoPath, ['stash', 'pop', `stash@{${index}}`])
-  if (res.code === 0) return ok()
-  return withConflicts(repoPath, failFrom(res))
+  return gitOp(repoPath, ['stash', 'pop', `stash@{${index}}`], { conflicts: true })
 }
 
 export async function stashApply(repoPath: string, index: number): Promise<OpResult> {
-  const res = await runGitResult(repoPath, ['stash', 'apply', `stash@{${index}}`])
-  if (res.code === 0) return ok()
-  return withConflicts(repoPath, failFrom(res))
+  return gitOp(repoPath, ['stash', 'apply', `stash@{${index}}`], { conflicts: true })
 }
 
 export async function stashDrop(repoPath: string, index: number): Promise<OpResult> {
-  const res = await runGitResult(repoPath, ['stash', 'drop', `stash@{${index}}`])
-  return res.code === 0 ? ok() : failFrom(res)
+  return gitOp(repoPath, ['stash', 'drop', `stash@{${index}}`])
 }

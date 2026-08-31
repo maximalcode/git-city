@@ -40,7 +40,7 @@ import { checkForUpdate } from './updates'
 import { readConflictFile, resolveConflictFile, resolveWholeFile } from './git/conflicts'
 import { mergeAbort, mergeBranch, mergeContinue } from './git/merge'
 import { withRepoLock } from './git/queue'
-import { FriendlyError, failFromError } from './git/result'
+import { FriendlyError, failFromError, stripNoise } from './git/result'
 import { analysisFailedMessage } from './git/openErrors'
 import { discardFiles, stageFiles, unstageFiles } from './git/stage'
 import { stashApply, stashDrop, stashList, stashPop, stashPush } from './git/stash'
@@ -88,10 +88,7 @@ function readOnly<T>(
  */
 function gitDetail(err: unknown, repoPath: string): string | null {
   if (!(err instanceof Error)) return null
-  const line = err.message
-    .split('\n')
-    .map((l) => l.replace(/^(fatal|error|warning):\s*/i, '').trim())
-    .find((l) => l.length > 0)
+  const line = stripNoise(err.message)[0]
   if (!line) return null
   // Our own failure text ("git log --first-parent … exited with 128") tells the
   // user nothing and exposes the invocation; the console.error above keeps it.

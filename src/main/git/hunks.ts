@@ -1,6 +1,7 @@
 import type { DiffLine, FileHunks, HunkInfo, HunkMode, OpResult } from '../../shared/types'
 import { runGitResult } from './exec'
-import { failFrom, ok } from './result'
+import { nothingToDo } from './result'
+import { gitOp } from './gitOp'
 
 /**
  * Partial (hunk-level) staging — the core of `git add -p`. We never reconstruct
@@ -148,7 +149,7 @@ export async function applyHunk(
   // edit, or another hunk was staged first) matching fails and we ask for a reopen.
   const hunkText = hunks.find((h) => h.startsWith(hunkHeader))
   if (!hunkText) {
-    return { ok: false, code: 'nothing-to-do', message: 'This change moved — reopen the file.' }
+    return nothingToDo('This change moved — reopen the file.')
   }
 
   const patch = header + hunkText
@@ -157,8 +158,7 @@ export async function applyHunk(
   if (mode === 'unstage' || mode === 'discard') args.push('--reverse')
   args.push('-') // read the patch from stdin
 
-  const res = await runGitResult(repoPath, args, { input: patch })
-  return res.code === 0 ? ok() : failFrom(res)
+  return gitOp(repoPath, args, { input: patch })
 }
 
 /**
@@ -179,17 +179,14 @@ export async function applyLines(
 
   const hunkText = hunks.find((h) => h.startsWith(hunkHeader))
   if (!hunkText) {
-    return { ok: false, code: 'nothing-to-do', message: 'This change moved — reopen the file.' }
+    return nothingToDo('This change moved — reopen the file.')
   }
 
   const rebuilt = buildLinePatch(hunkText, lineIndices)
   if (!rebuilt) {
-    return {
-      ok: false,
-      code: 'nothing-to-do',
-      message:
-        'Select at least one changed line (use the whole hunk for files with no trailing newline).'
-    }
+    return nothingToDo(
+      'Select at least one changed line (use the whole hunk for files with no trailing newline).'
+    )
   }
 
   const patch = header + rebuilt
@@ -198,6 +195,5 @@ export async function applyLines(
   if (mode === 'unstage' || mode === 'discard') args.push('--reverse')
   args.push('--recount', '-')
 
-  const res = await runGitResult(repoPath, args, { input: patch })
-  return res.code === 0 ? ok() : failFrom(res)
+  return gitOp(repoPath, args, { input: patch })
 }

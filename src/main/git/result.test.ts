@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { classifyGitError, failFrom, failFromError, ok, optionLikeName } from './result'
+import {
+  classifyGitError,
+  failFrom,
+  failFromError,
+  nothingToDo,
+  ok,
+  optionLikeName,
+  stripNoise
+} from './result'
 
 describe('classifyGitError', () => {
   const cases: [string, string][] = [
@@ -103,5 +111,36 @@ describe('optionLikeName', () => {
     expect(optionLikeName('v1.0')).toBeNull()
     expect(optionLikeName('feature/x-y')).toBeNull()
     expect(optionLikeName('weird-but-fine')).toBeNull()
+  })
+})
+
+describe('nothingToDo', () => {
+  it('builds the failure the eight hand-written literals used to spell out', () => {
+    expect(nothingToDo('Commit message is empty.')).toEqual({
+      ok: false,
+      code: 'nothing-to-do',
+      message: 'Commit message is empty.'
+    })
+  })
+})
+
+describe('stripNoise', () => {
+  it('strips severity prefixes and drops empty lines', () => {
+    expect(stripNoise('fatal: not a repo\n\n  \nerror: bad thing\nwarning: heed\n')).toEqual([
+      'not a repo',
+      'bad thing',
+      'heed'
+    ])
+  })
+
+  it('leaves ordinary lines untouched', () => {
+    expect(stripNoise('To github.com:you/repo.git\n ! [rejected] main -> main')).toEqual([
+      'To github.com:you/repo.git',
+      '! [rejected] main -> main'
+    ])
+  })
+
+  it('returns an empty array for empty output', () => {
+    expect(stripNoise('')).toEqual([])
   })
 })

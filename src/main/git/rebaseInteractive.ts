@@ -3,8 +3,8 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 import type { OpResult, RebaseEntry } from '../../shared/types'
 import { runGit, runGitResult } from './exec'
-import { failFrom, ok } from './result'
-import { withConflicts } from './merge'
+import { nothingToDo } from './result'
+import { gitOp } from './gitOp'
 
 /**
  * Load the last `count` first-parent commits of HEAD for the interactive-rebase
@@ -60,12 +60,11 @@ export async function runInteractiveRebase(
   entries: RebaseEntry[]
 ): Promise<OpResult> {
   const ordered = [...entries].reverse() // oldest-first for the todo
-  if (ordered.length === 0)
-    return { ok: false, code: 'nothing-to-do', message: 'Nothing to rebase.' }
+  if (ordered.length === 0) return nothingToDo('Nothing to rebase.')
   // a squash can't be the first line — promote it to pick
   if (ordered[0].action === 'squash') ordered[0] = { ...ordered[0], action: 'pick' }
   if (ordered.every((e) => e.action === 'drop')) {
-    return { ok: false, code: 'nothing-to-do', message: 'Cannot drop every commit.' }
+    return nothingToDo('Cannot drop every commit.')
   }
 
   const todo = ordered.map((e) => `${e.action} ${e.hash}`).join('\n') + '\n'
@@ -81,9 +80,7 @@ export async function runInteractiveRebase(
   else args.push('--root')
 
   try {
-    const res = await runGitResult(repoPath, args, { env })
-    if (res.code === 0) return ok()
-    return withConflicts(repoPath, failFrom(res))
+    return await gitOp(repoPath, args, { conflicts: true, env })
   } finally {
     // the todo file lives in the shared temp dir — don't leave it behind
     await unlink(todoFile).catch(() => {})

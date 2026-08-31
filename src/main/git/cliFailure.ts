@@ -11,6 +11,8 @@
  * network stack, and these are the strings that stack produces.
  */
 
+import { stripNoise } from './result'
+
 /**
  * How long any forge CLI is given to answer before we kill it.
  *
@@ -43,14 +45,11 @@ export function classifyCliFailure(output: string): CliFailure {
 /**
  * First useful line of CLI output, for showing inside our own sentence.
  *
- * Capped, and the leading "error:"/"failed to…" noise stripped, because this
- * goes into a panel and the CLIs are fond of multi-paragraph advice.
+ * Capped, because this goes into a panel and the CLIs are fond of
+ * multi-paragraph advice. The prefix-stripping is the shared stripNoise (#113);
+ * forge output has no git transport chatter to skip past.
  */
-export function firstLine(output: string, max = 160): string {
-  const line =
-    output
-      .split('\n')
-      .map((l) => l.replace(/^(error|fatal|warning):\s*/i, '').trim())
-      .find((l) => l.length > 0) ?? ''
+export function firstCliLine(output: string, max = 160): string {
+  const line = stripNoise(output)[0] ?? ''
   return line.length > max ? `${line.slice(0, max - 1)}…` : line
 }

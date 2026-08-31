@@ -61,6 +61,16 @@ export function ok(message?: string): OpResult {
 }
 
 /**
+ * A failure that means git was fine but had nothing to do — an empty commit
+ * message, an empty stash, a hunk that moved. The UI words these gently rather
+ * than as errors, which is why they get a constructor like ok()'s instead of
+ * twenty OpResult literals spelling the same shape (#113).
+ */
+export function nothingToDo(message: string): OpResult {
+  return { ok: false, code: 'nothing-to-do', message }
+}
+
+/**
  * Guard for user-supplied names passed to git as positionals: a name starting
  * with '-' would be parsed as an option (e.g. a tag named '-d' turning a
  * create into a delete). Returns a failure OpResult, or null when fine.
@@ -102,10 +112,19 @@ export function failFromError(err: unknown): OpResult {
  */
 const TRANSPORT_LINE = /^(To|From|Pushing to|Fetching|Everything up-to-date|remote:)\b/i
 
-export function firstLine(text: string): string | undefined {
-  const lines = text
+/**
+ * Every line of git/CLI output with the severity prefix stripped and the blank
+ * lines dropped. The one piece of text-massing five modules had each written
+ * for themselves (#113); firstLine and its cousins are thin picks over this.
+ */
+export function stripNoise(text: string): string[] {
+  return text
     .split('\n')
     .map((l) => l.replace(/^(error|fatal|warning):\s*/i, '').trim())
     .filter((l) => l.length > 0)
+}
+
+export function firstLine(text: string): string | undefined {
+  const lines = stripNoise(text)
   return lines.find((l) => !TRANSPORT_LINE.test(l)) ?? lines[0]
 }

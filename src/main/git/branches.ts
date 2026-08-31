@@ -1,6 +1,7 @@
 import type { BranchInfo, OpResult } from '../../shared/types'
 import { runGit, runGitResult } from './exec'
 import { failFrom, ok, optionLikeName } from './result'
+import { gitOp } from './gitOp'
 
 const FORMAT =
   '%(refname:short)%09%(upstream:short)%09%(upstream:track)%09%(objectname:short)%09%(committerdate:unix)%09%(contents:subject)'
@@ -88,8 +89,7 @@ export async function switchBranch(repoPath: string, name: string): Promise<OpRe
     `refs/heads/${name}`
   ])
   if (isLocal.code === 0) {
-    const res = await runGitResult(repoPath, ['switch', name])
-    return res.code === 0 ? ok() : failFrom(res)
+    return gitOp(repoPath, ['switch', name])
   }
 
   const isRemote = await runGitResult(repoPath, [
@@ -107,8 +107,7 @@ export async function switchBranch(repoPath: string, name: string): Promise<OpRe
     return fallback.code === 0 ? ok() : failFrom(create)
   }
 
-  const res = await runGitResult(repoPath, ['switch', name])
-  return res.code === 0 ? ok() : failFrom(res)
+  return gitOp(repoPath, ['switch', name])
 }
 
 export async function createBranch(
@@ -118,8 +117,7 @@ export async function createBranch(
 ): Promise<OpResult> {
   const bad = optionLikeName(name)
   if (bad) return bad
-  const res = await runGitResult(repoPath, andSwitch ? ['switch', '-c', name] : ['branch', name])
-  return res.code === 0 ? ok() : failFrom(res)
+  return gitOp(repoPath, andSwitch ? ['switch', '-c', name] : ['branch', name])
 }
 
 export async function deleteBranch(
@@ -130,6 +128,5 @@ export async function deleteBranch(
   const bad = optionLikeName(name)
   if (bad) return bad
   // force only ever set after the UI's explicit "not fully merged" confirmation
-  const res = await runGitResult(repoPath, ['branch', force ? '-D' : '-d', name])
-  return res.code === 0 ? ok() : failFrom(res)
+  return gitOp(repoPath, ['branch', force ? '-D' : '-d', name])
 }

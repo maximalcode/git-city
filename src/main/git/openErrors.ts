@@ -12,6 +12,8 @@
  * cause and an action.
  */
 
+import { stripNoise } from './result'
+
 export const BARE_REPOSITORY =
   'That is a bare repository — it has no working tree to render. Clone it first ' +
   '(git clone <path> <dest>) and open the clone.'
@@ -34,19 +36,16 @@ export function gitComplaint(stderr: string): string | null {
   const text = stderr.trim()
   if (!text) return null
 
+  // Dubious ownership keeps every line rather than its first: git's first line
+  // states the problem, and the `git config --global --add safe.directory …`
+  // line underneath it is the entire fix. Throwing that away was the worst
+  // version of this failure — the app had the exact command the user needed to
+  // type and dropped it.
   if (/dubious ownership/i.test(text)) {
-    return text
-      .split('\n')
-      .map((l) => l.replace(/^(fatal|error|warning):\s*/i, '').trim())
-      .filter((l) => l.length > 0)
-      .join('\n')
+    return stripNoise(text).join('\n')
   }
 
-  const first = text
-    .split('\n')
-    .map((l) => l.replace(/^(fatal|error|warning):\s*/i, '').trim())
-    .find((l) => l.length > 0)
-  return first ?? null
+  return stripNoise(text)[0] ?? null
 }
 
 /** A folder git can see but the process cannot read. */

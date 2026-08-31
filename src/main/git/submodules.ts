@@ -1,6 +1,6 @@
 import type { OpResult, SubmoduleInfo } from '../../shared/types'
 import { runGitResult } from './exec'
-import { failFrom, ok } from './result'
+import { gitOp } from './gitOp'
 
 /**
  * Parse `git submodule status` output. Each line is `<flag><sha> <path> (<ref>)`
@@ -34,6 +34,5 @@ export async function listSubmodules(repoPath: string): Promise<SubmoduleInfo[]>
 export async function updateSubmodules(repoPath: string, path?: string): Promise<OpResult> {
   const args = ['submodule', 'update', '--init', '--recursive']
   if (path) args.push('--', path)
-  const res = await runGitResult(repoPath, args)
-  return res.code === 0 ? ok() : failFrom(res)
+  return gitOp(repoPath, args)
 }

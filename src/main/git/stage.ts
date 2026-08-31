@@ -3,18 +3,17 @@ import { join } from 'path'
 import type { OpResult } from '../../shared/types'
 import { runGitResult } from './exec'
 import { failFrom, ok } from './result'
+import { gitOp } from './gitOp'
 import { getWorkingStatus } from './status'
 
 export async function stageFiles(repoPath: string, paths: string[]): Promise<OpResult> {
   if (paths.length === 0) return ok()
-  const res = await runGitResult(repoPath, ['add', '--', ...paths])
-  return res.code === 0 ? ok() : failFrom(res)
+  return gitOp(repoPath, ['add', '--', ...paths])
 }
 
 export async function unstageFiles(repoPath: string, paths: string[]): Promise<OpResult> {
   if (paths.length === 0) return ok()
-  const res = await runGitResult(repoPath, ['restore', '--staged', '--', ...paths])
-  return res.code === 0 ? ok() : failFrom(res)
+  return gitOp(repoPath, ['restore', '--staged', '--', ...paths])
 }
 
 /**

@@ -1,6 +1,6 @@
 import type { OpResult, WorktreeInfo } from '../../shared/types'
 import { runGitResult } from './exec'
-import { failFrom, ok } from './result'
+import { gitOp } from './gitOp'
 
 /**
  * Parse `git worktree list --porcelain`: blank-line-separated blocks, each
@@ -55,8 +55,7 @@ export async function listWorktrees(repoPath: string): Promise<WorktreeInfo[]> {
 
 /** Create a worktree at `path` for `ref` (a branch or commit). */
 export async function addWorktree(repoPath: string, path: string, ref: string): Promise<OpResult> {
-  const res = await runGitResult(repoPath, ['worktree', 'add', path, ref])
-  return res.code === 0 ? ok() : failFrom(res)
+  return gitOp(repoPath, ['worktree', 'add', path, ref])
 }
 
 /** Remove a worktree (force only when the user confirmed a dirty/locked one). */
@@ -68,6 +67,5 @@ export async function removeWorktree(
   const args = ['worktree', 'remove']
   if (force) args.push('--force')
   args.push(path)
-  const res = await runGitResult(repoPath, args)
-  return res.code === 0 ? ok() : failFrom(res)
+  return gitOp(repoPath, args)
 }

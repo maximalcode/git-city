@@ -8,7 +8,7 @@ import type {
   PrListResult,
   PullRequestInfo
 } from '../../shared/types'
-import { classifyCliFailure, CLI_TIMEOUT_MS, firstLine, TIMED_OUT } from './cliFailure'
+import { classifyCliFailure, CLI_TIMEOUT_MS, firstCliLine, TIMED_OUT } from './cliFailure'
 import type { HostProvider } from './host'
 import { hostnameOf } from './hostUrl'
 
@@ -218,7 +218,7 @@ function repoViewFailure(
   if (/no such remote|not a git repository|could not determine|no git remotes/i.test(output)) {
     return { reason: 'This repository has no GitHub remote.', hint: 'none' }
   }
-  const detail = firstLine(output)
+  const detail = firstCliLine(output)
   return {
     reason: detail
       ? `gh could not read this repository (${detail})`
@@ -260,7 +260,7 @@ function listFailureReason(res: GhResult): string {
     return `gh didn't respond within ${CLI_TIMEOUT_MS / 1000}s — check your network or VPN, then ↻.`
   }
   if (failure === 'offline') return "Couldn't reach GitHub — check your network, then ↻."
-  const detail = firstLine(res.stderr + res.stdout)
+  const detail = firstCliLine(res.stderr + res.stdout)
   return detail ? `Couldn't reach GitHub: ${detail} Try ↻.` : "Couldn't reach GitHub. Try ↻."
 }
 

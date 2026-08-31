@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { analyzeRepo, pickSampleIndices, resampleIndices } from './analyze'
+import { analyzeRepo, evictOldest, pickSampleIndices, resampleIndices } from './analyze'
 import { materializeSnapshot } from '../../shared/snapshots'
 
 let repo: string
@@ -180,5 +180,23 @@ describe('resampleIndices', () => {
     const gaps = keep.slice(1).map((v, i) => v - keep[i])
     // a full analysis of 70 commits at target 5 spaces them 17 apart
     expect(Math.max(...gaps)).toBeLessThanOrEqual(2 * Math.ceil(total / 5))
+  })
+})
+
+describe('evictOldest', () => {
+  it('drops least-recently-inserted entries past the cap', () => {
+    const m = new Map<string, number>([
+      ['a', 1],
+      ['b', 2],
+      ['c', 3]
+    ])
+    evictOldest(m, 2)
+    expect([...m.keys()]).toEqual(['b', 'c'])
+  })
+
+  it('leaves a map at or under the cap untouched', () => {
+    const m = new Map<string, number>([['a', 1]])
+    evictOldest(m, 4)
+    expect(m.size).toBe(1)
   })
 })

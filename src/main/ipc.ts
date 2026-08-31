@@ -1,14 +1,12 @@
 import { app, BrowserWindow, dialog, ipcMain } from 'electron'
 import { basename } from 'path'
 import type { ProgressInfo } from '../shared/types'
-import { analyzeRepo, checkGitInstalled } from './git/analyze'
+import { analyze, checkGitInstalled } from './git/analyze'
 import { cloneRepo } from './git/clone'
 import { analysisFailedMessage } from './git/openErrors'
 import { FriendlyError } from './git/result'
 import { withRepoLock } from './git/queue'
 import { registerOpsIpc } from './ipcOps'
-
-const SAMPLE_TARGET = 50
 
 export function registerIpc(): void {
   registerOpsIpc()
@@ -24,14 +22,14 @@ export function registerIpc(): void {
     return result.canceled ? null : result.filePaths[0]
   })
 
-  ipcMain.handle('git-city:analyze', async (event, repoPath: string, samples?: number) => {
+  // The one analysis channel: incremental splice versus full replay is decided
+  // behind analyze() (#112), and the lock covers whichever path ran.
+  ipcMain.handle('git-city:analyze', async (event, repoPath: string) => {
     const send = (p: ProgressInfo): void => {
       if (!event.sender.isDestroyed()) event.sender.send('git-city:progress', p)
     }
     try {
-      return await withRepoLock(repoPath, () =>
-        analyzeRepo(repoPath, samples ?? SAMPLE_TARGET, send)
-      )
+      return await withRepoLock(repoPath, () => analyze(repoPath, send))
     } catch (err) {
       throw friendly(err, () => analysisFailedMessage(basename(repoPath)), 'analyze')
     }

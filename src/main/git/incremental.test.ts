@@ -1,6 +1,6 @@
 import { rmSync } from 'fs'
 import { afterAll, describe, expect, it } from 'vitest'
-import { analyzeIncremental, analyzeRepo } from './analyze'
+import { analyze, analyzeRepo } from './analyze'
 import { materializeSnapshot } from '../../shared/snapshots'
 import { makeTempRepo, type FixtureRepo } from './fixtures'
 
@@ -39,13 +39,15 @@ function addCommits(r: FixtureRepo, from: number, count: number): void {
 const sortedByPath = <T extends { path: string }>(files: T[]): T[] =>
   [...files].sort((x, y) => x.path.localeCompare(y.path))
 
-describe('analyzeIncremental', () => {
-  it('returns null without a prior full analysis', async () => {
+describe('analyze', () => {
+  it('analyzes from scratch when nothing is cached yet', async () => {
     const r = seeded()
-    expect(await analyzeIncremental(r.path)).toBeNull()
+    const a = await analyze(r.path, noop)
+    expect(a.info.commitCount).toBe(2)
+    expect(a.snapshots).toHaveLength(2)
   })
 
-  it('gold test: incremental equals a fresh full analysis', async () => {
+  it('gold test: the splice equals a fresh full analysis', async () => {
     const r = seeded()
     await analyzeRepo(r.path, 1000, noop) // sample target > commits → snapshot every commit
 
@@ -56,14 +58,13 @@ describe('analyzeIncremental', () => {
     r.git('rm', 'b.txt')
     r.git('commit', '-m', 'fifth deletes b')
 
-    const incremental = await analyzeIncremental(r.path)
-    expect(incremental).not.toBeNull()
+    const incremental = await analyze(r.path, noop)
     const full = await analyzeRepo(r.path, 1000, noop)
 
-    expect(incremental!.info.commitCount).toBe(full.info.commitCount)
-    expect(incremental!.snapshots.length).toBe(full.snapshots.length)
+    expect(incremental.info.commitCount).toBe(full.info.commitCount)
+    expect(incremental.snapshots.length).toBe(full.snapshots.length)
     for (let i = 0; i < full.snapshots.length; i++) {
-      const a = materializeSnapshot(incremental!, i)
+      const a = materializeSnapshot(incremental, i)
       const b = materializeSnapshot(full, i)
       expect(a.hash).toBe(b.hash)
       expect(a.index).toBe(b.index)
@@ -73,22 +74,25 @@ describe('analyzeIncremental', () => {
     }
   })
 
-  it('returns the cached analysis when HEAD is unchanged', async () => {
+  it('re-opens from the cache when HEAD is unchanged', async () => {
     const r = seeded()
     const full = await analyzeRepo(r.path, 50, noop)
-    const inc = await analyzeIncremental(r.path)
-    expect(inc).not.toBeNull()
-    expect(inc!.snapshots.length).toBe(full.snapshots.length)
-    expect(inc!.info.commitCount).toBe(full.info.commitCount)
+    const inc = await analyze(r.path, noop)
+    expect(inc.snapshots.length).toBe(full.snapshots.length)
+    expect(inc.info.commitCount).toBe(full.info.commitCount)
   })
 
-  it('returns null after history rewrite (amend) → caller falls back to full', async () => {
+  it('falls back to a full replay after a history rewrite (amend)', async () => {
     const r = seeded()
     await analyzeRepo(r.path, 50, noop)
     r.write('a.txt', 'amended\n')
     r.git('add', '-A')
     r.git('commit', '--amend', '-m', 'second (amended)')
-    expect(await analyzeIncremental(r.path)).toBeNull()
+    // the old splice contract answered null here and left the caller to fall
+    // back; the one entry point does it, and the result shows the amend
+    const a = await analyze(r.path, noop)
+    expect(a.info.commitCount).toBe(2)
+    expect(a.snapshots[a.snapshots.length - 1].hash).toBe(r.git('rev-parse', 'HEAD').trim())
   })
 
   it('handles a merge commit via first-parent telescoping', async () => {
@@ -103,21 +107,20 @@ describe('analyzeIncremental', () => {
     r.commitAll('main work')
     r.git('merge', '--no-edit', 'side')
 
-    const incremental = await analyzeIncremental(r.path)
-    expect(incremental).not.toBeNull()
+    const incremental = await analyze(r.path, noop)
     const full = await analyzeRepo(r.path, 1000, noop)
 
-    const lastInc = materializeSnapshot(incremental!, incremental!.snapshots.length - 1)
+    const lastInc = materializeSnapshot(incremental, incremental.snapshots.length - 1)
     const lastFull = materializeSnapshot(full, full.snapshots.length - 1)
     expect(lastInc.hash).toBe(lastFull.hash)
     const locOf = (s: typeof lastInc, p: string): number | undefined =>
       s.files.find((f) => f.path === p)?.loc
     expect(locOf(lastInc, 'side.txt')).toBe(2)
     expect(locOf(lastInc, 'side.txt')).toBe(locOf(lastFull, 'side.txt'))
-    expect(incremental!.info.commitCount).toBe(full.info.commitCount)
+    expect(incremental.info.commitCount).toBe(full.info.commitCount)
   })
 
-  it('returns null when prevHead is reachable only as a merge parent', async () => {
+  it('re-analyses fully when prevHead is reachable only as a merge parent', async () => {
     // main:    A ── B ── C          (f.txt grows 10 → 17)
     // feature: A ── D ─────── M     (M's first parent is D, second is C)
     //
@@ -146,11 +149,11 @@ describe('analyzeIncremental', () => {
     r.git('switch', 'feature')
     r.git('merge', '--no-edit', 'main')
 
-    expect(await analyzeIncremental(r.path)).toBeNull()
-
-    const full = await analyzeRepo(r.path, 1000, noop)
-    expect(full.info.commitCount).toBe(3) // A, D, M along first parents
-    const last = materializeSnapshot(full, full.snapshots.length - 1)
+    // the splice refuses this shape, so the entry point re-reads everything —
+    // and the result is the correct first-parent analysis, not a double-count
+    const a = await analyze(r.path, noop)
+    expect(a.info.commitCount).toBe(3) // A, D, M along first parents
+    const last = materializeSnapshot(a, a.snapshots.length - 1)
     const locOf = (p: string): number | undefined => last.files.find((f) => f.path === p)?.loc
     expect(locOf('f.txt')).toBe(17) // not 17 + 7 double-counted
     expect(locOf('g.txt')).toBe(2)
@@ -161,21 +164,20 @@ describe('analyzeIncremental', () => {
     await analyzeRepo(r.path, 5, noop) // stops at 0, 5, 10, 14, 19
     addCommits(r, 20, 3)
 
-    const inc = await analyzeIncremental(r.path)
-    expect(inc).not.toBeNull()
-    expect(inc!.info.commitCount).toBe(23)
+    const inc = await analyze(r.path, noop)
+    expect(inc.info.commitCount).toBe(23)
     // Append-only gave 0,5,10,14,19,20,21,22 — eight stops where a full
     // analysis has five, and the last three commits crowding the scrubber's
     // right edge (#71).
-    expect(inc!.snapshots.map((s) => s.index)).toEqual([0, 5, 10, 19, 22])
+    expect(inc.snapshots.map((s) => s.index)).toEqual([0, 5, 10, 19, 22])
 
     // Not the *same* stops as a full analysis — it would want 0,6,11,17,22, and
     // 6, 11 and 17 were never captured. Splicing exists so that history is not
     // re-read, so the achievable claim is the one that matters to the scrubber:
     // as many stops as a full analysis, ending on the same commit.
     const full = await analyzeRepo(r.path, 5, noop)
-    expect(inc!.snapshots.length).toBe(full.snapshots.length)
-    expect(inc!.snapshots[inc!.snapshots.length - 1].hash).toBe(
+    expect(inc.snapshots.length).toBe(full.snapshots.length)
+    expect(inc.snapshots[inc.snapshots.length - 1].hash).toBe(
       full.snapshots[full.snapshots.length - 1].hash
     )
   })
@@ -184,13 +186,12 @@ describe('analyzeIncremental', () => {
     const r = withCommits(12)
     await analyzeRepo(r.path, 5, noop)
 
-    let inc: Awaited<ReturnType<typeof analyzeIncremental>> = null
+    let inc: Awaited<ReturnType<typeof analyze>> | null = null
     for (let round = 0; round < 10; round++) {
       addCommits(r, 12 + round * 2, 2)
-      inc = await analyzeIncremental(r.path)
-      expect(inc).not.toBeNull()
+      inc = await analyze(r.path, noop)
       // it used to reach 25 here, and never come back down
-      expect(inc!.snapshots.length).toBeLessThanOrEqual(6)
+      expect(inc.snapshots.length).toBeLessThanOrEqual(6)
     }
     expect(inc!.info.commitCount).toBe(32)
 
@@ -204,12 +205,26 @@ describe('analyzeIncremental', () => {
   })
 
   it('keeps sampling at the target the analysis was opened with', async () => {
-    // sampleTarget is an argument to analyzeRepo and never reaches
-    // analyzeIncremental, so the splice has to remember what it was told.
+    // The entry point owns the default (#112), but the cache records the
+    // target the analysis it holds was actually built at, and the splice
+    // continues at that one.
     const r = withCommits(10)
     await analyzeRepo(r.path, 3, noop)
     addCommits(r, 10, 4)
-    const inc = await analyzeIncremental(r.path)
-    expect(inc!.snapshots.length).toBeLessThanOrEqual(4)
+    const inc = await analyze(r.path, noop)
+    expect(inc.snapshots.length).toBeLessThanOrEqual(4)
+  })
+
+  it('reports progress on the splice path too', async () => {
+    // Only the full replay used to report progress; the splice ran silent, so
+    // the two paths had two progress contracts decided by the caller (#112).
+    const r = withCommits(12)
+    await analyzeRepo(r.path, 5, noop)
+    addCommits(r, 12, 30)
+
+    const seen: string[] = []
+    await analyze(r.path, (p) => seen.push(`${p.phase} ${p.done}/${p.total}`))
+    expect(seen.length).toBeGreaterThan(0)
+    expect(seen[seen.length - 1]).toBe(`reading-history 42/42`)
   })
 })

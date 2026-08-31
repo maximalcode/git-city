@@ -20,7 +20,7 @@ import {
   rebaseContinue,
   rebaseOnto
 } from './git/advanced'
-import { analyzeIncremental, repoSize } from './git/analyze'
+import { repoSize } from './git/analyze'
 import { getFileDiff } from './git/diff'
 import { imageDiff } from './git/images'
 import { applyHunk, applyLines, getFileHunks } from './git/hunks'
@@ -41,7 +41,6 @@ import { readConflictFile, resolveConflictFile, resolveWholeFile } from './git/c
 import { mergeAbort, mergeBranch, mergeContinue } from './git/merge'
 import { withRepoLock } from './git/queue'
 import { FriendlyError, failFromError, stripNoise } from './git/result'
-import { analysisFailedMessage } from './git/openErrors'
 import { discardFiles, stageFiles, unstageFiles } from './git/stage'
 import { stashApply, stashDrop, stashList, stashPop, stashPush } from './git/stash'
 import { getWorkingStatus } from './git/status'
@@ -209,17 +208,6 @@ export function registerOpsIpc(): void {
   readOnly('reflog', (repo, limit?: number) => getReflog(repo, limit ?? 100))
   readOnly('tags', (repo) => listTags(repo))
   readOnly('rebase-todo', (repo, count: number) => getRebaseTodo(repo, count))
-  // Wrapped like every other read: an interrupted history pass otherwise
-  // reached the user as the internal command line plus "exited with null" (#25).
-  ipcMain.handle('git-city:analyze-incremental', async (_e, repoPath: string) => {
-    try {
-      return await withRepoLock(repoPath, () => analyzeIncremental(repoPath))
-    } catch (err) {
-      if (err instanceof FriendlyError) throw new Error(err.message)
-      console.error('[git-city] analyze-incremental failed:', err)
-      throw new Error(analysisFailedMessage(basename(repoPath)))
-    }
-  })
   ipcMain.handle('git-city:open-in-editor', (_e, repoPath: string, path: string) => {
     const root = resolve(repoPath)
     const abs = resolve(root, path)

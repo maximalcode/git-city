@@ -4,7 +4,7 @@ import { layoutDigest, layoutWeights } from '../layout/weights'
 /**
  * Memoisation for the scene models, keyed on what the layout is computed from.
  *
- * The models used to be cached on the analysis *object*, and analyzeIncremental
+ * The models used to be cached on the analysis *object*, and a re-analysis
  * hands back a fresh one after every commit — so every commit missed and rebuilt
  * the treemap. Plot positions come out of a squarified treemap over the weights,
  * so that moved 49,365 of 81,368 plots, max displacement 10.66 units on a

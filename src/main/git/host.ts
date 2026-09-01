@@ -94,8 +94,15 @@ const probed = new Map<string, { probe: HostProbe; at: number }>()
  * we ask each CLI whether it recognises the repo — that is the only honest way
  * to tell `git.acme.com` apart, and it costs one cheap call that only runs when
  * the URL was inconclusive.
+ *
+ * `candidates` is injected so tests can drive the probe with fake-runner
+ * providers — the seam the adapters expose since their runners were lifted
+ * (#109). Production callers take the two real ones.
  */
-export async function probeHost(repoPath: string): Promise<HostProbe> {
+export async function probeHost(
+  repoPath: string,
+  candidates: HostProvider[] = [gitlabProvider, githubProvider]
+): Promise<HostProbe> {
   const origin = await originUrlOf(repoPath)
   const kind = detectHost(origin)
   if (kind !== 'unknown') return { provider: PROVIDERS[kind], auth: null }
@@ -108,7 +115,7 @@ export async function probeHost(repoPath: string): Promise<HostProbe> {
 
   const attempts: HostAuth[] = []
   let provider: HostProvider | null = null
-  for (const candidate of [gitlabProvider, githubProvider]) {
+  for (const candidate of candidates) {
     const auth = await candidate.status(repoPath, origin)
     attempts.push(auth)
     if (auth.isRepo) {
@@ -123,8 +130,11 @@ export async function probeHost(repoPath: string): Promise<HostProbe> {
 }
 
 /** Just the provider, for callers that don't care why there isn't one. */
-export async function providerFor(repoPath: string): Promise<HostProvider | null> {
-  return (await probeHost(repoPath)).provider
+export async function providerFor(
+  repoPath: string,
+  candidates: HostProvider[] = [gitlabProvider, githubProvider]
+): Promise<HostProvider | null> {
+  return (await probeHost(repoPath, candidates)).provider
 }
 
 /**

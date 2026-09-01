@@ -8,7 +8,7 @@
 [![Latest release](https://img.shields.io/github/v/release/maximalcode/git-city?display_name=tag&sort=semver)](https://github.com/maximalcode/git-city/releases/latest)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-![Git City replaying a repository's history](docs/media/demo.gif)
+![Git City replaying its own repository's history](docs/media/app-hero.gif)
 
 ### [⬇ Download for macOS, Windows or Linux](https://github.com/maximalcode/git-city/releases/latest)
 
@@ -22,15 +22,16 @@
 - 🗺 **Districts are folders.** Nested plots follow your directory tree.
 - 🎨 **Colour is yours to choose.** Six encodings, each with a legend.
 
-![The city at night, coloured by language](docs/media/city-night.jpg)
+![The city at night, coloured by language](docs/media/app-city-night.jpg)
 
 Press play and the city grows commit by commit. A whole history replays in about
 ten seconds. The sky tracks each commit's local hour, so scrubbing walks you from
 a morning commit's light into a late-night one's dark.
 
-The scenes here are a demo repository, so the shape stays readable. The git
-client below is Git City open on its own source, so every path, commit and
-branch in those shots is real.
+Every scene and panel here is Git City open on its own source: real files,
+commits and branches. Plot area uses the square root of each file's peak line
+count, so a lockfile or generated bundle leaves more ground for the source
+around it. Building height still follows the current line count.
 
 ## Colour it by the question you are asking
 
@@ -38,12 +39,12 @@ Language tells you what a repository is made of. Activity tells you where the
 work is. A large red building is big and permanently in flux, often the one worth
 splitting up.
 
-![The same city in Neon, coloured by how often each file changes](docs/media/city-neon.jpg)
+![The same city in Neon, coloured by how often each file changes](docs/media/app-city-activity.jpg)
 
 Author gives every person a colour. A district in one colour is code with one
 owner. A speckled one is shared ground.
 
-![The city in Golden Hour, coloured by who touched each file last](docs/media/city-author.jpg)
+![The city in Golden Hour, coloured by who touched each file last](docs/media/app-city-author.jpg)
 
 Recency, size and kind round out the six.
 [What the colours mean](docs/colour-modes.md) explains them all.
@@ -54,9 +55,9 @@ Press `V`. Files become fields whose crop rises and falls with the line count.
 Folders become fenced parcels, each with a barn and silo. Herds graze across the
 holding and a tractor works the tracks. After dark the steadings light up.
 
-![The same repository as a farm](docs/media/farm.jpg)
+![The same repository as a farm](docs/media/app-farm.jpg)
 
-![The farm after dark, its steadings lit](docs/media/farm-night.jpg)
+![The farm after dark, its steadings lit](docs/media/app-farm-night.jpg)
 
 ## It is a real git client
 
@@ -131,9 +132,12 @@ commit's added and deleted line counts reproduces the exact size of every file a
 every mainline commit, with no checkouts and no per-file git calls. About 50
 evenly spaced snapshots feed the timeline, re-spaced every time you commit from
 inside the app so the stops never bunch up at the end. The treemap layout is
-computed once over every file that ever existed, so buildings rise, shrink and
-vanish, but never move while you scrub — and the same city survives a commit,
-unless that commit changed the peak sizes the layout is built from.
+computed once over every file that ever existed, with city plots and farm fields
+weighted by the square root of peak line count (at least one for empty files).
+Buildings and crops rise, shrink and vanish, but never move while you scrub —
+and the same layout survives a commit, unless it changes the peak sizes the
+layout is built from. Existing repositories get a new layout once with this
+compression; their building heights and crop classes keep the same scales.
 
 Git operations run in the Electron main process behind a per-repo lock, so two of
 our own commands never race for `index.lock`. A file watcher keeps the UI live

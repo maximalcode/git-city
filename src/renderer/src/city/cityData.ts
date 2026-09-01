@@ -9,7 +9,8 @@ import { buildColorer, type ColorMode } from './colorModes'
 
 /**
  * The static city model: layout is computed once per analysis over the union
- * of every file that ever existed (weighted by its peak line count), so
+ * of every file that ever existed (weighted by the square root of its peak
+ * line count), so
  * buildings keep a stable position while scrubbing through history —
  * they rise, shrink and vanish, but never move.
  */
@@ -43,8 +44,8 @@ export function buildCityModel(analysis: RepoAnalysis): CityModel {
   const weights = layoutWeights(analysis)
   // Past the ceiling we draw the largest files and say so, rather than
   // spending 80 seconds building a scene whose streets have already
-  // vanished (#12). `weights` is peak LOC per path, so the kept set is the
-  // same for every frame of the timeline.
+  // vanished (#12). Square-rooting peak LOC preserves the largest-file
+  // ranking, and the kept set is the same for every frame of the timeline.
   const { files, total, capped } = capFiles(
     Array.from(weights, ([path, weight]) => ({ path, weight }))
   )

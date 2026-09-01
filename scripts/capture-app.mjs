@@ -69,6 +69,8 @@ const SHOTS = [
   // ── Scene ────────────────────────────────────────────────────────────────
   { name: 'app-city-night', theme: 'realistic-night', color: 'language' },
   { name: 'app-city-activity', theme: 'neon', color: 'activity' },
+  { name: 'app-city-author', theme: 'golden-hour', color: 'author' },
+  { name: 'app-farm', theme: 'realistic-day', view: 'farm', color: 'language' },
   { name: 'app-farm-night', theme: 'realistic-night', view: 'farm', color: 'language' },
 
   // ── The git client ───────────────────────────────────────────────────────

@@ -14,6 +14,7 @@
 
 import { Color } from 'three'
 import type { RepoAnalysis, Snapshot } from '../../../shared/types'
+import { peakLocByPath } from '../../../shared/snapshots'
 import { layoutWeights } from './weights'
 import { cityLayout, type CityLayout, type Rect } from './treemap'
 import { buildRoadGraph, type RoadGraph } from './roads'
@@ -71,8 +72,8 @@ export interface FarmTargets {
 /**
  * Crop height for a present file, in world units.
  *
- * Logarithmic like the city's building height, for the same reason: a 5,000-line
- * file is not fifty times more interesting than a 100-line one, and a linear
+ * Logarithmic: a 5,000-line file is not fifty times more interesting than a
+ * 100-line one, and a linear
  * scale would leave everything else as stubble.
  */
 export function cropHeightFor(loc: number): number {
@@ -82,6 +83,7 @@ export function cropHeightFor(loc: number): number {
 export function buildFarmModel(analysis: RepoAnalysis): FarmModel {
   // the same union weights the city lays out from
   const weights = layoutWeights(analysis)
+  const peaks = peakLocByPath(analysis)
   // same ceiling as the city — a monorepo's fields are unreadable long before
   // the scene finishes building, so draw the largest and say so (#12)
   const { files, total, capped } = capFiles(
@@ -106,7 +108,7 @@ export function buildFarmModel(analysis: RepoAnalysis): FarmModel {
     centers[i * 2] = rect.x + rect.w / 2
     centers[i * 2 + 1] = rect.y + rect.h / 2
 
-    kinds[i] = CROP_KINDS.indexOf(cropKindFor(weights.get(path) ?? 1))
+    kinds[i] = CROP_KINDS.indexOf(cropKindFor(peaks.get(path) ?? 1))
 
     const slash = path.lastIndexOf('/')
     const dir = slash === -1 ? '' : path.slice(0, slash)

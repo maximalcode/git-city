@@ -2,8 +2,9 @@ import type { RepoAnalysis } from '../../../shared/types'
 import { peakLocByPath } from '../../../shared/snapshots'
 
 /**
- * The layout's only input: peak line count per path, over the union of every
- * file that ever existed.
+ * The layout's only input: square-rooted peak line count per path, over the
+ * union of every file that ever existed. Compression keeps generated outliers
+ * from dominating the ground area (#102).
  *
  * Both model builders lay out from this and nothing else, which is what keeps a
  * building in one place while you scrub — it rises, shrinks and vanishes, but
@@ -15,7 +16,7 @@ export function layoutWeights(analysis: RepoAnalysis): Map<string, number> {
   const weights = new Map<string, number>()
   for (const [path, peak] of peakLocByPath(analysis)) {
     // floor of 1: a file that only ever existed empty still gets a plot
-    weights.set(path, Math.max(peak, 1))
+    weights.set(path, Math.sqrt(Math.max(peak, 1)))
   }
   return weights
 }
@@ -35,13 +36,17 @@ export function layoutWeights(analysis: RepoAnalysis): Map<string, number> {
 export function layoutDigest(weights: Map<string, number>): string {
   let sum = 0
   let xor = 0
+  const bits = new DataView(new ArrayBuffer(8))
   for (const [path, weight] of weights) {
     let h = 2166136261 // FNV-1a over the path
     for (let i = 0; i < path.length; i++) {
       h = Math.imul(h ^ path.charCodeAt(i), 16777619)
     }
-    // line counts are whole numbers, so the int32 coercion in `^` loses nothing
-    h = Math.imul(h ^ weight, 2654435761)
+    // Compression makes weights fractional. Hash both halves of the float64:
+    // coercing the weight to int32 would hide small peak increases (#102).
+    bits.setFloat64(0, weight)
+    h = Math.imul(h ^ bits.getUint32(0), 2654435761)
+    h = Math.imul(h ^ bits.getUint32(4), 2654435761)
     sum = (sum + h) | 0
     xor ^= h
   }

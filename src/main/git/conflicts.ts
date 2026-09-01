@@ -2,7 +2,8 @@ import { readFile, writeFile } from 'fs/promises'
 import { join } from 'path'
 import type { ConflictFile, ConflictSegment, OpResult } from '../../shared/types'
 import { runGitResult } from './exec'
-import { failFrom, ok } from './result'
+import { failFrom } from './result'
+import { gitOp } from './gitOp'
 
 /**
  * Conflict-marker parsing for the in-app resolver. Segments carry the raw
@@ -95,8 +96,7 @@ export async function resolveConflictFile(
   resolvedText: string
 ): Promise<OpResult> {
   await writeFile(join(repoPath, path), resolvedText, 'utf8')
-  const res = await runGitResult(repoPath, ['add', '--', path])
-  return res.code === 0 ? ok() : failFrom(res)
+  return gitOp(repoPath, ['add', '--', path])
 }
 
 /** Whole-file resolution (the only option for binary conflicts). */
@@ -107,6 +107,5 @@ export async function resolveWholeFile(
 ): Promise<OpResult> {
   const co = await runGitResult(repoPath, ['checkout', `--${side}`, '--', path])
   if (co.code !== 0) return failFrom(co)
-  const res = await runGitResult(repoPath, ['add', '--', path])
-  return res.code === 0 ? ok() : failFrom(res)
+  return gitOp(repoPath, ['add', '--', path])
 }

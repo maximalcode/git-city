@@ -6,9 +6,8 @@ const api: GitCityApi = {
   selectFolder: () => ipcRenderer.invoke('git-city:select-folder'),
   // Electron 35 removed File.path; webUtils is the supported way to resolve a dropped folder
   pathForFile: (file) => webUtils.getPathForFile(file),
-  analyzeRepo: (repoPath, samples) => ipcRenderer.invoke('git-city:analyze', repoPath, samples),
+  analyzeRepo: (repoPath) => ipcRenderer.invoke('git-city:analyze', repoPath),
   repoSize: (repoPath) => ipcRenderer.invoke('git-city:repo-size', repoPath),
-  analyzeIncremental: (repoPath) => ipcRenderer.invoke('git-city:analyze-incremental', repoPath),
   cloneRepo: (url) => ipcRenderer.invoke('git-city:clone', url),
   onProgress: (cb) => {
     const listener = (_e: Electron.IpcRendererEvent, p: ProgressInfo): void => cb(p)

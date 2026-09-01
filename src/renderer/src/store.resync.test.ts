@@ -45,7 +45,7 @@ function fakeBridge(overrides: Record<string, (...args: never[]) => unknown> = {
     tags: [{ name: 'v1' }],
     submodules: [{ path: 'vendor/x' }],
     worktrees: [{ path: '/repo' }],
-    analyzeIncremental: EMPTY_ANALYSIS
+    analyzeRepo: EMPTY_ANALYSIS
   }
   const api = new Proxy(
     {},

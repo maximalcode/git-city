@@ -1,6 +1,7 @@
 import type { OpResult, ReflogEntry } from '../../shared/types'
 import { runGit, runGitResult } from './exec'
 import { failFrom, ok, optionLikeName } from './result'
+import { gitOp } from './gitOp'
 
 const FS = '\x1f' // unit separator between fields (never appears in git output)
 
@@ -91,6 +92,5 @@ export async function recoverToBranch(
   if (badName) return badName
   const badRef = optionLikeName(ref)
   if (badRef) return badRef
-  const res = await runGitResult(repoPath, ['branch', name, ref])
-  return res.code === 0 ? ok() : failFrom(res)
+  return gitOp(repoPath, ['branch', name, ref])
 }

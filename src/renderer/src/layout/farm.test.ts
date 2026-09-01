@@ -109,6 +109,29 @@ describe('buildFarmModel', () => {
     }
   })
 
+  it('keeps crop classes tied to raw peak lines after field areas are compressed', () => {
+    const m = buildFarmModel(
+      analysis([
+        {
+          files: [
+            file('small.ts', 119),
+            file('medium.ts', 120),
+            file('large.ts', 1199),
+            file('orchard.ts', 1200)
+          ]
+        },
+        { files: [file('medium.ts', 1), file('orchard.ts', 1)] }
+      ])
+    )
+    const kind = (path: string) => CROP_KINDS[m.kinds[m.indexOf.get(path)!]]
+    expect(['small.ts', 'medium.ts', 'large.ts', 'orchard.ts'].map(kind)).toEqual([
+      'furrow',
+      'row',
+      'row',
+      'orchard'
+    ])
+  })
+
   it('lays out an empty repository without throwing', () => {
     const m = buildFarmModel(analysis([{ files: [] }]))
     expect(m.paths).toEqual([])

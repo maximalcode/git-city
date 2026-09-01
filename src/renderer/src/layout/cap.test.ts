@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { capFiles, cappedLabel, MAX_DRAWN_FILES } from './cap'
 import type { CityInput } from './treemap'
+import { buildAnalysis } from '../../../shared/snapshots'
+import { layoutWeights } from './weights'
 
 const file = (path: string, weight: number): CityInput => ({ path, weight })
 
@@ -47,6 +49,45 @@ describe('capFiles', () => {
     expect(out.files).toHaveLength(MAX_DRAWN_FILES)
     expect(out.total).toBe(81_368)
     expect(out.capped).toBe(true)
+  })
+
+  it('keeps the same largest 20,000 files and path ties after square-root compression', () => {
+    const peaks = [
+      ...Array.from({ length: 19_999 }, (_, i) => file(`src/f${i}.ts`, 101 + i)),
+      file('z-tie.ts', 100),
+      file('a-tie.ts', 100),
+      file('empty.ts', 0)
+    ]
+    const expected = capFiles(peaks).files.map((f) => f.path)
+    expect(expected).toHaveLength(20_000)
+    expect(expected.at(-1)).toBe('a-tie.ts')
+
+    for (const ordered of [peaks, [...peaks].reverse()]) {
+      const a = buildAnalysis(
+        { name: 'r', path: '/r', branch: 'main', commitCount: 2 },
+        [ordered, ordered.map((f) => ({ ...f, weight: 0 }))].map((files, index) => ({
+          hash: `h${index}`,
+          date: index,
+          author: 'a',
+          message: '',
+          index,
+          files: files.map(({ path, weight }) => ({
+            path,
+            loc: weight,
+            commits: 1,
+            lastTouched: 0,
+            lastAuthor: 'a',
+            binary: false
+          }))
+        }))
+      )
+      const compressed = capFiles(
+        Array.from(layoutWeights(a), ([path, weight]) => ({ path, weight }))
+      )
+      expect(compressed.files.map((f) => f.path)).toEqual(expected)
+      expect(compressed.total).toBe(20_002)
+      expect(compressed.capped).toBe(true)
+    }
   })
 })
 

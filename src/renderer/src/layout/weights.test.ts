@@ -25,16 +25,16 @@ const analysis = (snapshots: Snapshot[]): RepoAnalysis =>
   buildAnalysis({ name: 'r', path: '/r', branch: 'main', commitCount: 1 }, snapshots)
 
 describe('layoutWeights', () => {
-  it('takes each path at its peak across history, not its size now', () => {
+  it('square-roots each path’s peak across history, not its size now', () => {
     const w = layoutWeights(
       analysis([snap(0, [file('big.ts', 900)]), snap(1, [file('big.ts', 12)])])
     )
-    expect(w.get('big.ts')).toBe(900)
+    expect(w.get('big.ts')).toBe(30)
   })
 
   it('keeps files that have since been deleted', () => {
-    const w = layoutWeights(analysis([snap(0, [file('gone.ts', 40)]), snap(1, [])]))
-    expect(w.get('gone.ts')).toBe(40)
+    const w = layoutWeights(analysis([snap(0, [file('gone.ts', 36)]), snap(1, [])]))
+    expect(w.get('gone.ts')).toBe(6)
   })
 
   it('floors at 1, so an empty file still gets a plot', () => {
@@ -46,12 +46,12 @@ describe('layoutWeights', () => {
 describe('layoutDigest', () => {
   it('is equal for the same pairs whatever order they arrive in', () => {
     const a = new Map([
-      ['a.ts', 10],
-      ['b.ts', 20]
+      ['a.ts', 10.25],
+      ['b.ts', 10.75]
     ])
     const b = new Map([
-      ['b.ts', 20],
-      ['a.ts', 10]
+      ['b.ts', 10.75],
+      ['a.ts', 10.25]
     ])
     expect(layoutDigest(a)).toBe(layoutDigest(b))
   })

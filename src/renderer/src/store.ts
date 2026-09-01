@@ -258,8 +258,8 @@ const REPO_STATE_RESET: Partial<GitCityState> = {
  * (watcher.ts), and the app's own reaction to an event — refreshing branches,
  * stashes, tags, and the host — runs git commands that touch .git again. So
  * raising the reload pill on the bare event made it re-arm the moment it was
- * cleared, and it never went down again (#98). analyzeIncremental compares the
- * same two hashes to decide whether there is anything to replay at all.
+ * cleared, and it never went down again (#98). The main process re-analysis
+ * compares the same two hashes to decide whether there is anything to replay.
  *
  * Unknown either side means "assume it moved": a pill that should not be there
  * costs a click, and a missing one silently shows history that is out of date.
@@ -622,7 +622,7 @@ export const useStore = create<GitCityState>((set, get) => ({
     } finally {
       set({ pendingProbe: null })
     }
-    await loadRepo(set, get, () => api.analyzeRepo(path, 50), path)
+    await loadRepo(set, get, () => api.analyzeRepo(path), path)
   },
 
   confirmPendingRepo: async () => {
@@ -630,7 +630,7 @@ export const useStore = create<GitCityState>((set, get) => ({
     const pending = get().pendingRepo
     if (!api || !pending) return
     set({ pendingRepo: null })
-    await loadRepo(set, get, () => api.analyzeRepo(pending.path, 50), pending.path)
+    await loadRepo(set, get, () => api.analyzeRepo(pending.path), pending.path)
   },
 
   cancelPendingRepo: () => set({ pendingRepo: null }),
@@ -648,7 +648,7 @@ export const useStore = create<GitCityState>((set, get) => ({
     set({ screen: 'loading', error: null, progress: null })
     try {
       const path = await api.cloneRepo(url)
-      await loadRepo(set, get, () => api.analyzeRepo(path, 50), path)
+      await loadRepo(set, get, () => api.analyzeRepo(path), path)
     } catch (err) {
       set({ screen: 'welcome', error: cleanError(err) })
     }
@@ -971,8 +971,10 @@ export const useStore = create<GitCityState>((set, get) => ({
     const viewingCommit = before.analysis?.snapshots[before.snapshotIndex]?.index
     set({ reanalyzing: true, historyStale: false })
     try {
-      let analysis = await api.analyzeIncremental(repoPath)
-      if (!analysis) analysis = await api.analyzeRepo(repoPath, 50)
+      // One call (#112): the main process splices or replays as its cache
+      // allows — a decision the renderer cannot make, the cache state being
+      // invisible to it.
+      const analysis = await api.analyzeRepo(repoPath)
       set({
         analysis,
         // watching the latest state (or nowhere in particular) → stay at the tip

@@ -248,12 +248,23 @@ async function replayRange(
 }
 
 /**
- * Last full analysis per repo, kept so analyzeIncremental can splice new
+ * Last full analysis per repo, kept so the next analyze() can splice new
  * commits without re-reading the whole history. Analyses are too big to
  * round-trip over IPC, so the renderer only ever asks by repoPath.
  *
- * The sample target rides along because the splice has to re-sample to it, and
- * it is an argument to analyzeRepo that never reaches analyzeIncremental (#71).
+ * The sample target rides along because the splice has to re-sample to it
+ * (#71). analyze() owns the value now (#112) — one entry point, not an
+ * argument of one path and hidden state of the other — and the cache records
+ * the target the analysis it holds was actually built at, so a splice
+ * continues at that same target. That continuation is deliberate: a splice
+ * against a target change could only snap its new ideal stops onto captures
+ * that already exist, so spacing would degrade until the next full replay,
+ * which picks the new target up cleanly.
+ *
+ * Bounded, because analyses are big (every sampled commit's full file state)
+ * and a session that opens many repositories should not hold all of them
+ * forever (#74). Recency is bumped by every successful store — and every
+ * successful analysis ends in one — so eviction is LRU in effect.
  */
 interface CachedAnalysis {
   analysis: RepoAnalysis
@@ -261,6 +272,31 @@ interface CachedAnalysis {
 }
 
 const analysisCache = new Map<string, CachedAnalysis>()
+
+/** How many repos' last analysis to keep. A splice for an evicted repo merely
+ * costs a full re-read — never a wrong answer. */
+const MAX_CACHED_REPOS = 4
+
+/**
+ * Drop the oldest entries until the map holds at most `max`. Map iteration is
+ * insertion order and delete+set bumps an entry to newest, so the first key is
+ * the least recently used. Exported for tests: the policy is the unit,
+ * cacheAnalysis is just the wiring.
+ */
+export function evictOldest<V>(m: Map<string, V>, max: number): void {
+  while (m.size > max) {
+    const oldest = m.keys().next().value
+    if (oldest === undefined) return
+    m.delete(oldest)
+  }
+}
+
+/** Record an analysis as the newest cache entry, evicting past the cap. */
+function cacheAnalysis(repoPath: string, analysis: RepoAnalysis, sampleTarget: number): void {
+  analysisCache.delete(repoPath)
+  analysisCache.set(repoPath, { analysis, sampleTarget })
+  evictOldest(analysisCache, MAX_CACHED_REPOS)
+}
 
 /**
  * Commit and file counts, cheaply — two counting calls, no history replay.
@@ -312,6 +348,57 @@ async function explainNotAWorkTree(repoPath: string, stderr: string): Promise<st
   return gitComplaint(stderr) ?? NOT_A_REPOSITORY
 }
 
+/**
+ * The sample target every analysis is opened at. It used to travel as a
+ * renderer argument plus a hidden module-level constant, spelled in three
+ * places and smuggled through the cache (#75); one entry point owns it now.
+ */
+const DEFAULT_SAMPLE_TARGET = 50
+
+/**
+ * The one way to analyse a repository (#112).
+ *
+ * First try splicing the commits made since the cached analysis; when that is
+ * impossible for any reason — nothing cached, history rewritten, prevHead off
+ * the first-parent chain — run the full replay. The caller neither knows nor
+ * cares which happened: the old split answered null to mean "now call the
+ * other one yourself", and the one caller that remembered to was the renderer,
+ * which cannot see the main-process cache state the decision depends on.
+ *
+ * Both paths report the same progress contract, take the same sample target,
+ * and the caller's repo lock (ipc.ts) covers whichever ran.
+ */
+export async function analyze(
+  repoPath: string,
+  onProgress: (p: ProgressInfo) => void
+): Promise<RepoAnalysis> {
+  const spliced = await spliceFromCache(repoPath, onProgress)
+  if (spliced) return spliced
+  return analyzeRepo(repoPath, DEFAULT_SAMPLE_TARGET, onProgress)
+}
+
+/**
+ * The full replay: every commit's numstat streamed once, sampled to
+ * `sampleTarget` stops. analyze() is what callers want; this stays the
+ * well-tested primitive the splice falls back to and the tests pin.
+ */
+/**
+ * The one reading-history progress contract, both paths: every 500th commit
+ * plus a final 100%, counted from `base` — 0 for a full replay, the previous
+ * commit count for a splice — against the same total.
+ */
+function historyProgress(
+  onProgress: (p: ProgressInfo) => void,
+  base: number,
+  total: number
+): (index: number) => void {
+  return (i) => {
+    if (i % 500 === 0) {
+      onProgress({ phase: 'reading-history', done: base + i + 1, total })
+    }
+  }
+}
+
 export async function analyzeRepo(
   repoPath: string,
   sampleTarget: number,
@@ -351,7 +438,7 @@ export async function analyzeRepo(
       authors: [],
       snapshots: []
     }
-    analysisCache.set(repoPath, { analysis: empty, sampleTarget })
+    cacheAnalysis(repoPath, empty, sampleTarget)
     return empty
   }
 
@@ -372,11 +459,7 @@ export async function analyzeRepo(
     interner,
     0,
     (i) => sampleIdx.has(i),
-    (i) => {
-      if (i % 500 === 0) {
-        onProgress({ phase: 'reading-history', done: i + 1, total: commitCount })
-      }
-    }
+    historyProgress(onProgress, 0, commitCount)
   )
 
   onProgress({ phase: 'reading-history', done: commitCount, total: commitCount })
@@ -387,17 +470,21 @@ export async function analyzeRepo(
     authors: interner.authors,
     snapshots
   }
-  analysisCache.set(repoPath, { analysis, sampleTarget })
+  cacheAnalysis(repoPath, analysis, sampleTarget)
   return analysis
 }
 
 /**
  * Splice commits made since the cached analysis instead of re-reading the
  * whole history. Returns null when a fast path is impossible (no cache, or
- * history was rewritten — rebase/amend/reset) so the caller falls back to a
- * full analyzeRepo.
+ * history was rewritten — rebase/amend/reset) and analyze() falls back to a
+ * full replay. Private: the old public null contract is exactly what #112
+ * removed — no caller should ever have to ask "was it spliced?".
  */
-export async function analyzeIncremental(repoPath: string): Promise<RepoAnalysis | null> {
+async function spliceFromCache(
+  repoPath: string,
+  onProgress: (p: ProgressInfo) => void
+): Promise<RepoAnalysis | null> {
   const cached = analysisCache.get(repoPath)
   if (!cached || cached.analysis.snapshots.length === 0) return null
   const { analysis: prev, sampleTarget } = cached
@@ -408,7 +495,7 @@ export async function analyzeIncremental(repoPath: string): Promise<RepoAnalysis
   if (head === prevHead) {
     // HEAD unchanged (e.g. branch metadata only) — refresh the branch name
     const analysis = { ...prev, info: { ...prev.info, branch } }
-    analysisCache.set(repoPath, { analysis, sampleTarget })
+    cacheAnalysis(repoPath, analysis, sampleTarget)
     return analysis
   }
 
@@ -459,7 +546,10 @@ export async function analyzeIncremental(repoPath: string): Promise<RepoAnalysis
     state,
     interner,
     prev.info.commitCount,
-    (i) => keep.has(i)
+    (i) => keep.has(i),
+    // the same progress contract as the full replay — the splice used to run
+    // silent, so which path ran decided whether the user saw any progress
+    historyProgress(onProgress, prev.info.commitCount, commitCount)
   )
 
   const analysis: RepoAnalysis = {
@@ -472,6 +562,7 @@ export async function analyzeIncremental(repoPath: string): Promise<RepoAnalysis
     authors: interner.authors,
     snapshots: [...prev.snapshots.filter((s) => keep.has(s.index)), ...newSnaps]
   }
-  analysisCache.set(repoPath, { analysis, sampleTarget })
+  cacheAnalysis(repoPath, analysis, sampleTarget)
+  onProgress({ phase: 'reading-history', done: commitCount, total: commitCount })
   return analysis
 }

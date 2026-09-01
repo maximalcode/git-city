@@ -518,9 +518,13 @@ export interface GitCityApi {
   selectFolder(): Promise<string | null>
   /** Resolve a dropped File to its absolute path (File.path is gone in Electron 35). */
   pathForFile(file: File): string
-  analyzeRepo(repoPath: string, samples: number): Promise<RepoAnalysis>
-  /** Incremental history update after our own HEAD move; null → caller should run a full analyze. */
-  analyzeIncremental(repoPath: string): Promise<RepoAnalysis | null>
+  /**
+   * Open a repository's history: a full replay on first open, a splice of the
+   * commits made since the cached analysis afterwards. The
+   * incremental-versus-full decision lives behind this call (#112) — it
+   * depends on main-process cache state the renderer cannot see.
+   */
+  analyzeRepo(repoPath: string): Promise<RepoAnalysis>
   /** Clones a public repo URL, returns the local path. */
   cloneRepo(url: string): Promise<string>
   /** Subscribe to progress events; returns an unsubscribe function. */

@@ -150,6 +150,27 @@ first, then the renderer side.
 - [docs/roadmap-git-parity.md](docs/roadmap-git-parity.md) — historical record of
   the v9–v12 milestones (all shipped). Live planning happens in issues now.
 
+## Agent skills
+
+### Issue tracker
+
+Before issue operations, read `docs/agents/issue-tracker.md` for the GitHub workflow.
+
+### Triage labels
+
+Before triage, read `docs/agents/triage-labels.md` for the role-to-label mapping.
+
+### Domain docs
+
+Before codebase exploration, read `docs/agents/domain.md` for this repo's
+single-context documentation conventions.
+
+### Sub-agent model tiers
+
+Before spawning a stage with a named tier, read `docs/agents/subagents.md` and
+apply its explicit Codex model and reasoning settings. Fresh-context spawning
+is confirmed.
+
 <!-- BEGIN maxi-quality agent-guard sha256:1f0a94506e51e28d -->
 
 ## The gate, and how a session ends

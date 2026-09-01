@@ -40,8 +40,10 @@ export interface CappedFiles {
 /**
  * Keep the largest `max` files and say how many were dropped.
  *
- * Ranked by weight, which both model builders define as a path's *peak* line
- * count across the whole history — not its size in the current snapshot. That
+ * Ranked by weight, which both model builders define as the square root of a
+ * path's *peak* line count across history. Compression preserves the ranking
+ * (empty files still tie with one-line files), so these remain the largest
+ * files — not the largest in the current snapshot. That
  * matters: the set has to be identical for every frame of the timeline, or
  * buildings would appear and vanish as you scrub, which is exactly the property
  * the layout is built to avoid.

@@ -17,7 +17,7 @@ Traffic is weighted by commit activity and comes in four body styles, plus
 bikes. Lamp posts and street trees line the roads.
 
 **The farm.** Every file is a cultivated field. The crop rises and falls with
-the live line count, and the crop class follows the file's size: leafy rows for
+the live line count, and the crop class follows the file's peak line count: leafy rows for
 small files, standing cereal for mid-size, orchards for the largest. Folders are
 fenced parcels with a barn and silo, and wind pumps on the big ones. Herds of
 cattle, sheep, pigs and chickens graze across the holding, walking with a
@@ -25,10 +25,19 @@ footfall bob. One or two tractors work the dirt tracks. After dark the
 steadings light up: hayloft windows, the spill under the big door, a yard lamp
 on a post.
 
-**A layout that stays put.** Plots are placed by each file's peak size across
-the whole history rather than its size right now, so buildings rise, shrink and
-vanish as you scrub but never move. That holds across commits you make in the
-app too: the city is re-laid-out only when a commit changes those peak sizes.
+**Compressed plot areas.** City plots and farm fields are weighted by the square
+root of each file's peak line count, with a minimum of one for empty files.
+Lockfiles, generated code and other outliers still get larger plots, but leave
+more ground for smaller source files. Building heights keep their square-root
+scale, crops keep their logarithmic height scale, and crop classes still use raw
+peak line counts. Repositories above the draw ceiling keep the same largest
+20,000 files, with ties broken by path.
+
+**A layout that stays put.** Plots use peaks across the whole history rather
+than sizes right now, so buildings and crops rise, shrink and vanish as you scrub
+but never move. That holds across commits you make in the app too: the layout is
+rebuilt only when its inputs change, including a one-line increase in a peak.
+The switch to compressed areas rearranges existing repositories once.
 
 **Timeline playback.** Scrub or play the whole history. A full replay takes
 about ten seconds.

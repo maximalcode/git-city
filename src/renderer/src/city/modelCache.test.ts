@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import type { FileState, RepoAnalysis, Snapshot } from '../../../shared/types'
 import { buildAnalysis } from '../../../shared/snapshots'
 import { cacheByLayout, layoutKey } from './modelCache'
+import { buildCityModel } from './cityData'
+import { buildFarmModel, CROP_KINDS } from '../layout/farm'
 
 const file = (path: string, loc: number): FileState => ({
   path,
@@ -58,6 +60,25 @@ describe('layoutKey', () => {
 })
 
 describe('cacheByLayout', () => {
+  it('rebuilds both worlds when a one-line peak increase changes a fractional weight', () => {
+    const before = analysis([snap(0, [file('a.ts', 1199), file('b.ts', 100)])])
+    const after = analysis([
+      snap(0, [file('a.ts', 1199), file('b.ts', 100)]),
+      snap(1, [file('a.ts', 1200), file('b.ts', 100)])
+    ])
+    for (const build of [buildCityModel, buildFarmModel]) {
+      const cached = cacheByLayout<ReturnType<typeof build>>(build)
+      const first = cached(before)
+      const grown = cached(after)
+      expect(grown).not.toBe(first)
+      expect(grown.layout.plots).not.toEqual(first.layout.plots)
+      if ('kinds' in first && 'kinds' in grown) {
+        expect(CROP_KINDS[first.kinds[first.indexOf.get('a.ts')!]]).toBe('row')
+        expect(CROP_KINDS[grown.kinds[grown.indexOf.get('a.ts')!]]).toBe('orchard')
+      }
+    }
+  })
+
   it('builds once for an analysis asked for repeatedly (the scrub path)', () => {
     const { fn, calls } = counting()
     const cached = cacheByLayout(fn)

@@ -115,9 +115,15 @@ export async function probeHost(
     return hit.probe
   }
 
+  // Azure's CLI can use a configured organization/project when `--detect` is
+  // omitted (or cannot inspect the remote). Never let those defaults claim a
+  // neutral or non-Azure URL: Azure is selected only by its known URL forms.
+  const allowedCandidates = candidates.filter(
+    (candidate) => candidate.kind !== 'azure' || detectHost(origin) === 'azure'
+  )
   const attempts: HostAuth[] = []
   let provider: HostProvider | null = null
-  for (const candidate of candidates) {
+  for (const candidate of allowedCandidates) {
     const auth = await candidate.status(repoPath, origin)
     attempts.push(auth)
     if (auth.isRepo) {

@@ -7,17 +7,12 @@ import type {
   PrListResult,
   PullRequestInfo
 } from '../../shared/types'
-import {
-  classifyCliFailure,
-  listFailureReason,
-  opFailure,
-  repoProbeFailure,
-  unreachable
-} from './cliFailure'
-import type { CliWording, RepoProbeWording } from './cliFailure'
+import { classifyCliFailure, listFailureReason, opFailure, unreachable } from './cliFailure'
+import type { CliWording } from './cliFailure'
 import { cliRunner } from './cliRunner'
 import type { CliRunner } from './cliRunner'
 import type { HostProvider } from './host'
+import { detectHost, hostnameOf } from './hostUrl'
 
 /**
  * Azure DevOps policy/build evaluations use a different vocabulary from the
@@ -87,7 +82,15 @@ function statusOf(value: unknown): string {
     return String(value ?? '')
       .toLowerCase()
       .replace(/[ _-]/g, '')
-  const status = value.status ?? value.state ?? value.result ?? value.conclusion
+  // Azure build records commonly say { status: 'completed', result: 'failed' }.
+  // The lifecycle is not the outcome: an explicitly reported result wins so a
+  // completed failed/canceled build cannot be rendered as passing.
+  const result = value.result ?? value.conclusion
+  if (result != null) {
+    const resultValue = isRecord(result) ? statusOf(result) : String(result)
+    if (resultValue) return resultValue.toLowerCase().replace(/[ _-]/g, '')
+  }
+  const status = value.status ?? value.state
   if (isRecord(status)) return statusOf(status)
   if (status != null) return String(status).toLowerCase().replace(/[ _-]/g, '')
   const context = value.context
@@ -112,13 +115,47 @@ interface RawAzurePr {
   url?: string
   webUrl?: string
   _links?: { web?: { href?: string } }
-  repository?: { webUrl?: string }
+  repository?: {
+    webUrl?: string
+    url?: string
+    name?: string
+    id?: string
+    project?: { id?: string; name?: string }
+  }
   createdBy?: { displayName?: string; uniqueName?: string; id?: string }
   author?: { displayName?: string; uniqueName?: string }
   policyEvaluations?: unknown
   policies?: unknown
   statuses?: unknown
   buildStatuses?: unknown
+}
+
+function browserPrUrl(pr: RawAzurePr): string {
+  const id = prNumber(pr)
+  if (!id) return ''
+  const links = [pr._links?.web?.href, pr.webUrl, pr.url]
+  for (const candidate of links) {
+    if (!candidate) continue
+    try {
+      const url = new URL(candidate)
+      if (url.protocol !== 'http:' && url.protocol !== 'https:') continue
+      if (url.pathname.match(/\/_git\/[^/]+\/pullrequest\/\d+(?:\/|$)/i)) return url.href
+    } catch {
+      // Ignore malformed or REST-resource links and construct from repository below.
+    }
+  }
+  const repositoryUrl = pr.repository?.webUrl
+  if (!repositoryUrl) return ''
+  try {
+    const url = new URL(repositoryUrl)
+    if (!url.pathname.match(/\/_git\/[^/]+\/?$/i)) return ''
+    url.pathname = `${url.pathname.replace(/\/$/, '')}/pullrequest/${id}`
+    url.search = ''
+    url.hash = ''
+    return url.href
+  } catch {
+    return ''
+  }
 }
 
 function refName(ref: unknown): string {
@@ -165,7 +202,7 @@ export function mapPr(pr: RawAzurePr): PullRequestInfo {
     baseRef: refName(pr.targetRefName ?? pr.target_branch ?? pr.targetBranch),
     state: rawState === 'ACTIVE' ? 'OPEN' : rawState,
     isDraft: !!pr.isDraft,
-    url: pr._links?.web?.href ?? pr.webUrl ?? pr.url ?? '',
+    url: browserPrUrl(pr),
     author:
       pr.createdBy?.displayName ??
       pr.createdBy?.uniqueName ??
@@ -199,15 +236,38 @@ export function parsePrList(stdout: string): PullRequestInfo[] {
 const AZ_MISSING =
   "Azure CLI (az) not found. If it is installed, Git City cannot see it on this app's PATH."
 const AZ_WORDING: CliWording = { missing: AZ_MISSING, cli: 'az', subject: 'Azure DevOps' }
-const AZ_PROBE: RepoProbeWording = {
-  ...AZ_WORDING,
-  noun: 'repository',
-  authPattern: /az login|not logged in|unauthorized|authentication|TF400813|401/i,
-  notFoundPattern: /404|not found|does not exist|no repository|could not detect/i
-}
 
 const runAz: CliRunner = cliRunner({ binary: 'az', env: { AZURE_CORE_ONLY_SHOW_ERRORS: '1' } })
 const PR_PAGE = 50
+
+function parseIterationIds(stdout: string): number[] | null {
+  try {
+    const parsed: unknown = JSON.parse(stdout)
+    const values = Array.isArray(parsed)
+      ? parsed
+      : isRecord(parsed) && Array.isArray(parsed.value)
+        ? parsed.value
+        : null
+    if (!values) return null
+    const ids = values
+      .map((value) => (isRecord(value) ? value.id : value))
+      .map((value) => (typeof value === 'number' ? value : Number(value)))
+      .filter((value) => Number.isInteger(value) && value > 0)
+    return ids
+  } catch {
+    return null
+  }
+}
+
+function parseIterationChanges(stdout: string): PrFileChange[] | null {
+  try {
+    const parsed: unknown = JSON.parse(stdout)
+    if (!isRecord(parsed) || !Array.isArray(parsed.changeEntries)) return null
+    return parsePrFiles(JSON.stringify({ changeEntries: parsed.changeEntries }))
+  } catch {
+    return null
+  }
+}
 
 /** The repository name can be supplied to `az repos show` when git config
  * defaults are not available (for example when this process was launched by
@@ -245,46 +305,52 @@ async function currentBranch(repoPath: string): Promise<string> {
   return result.code === 0 ? result.stdout.trim() : ''
 }
 
-function loginOf(stdout: string): string | null {
-  try {
-    const account = JSON.parse(stdout) as { user?: { name?: string }; name?: string }
-    return account.user?.name ?? account.name ?? null
-  } catch {
-    return null
+function azureRepoProbeFailure(
+  result: Awaited<ReturnType<CliRunner>>,
+  origin: string
+): { reason: string; hint: HostAuth['hint'] } {
+  const output = result.stderr + result.stdout
+  const failure = classifyCliFailure(output)
+  if (failure !== 'other') return unreachable('Azure DevOps', failure)
+  if (
+    /az (?:devops )?login|not logged in|unauthorized|authentication|TF400813|\b401\b/i.test(output)
+  ) {
+    const host = hostnameOf(origin)
+    return {
+      reason: host
+        ? `Azure DevOps CLI is not authenticated for ${host} — run: az devops login`
+        : 'Azure DevOps CLI is not authenticated — run: az devops login',
+      hint: 'login'
+    }
+  }
+  if (/404|not found|does not exist|no repository|could not detect/i.test(output)) {
+    return { reason: 'This repository has no Azure DevOps remote.', hint: 'none' }
+  }
+  return {
+    reason: output.trim()
+      ? `az could not read this repository (${output.trim().split('\n')[0]})`
+      : 'az could not read this repository.',
+    hint: 'retry'
   }
 }
 
 /** Build the Azure provider over an injectable CLI runner. */
 export function createAzureProvider(run: CliRunner): HostProvider {
   async function status(repoPath: string, origin = ''): Promise<HostAuth> {
-    const account = await run(repoPath, ['account', 'show', '--output', 'json'])
-    if (account.missing) {
+    const actualOrigin =
+      origin || (await runGitResult(repoPath, ['remote', 'get-url', 'origin'])).stdout.trim()
+    if (detectHost(actualOrigin) !== 'azure') {
       return {
-        host: 'azure',
-        available: false,
-        authed: false,
-        isRepo: false,
-        login: null,
-        reason: AZ_MISSING,
-        hint: 'install'
-      }
-    }
-    if (account.code !== 0) {
-      const failure = classifyCliFailure(account.stderr + account.stdout)
-      const base = {
         host: 'azure',
         available: true,
         authed: false,
         isRepo: false,
-        login: null
-      } as const
-      return failure !== 'other'
-        ? { ...base, ...unreachable('Azure DevOps', failure) }
-        : { ...base, reason: 'Not logged in to Azure DevOps — run: az login', hint: 'login' }
+        login: null,
+        reason: 'This repository has no Azure DevOps remote.',
+        hint: 'none'
+      }
     }
 
-    const actualOrigin =
-      origin || (await runGitResult(repoPath, ['remote', 'get-url', 'origin'])).stdout.trim()
     const repository = repositoryName(actualOrigin)
     const repoArgs = repository
       ? ['repos', 'show', '--repository', repository, '--detect', 'true', '--output', 'json']
@@ -302,14 +368,29 @@ export function createAzureProvider(run: CliRunner): HostProvider {
           'json'
         ]
     const repo = await run(repoPath, repoArgs)
+    if (repo.missing) {
+      return {
+        host: 'azure',
+        available: false,
+        authed: false,
+        isRepo: false,
+        login: null,
+        reason: AZ_MISSING,
+        hint: 'install'
+      }
+    }
     if (repo.code !== 0) {
+      const failure = azureRepoProbeFailure(repo, actualOrigin)
       return {
         host: 'azure',
         available: true,
-        authed: true,
+        // A repository miss, offline response, or server error does not mean
+        // the DevOps credential is invalid. Only an explicit auth failure
+        // should make the panel call the user logged out.
+        authed: failure.hint !== 'login',
         isRepo: false,
-        login: loginOf(account.stdout),
-        ...repoProbeFailure(repo, actualOrigin, AZ_PROBE)
+        login: null,
+        ...failure
       }
     }
     return {
@@ -317,7 +398,7 @@ export function createAzureProvider(run: CliRunner): HostProvider {
       available: true,
       authed: true,
       isRepo: true,
-      login: loginOf(account.stdout),
+      login: null,
       reason: null
     }
   }
@@ -342,7 +423,34 @@ export function createAzureProvider(run: CliRunner): HostProvider {
     if (!all) {
       return { ok: false, reason: "Couldn't read the response from az. Try ↻." }
     }
-    return { ok: true, prs: all.slice(0, PR_PAGE), more: all.length > PR_PAGE }
+    const prs = await Promise.all(all.slice(0, PR_PAGE).map((pr) => enrichCi(repoPath, pr)))
+    return { ok: true, prs, more: all.length > PR_PAGE }
+  }
+
+  async function enrichCi(repoPath: string, pr: PullRequestInfo): Promise<PullRequestInfo> {
+    const evaluations: unknown[] = []
+    for (const command of ['policy', 'status']) {
+      const result = await run(repoPath, [
+        'repos',
+        'pr',
+        command,
+        'list',
+        '--id',
+        String(pr.number),
+        '--detect',
+        'true',
+        '--output',
+        'json'
+      ])
+      if (result.code !== 0) continue
+      try {
+        evaluations.push(...recordsOf(JSON.parse(result.stdout)))
+      } catch {
+        // An unavailable or malformed status is represented as `none`; it
+        // must not make the whole open-PR list disappear.
+      }
+    }
+    return { ...pr, ci: deriveCi(evaluations) }
   }
 
   async function currentBranchPr(repoPath: string): Promise<PullRequestInfo | null> {
@@ -392,7 +500,10 @@ export function createAzureProvider(run: CliRunner): HostProvider {
   }
 
   async function pullRequestFiles(repoPath: string, number: number): Promise<PrFilesResult> {
-    const result = await run(repoPath, [
+    // `az repos pr show` is metadata only. Its repository/project identifiers
+    // are needed to address the iteration-changes REST resource below, but its
+    // response must never be interpreted as a file list.
+    const metadata = await run(repoPath, [
       'repos',
       'pr',
       'show',
@@ -403,8 +514,73 @@ export function createAzureProvider(run: CliRunner): HostProvider {
       '--output',
       'json'
     ])
-    if (result.code !== 0) return { ok: false, reason: listFailureReason(result, AZ_WORDING) }
-    return { ok: true, files: parsePrFiles(result.stdout) }
+    if (metadata.code !== 0) {
+      return { ok: false, reason: listFailureReason(metadata, AZ_WORDING) }
+    }
+    let route: { project: string; repositoryId: string } | null = null
+    try {
+      const parsed = JSON.parse(metadata.stdout) as RawAzurePr
+      const project = parsed.repository?.project?.id ?? parsed.repository?.project?.name
+      const repositoryId = parsed.repository?.id
+      if (project && repositoryId) route = { project, repositoryId }
+    } catch {
+      // Report the unavailable result below rather than pretending there are no files.
+    }
+    if (!route) {
+      return { ok: false, reason: "Couldn't read changed files from Azure DevOps. Try ↻." }
+    }
+    const iterations = await run(repoPath, [
+      'repos',
+      'pr',
+      'iteration',
+      'list',
+      '--id',
+      String(number),
+      '--detect',
+      'true',
+      '--output',
+      'json'
+    ])
+    if (iterations.code !== 0) {
+      return { ok: false, reason: listFailureReason(iterations, AZ_WORDING) }
+    }
+    const iterationIds = parseIterationIds(iterations.stdout)
+    if (iterationIds === null) {
+      return { ok: false, reason: "Couldn't read changed files from Azure DevOps. Try ↻." }
+    }
+    const files = new Map<string, PrFileChange>()
+    for (const iterationId of iterationIds) {
+      const result = await run(repoPath, [
+        'devops',
+        'invoke',
+        '--area',
+        'git',
+        '--resource',
+        'pullRequestIterationChanges',
+        '--route-parameters',
+        `project=${route.project}`,
+        `repositoryId=${route.repositoryId}`,
+        `pullRequestId=${number}`,
+        `iterationId=${iterationId}`,
+        '--query-parameters',
+        '$top=2000',
+        '--detect',
+        'true',
+        '--api-version',
+        '7.1',
+        '--output',
+        'json'
+      ])
+      if (result.code !== 0) {
+        return { ok: false, reason: listFailureReason(result, AZ_WORDING) }
+      }
+      const parsed = parseIterationChanges(result.stdout)
+      if (parsed === null) {
+        return { ok: false, reason: "Couldn't read changed files from Azure DevOps. Try ↻." }
+      }
+      for (const file of parsed) files.set(file.path, file)
+    }
+    return { ok: true, files: [...files.values()] }
   }
 
   async function checkoutPr(repoPath: string, number: number): Promise<OpResult> {
@@ -461,8 +637,11 @@ interface RawAzureFile {
 export function parsePrFiles(stdout: string): PrFileChange[] {
   try {
     const parsed = JSON.parse(stdout) as
-      RawAzureFile[] | { files?: RawAzureFile[]; changes?: RawAzureFile[] }
-    const files = Array.isArray(parsed) ? parsed : (parsed.files ?? parsed.changes ?? [])
+      | RawAzureFile[]
+      | { files?: RawAzureFile[]; changes?: RawAzureFile[]; changeEntries?: RawAzureFile[] }
+    const files = Array.isArray(parsed)
+      ? parsed
+      : (parsed.files ?? parsed.changes ?? parsed.changeEntries ?? [])
     return (Array.isArray(files) ? files : [])
       .map((file) => ({
         path: file.path ?? file.item?.path ?? '',

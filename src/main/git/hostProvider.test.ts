@@ -4,6 +4,7 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 import { createGithubProvider } from './github'
 import { createGitlabProvider } from './gitlab'
+import { createAzureProvider } from './azure'
 import { probeHost, providerFor } from './host'
 import { CLI_TIMEOUT_MS, TIMED_OUT } from './cliFailure'
 import type { CliResult, CliRunner } from './cliRunner'
@@ -677,6 +678,18 @@ describe('gitlab provider (fake runner)', () => {
 // ——— probeHost / providerFor through the HostProvider interface —————————
 
 describe('probeHost with injected providers (#109)', () => {
+  it('does not let Azure defaults claim a neutral remote', async () => {
+    const repoPath = tempRepo('https://git.acme.com/team/thing.git')
+    let calls = 0
+    const azure = createAzureProvider(async () => {
+      calls += 1
+      return ok(JSON.stringify({ id: 'configured-default-repository' }))
+    })
+    const { provider } = await probeHost(repoPath, [azure])
+    expect(provider).toBeNull()
+    expect(calls).toBe(0)
+  })
+
   it('returns the claiming provider without asking the other one', async () => {
     const repoPath = tempRepo('https://git.acme.com/team/thing.git')
     // auth ok + projects/:fullpath ok → gitlab claims the repository

@@ -16,7 +16,12 @@ describe('Azure DevOps response mapping', () => {
         targetRefName: 'refs/heads/develop',
         status: 'active',
         isDraft: true,
-        _links: { web: { href: 'https://dev.azure.com/acme/p/_git/r/pullrequest/42' } },
+        // The API's web link is a REST resource in this response. The browser
+        // URL must be built from the repository web URL instead.
+        _links: {
+          web: { href: 'https://dev.azure.com/acme/p/_apis/git/repositories/r/pullRequests/42' }
+        },
+        repository: { webUrl: 'https://dev.azure.com/acme/p/_git/r' },
         createdBy: { displayName: 'Ada Lovelace' },
         policyEvaluations: [{ status: 'approved' }]
       })
@@ -58,6 +63,12 @@ describe('Azure DevOps CI state', () => {
     expect(deriveCi([{ status: 'running' }, { status: 'rejected' }])).toBe('failing')
     expect(deriveCi([{ status: 'notApplicable' }])).toBe('none')
     expect(deriveCi({ value: [{ status: 'succeeded' }] })).toBe('passing')
+  })
+
+  it('uses a completed build result instead of its lifecycle status', () => {
+    expect(deriveCi([{ status: 'completed', result: 'failed' }])).toBe('failing')
+    expect(deriveCi([{ status: 'completed', result: 'canceled' }])).toBe('failing')
+    expect(deriveCi([{ status: 'completed', result: 'succeeded' }])).toBe('passing')
   })
 })
 
@@ -123,5 +134,114 @@ describe('Azure DevOps provider CLI calls', () => {
     }
     const current = await createAzureProvider(run).currentBranchPr(repo.path)
     expect(current?.ci).toBe('none')
+  })
+
+  it('probes repository access directly, without requiring az account login', async () => {
+    const calls: string[][] = []
+    const run: CliRunner = async (_cwd, args) => {
+      calls.push(args)
+      return ok(JSON.stringify({ id: 'repo-id' }))
+    }
+    const status = await createAzureProvider(run).status(
+      '/repo',
+      'https://dev.azure.com/acme/project/_git/repo'
+    )
+    expect(status).toMatchObject({ available: true, authed: true, isRepo: true })
+    expect(calls).toHaveLength(1)
+    expect(calls[0]).toContain('repos')
+    expect(calls[0]).toContain('show')
+    expect(calls[0]).not.toContain('account')
+  })
+
+  it('keeps Azure auth remediation valid for az devops login', async () => {
+    const run: CliRunner = async () => err('ERROR: az devops login required (TF400813)')
+    const status = await createAzureProvider(run).status(
+      '/repo',
+      'https://dev.azure.com/acme/project/_git/repo'
+    )
+    expect(status).toMatchObject({ available: true, authed: false, isRepo: false, hint: 'login' })
+    expect(status.reason).toContain('az devops login')
+    expect(status.reason).not.toContain('--hostname')
+  })
+
+  it('enriches every listed PR with policy and build status', async () => {
+    const calls: string[][] = []
+    const run: CliRunner = async (_cwd, args) => {
+      calls.push(args)
+      if (args[0] === 'repos' && args[1] === 'pr' && args[2] === 'list') {
+        return ok(
+          JSON.stringify([
+            { pullRequestId: 1, title: 'One', status: 'active' },
+            { pullRequestId: 2, title: 'Two', status: 'active' }
+          ])
+        )
+      }
+      if (args[2] === 'policy') return ok(JSON.stringify([{ status: 'approved' }]))
+      if (args[2] === 'status' && args.includes('2')) {
+        return ok(JSON.stringify([{ status: 'completed', result: 'failed' }]))
+      }
+      return ok('[]')
+    }
+    const result = await createAzureProvider(run).listPullRequests('/repo')
+    expect(result).toEqual({
+      ok: true,
+      prs: [
+        expect.objectContaining({ number: 1, ci: 'passing' }),
+        expect.objectContaining({ number: 2, ci: 'failing' })
+      ],
+      more: false
+    })
+    expect(calls.filter((args) => args[2] === 'policy')).toHaveLength(2)
+    expect(calls.filter((args) => args[2] === 'status')).toHaveLength(2)
+  })
+
+  it('reads changed files from pull request iteration changeEntries', async () => {
+    const calls: string[][] = []
+    const run: CliRunner = async (_cwd, args) => {
+      calls.push(args)
+      if (args[0] === 'repos' && args[1] === 'pr' && args[2] === 'show') {
+        return ok(
+          JSON.stringify({
+            repository: {
+              id: 'repo-id',
+              project: { id: 'project-id' }
+            }
+          })
+        )
+      }
+      if (args[2] === 'iteration' && args[3] === 'list') {
+        return ok(JSON.stringify([{ id: 1 }, { id: 2 }]))
+      }
+      return ok(
+        JSON.stringify({
+          changeEntries: [{ item: { path: '/src/one.ts' } }, { item: { path: '/src/two.ts' } }]
+        })
+      )
+    }
+    const result = await createAzureProvider(run).pullRequestFiles('/repo', 42)
+    expect(result).toEqual({
+      ok: true,
+      files: [
+        { path: '/src/one.ts', additions: 0, deletions: 0 },
+        { path: '/src/two.ts', additions: 0, deletions: 0 }
+      ]
+    })
+    expect(calls.some((args) => args[2] === 'iteration' && args[3] === 'list')).toBe(true)
+    expect(
+      calls.some(
+        (args) =>
+          args[0] === 'devops' &&
+          args[1] === 'invoke' &&
+          args.includes('pullRequestIterationChanges')
+      )
+    ).toBe(true)
+  })
+
+  it('reports unavailable changed files instead of a false empty success', async () => {
+    const run: CliRunner = async () => ok('{}')
+    await expect(createAzureProvider(run).pullRequestFiles('/repo', 42)).resolves.toEqual({
+      ok: false,
+      reason: "Couldn't read changed files from Azure DevOps. Try ↻."
+    })
   })
 })

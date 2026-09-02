@@ -22,20 +22,6 @@ export function hostnameOf(originUrl: string): string | null {
 }
 
 /**
- * Azure SSH remotes can use a configured ~/.ssh/config alias instead of the
- * public Azure hostname. Keep recognition strict: only the conventional
- * `devops_<organization>:v3/<organization>/<project>/<repo>` shape qualifies.
- */
-export function isAzureSshAlias(originUrl: string): boolean {
-  const value = originUrl.trim()
-  if (value.includes('://')) return false
-  const match = /^(?:[^@/]+@)?([^/:]+):(.+)$/.exec(value)
-  if (!match || !/^devops_[a-z0-9][a-z0-9_.-]*$/i.test(match[1])) return false
-  const parts = match[2].split('/').filter(Boolean)
-  return parts.length === 4 && parts[0].toLowerCase() === 'v3'
-}
-
-/**
  * Which forge a remote URL points at, by hostname.
  *
  * A self-hosted instance on a neutral domain (`git.acme.com`) is genuinely
@@ -51,7 +37,6 @@ export function detectHost(originUrl: string): HostKind {
   if (
     host === 'dev.azure.com' ||
     host === 'ssh.dev.azure.com' ||
-    isAzureSshAlias(originUrl) ||
     (host.endsWith('.visualstudio.com') && host.split('.').length === 3)
   ) {
     return 'azure'

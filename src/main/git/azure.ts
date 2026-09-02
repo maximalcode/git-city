@@ -12,7 +12,7 @@ import type { CliWording } from './cliFailure'
 import { cliRunner } from './cliRunner'
 import type { CliResult, CliRunner } from './cliRunner'
 import type { HostProvider } from './host'
-import { detectHost, hostnameOf, isAzureSshAlias } from './hostUrl'
+import { detectHost, hostnameOf } from './hostUrl'
 
 /**
  * Azure DevOps policy/build evaluations use a different vocabulary from the
@@ -399,7 +399,7 @@ function routeFromOrigin(origin: string): AzureRoute | null {
     })
   const gitIndex = parts.findIndex((part) => part.toLowerCase() === '_git')
   const v3Ssh =
-    (host === 'ssh.dev.azure.com' || host === 'vs-ssh.visualstudio.com' || isAzureSshAlias(value)) &&
+    (host === 'ssh.dev.azure.com' || host === 'vs-ssh.visualstudio.com') &&
     parts[0]?.toLowerCase() === 'v3'
   const project =
     gitIndex > 0

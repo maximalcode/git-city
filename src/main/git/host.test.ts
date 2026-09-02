@@ -36,9 +36,8 @@ describe('detectHost', () => {
     expect(detectHost('https://acme.visualstudio.com/project/_git/repo')).toBe('azure')
   })
 
-  it('recognises configured Azure SSH aliases only for v3 routes', () => {
-    expect(detectHost('git@devops_fabrikam:v3/Fabrikam/Project/repo')).toBe('azure')
-    expect(detectHost('git@devops_fabrikam:team/repo')).toBe('unknown')
+  it('does not claim unverified SSH aliases, even for an Azure-shaped v3 route', () => {
+    expect(detectHost('git@devops_other:v3/Other/Project/repo')).toBe('unknown')
     expect(detectHost('git@random-host:v3/Fabrikam/Project/repo')).toBe('unknown')
   })
 

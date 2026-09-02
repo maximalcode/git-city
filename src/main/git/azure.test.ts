@@ -177,6 +177,24 @@ describe('Azure DevOps provider CLI calls', () => {
     expect(status.reason).not.toContain('--hostname')
   })
 
+  it('distinguishes a missing azure-devops extension from a missing az binary', async () => {
+    const calls: string[][] = []
+    const run: CliRunner = async (_cwd, args) => {
+      calls.push(args)
+      return err(
+        "az: 'repos' is not in the 'az' command group. See 'az --help'. If the command is from an extension, make sure the corresponding extension is installed."
+      )
+    }
+    const status = await createAzureProvider(run).status(
+      '/repo',
+      'https://dev.azure.com/acme/project/_git/repo'
+    )
+    expect(status).toMatchObject({ available: true, authed: false, isRepo: false, hint: 'install' })
+    expect(status.reason).toContain('az extension add --name azure-devops')
+    expect(calls).toHaveLength(1)
+    expect(calls.flat()).not.toContain('extension')
+  })
+
   it('enriches every listed PR with policy and build status', async () => {
     const repo = makeTempRepo('git-city-azure-')
     repo.git('remote', 'add', 'origin', 'https://dev.azure.com/acme/project/_git/repo')
@@ -282,6 +300,138 @@ describe('Azure DevOps provider CLI calls', () => {
           args.includes('pullRequestIterationChanges')
       )
     ).toBe(true)
+  })
+
+  it('uses route metadata from a legacy Azure SSH remote', async () => {
+    const repo = makeTempRepo('git-city-azure-')
+    repo.git('remote', 'add', 'origin', 'git@vs-ssh.visualstudio.com:v3/acme/project/repo')
+    const calls: string[][] = []
+    const run: CliRunner = async (_cwd, args) => {
+      calls.push(args)
+      if (args[0] === 'repos' && args[1] === 'pr' && args[2] === 'show') {
+        return ok(
+          JSON.stringify({
+            repository: {
+              id: 'repo-id',
+              project: { id: 'project-id' },
+              webUrl: 'https://dev.azure.com/acme/project/_git/repo'
+            }
+          })
+        )
+      }
+      if (args[0] === 'devops' && args.includes('pullRequestIterations')) {
+        return ok(JSON.stringify([{ id: 1 }]))
+      }
+      return ok(JSON.stringify({ changeEntries: [] }))
+    }
+
+    await expect(createAzureProvider(run).pullRequestFiles(repo.path, 42)).resolves.toMatchObject({
+      ok: true
+    })
+    const iterationCall = calls.find(
+      (args) => args[0] === 'devops' && args.includes('pullRequestIterations')
+    )
+    expect(iterationCall).toEqual(
+      expect.arrayContaining([
+        '--organization',
+        'https://dev.azure.com/acme',
+        'project=project-id',
+        'repositoryId=repo-id'
+      ])
+    )
+  })
+
+  it('reads the latest iteration as the complete PR diff from iteration zero', async () => {
+    const repo = makeTempRepo('git-city-azure-')
+    repo.git('remote', 'add', 'origin', 'https://dev.azure.com/acme/project/_git/repo')
+    const calls: string[][] = []
+    const run: CliRunner = async (_cwd, args) => {
+      calls.push(args)
+      if (args[0] === 'repos' && args[1] === 'pr' && args[2] === 'show') {
+        return ok(
+          JSON.stringify({
+            repository: {
+              id: 'repo-id',
+              project: { id: 'project-id' },
+              webUrl: 'https://dev.azure.com/acme/project/_git/repo'
+            }
+          })
+        )
+      }
+      if (args[0] === 'devops' && args.includes('pullRequestIterations')) {
+        return ok(JSON.stringify({ value: [{ id: 1 }, { id: 2 }] }))
+      }
+      if (args.includes('iterationId=1')) {
+        return ok(JSON.stringify({ changeEntries: [{ item: { path: '/historical.ts' } }] }))
+      }
+      return ok(JSON.stringify({ changeEntries: [{ item: { path: '/current.ts' } }] }))
+    }
+
+    await expect(createAzureProvider(run).pullRequestFiles(repo.path, 42)).resolves.toEqual({
+      ok: true,
+      files: [{ path: 'current.ts', additions: 0, deletions: 0 }]
+    })
+    const changeCalls = calls.filter(
+      (args) => args[0] === 'devops' && args.includes('pullRequestIterationChanges')
+    )
+    expect(changeCalls).toHaveLength(1)
+    expect(changeCalls[0]).toEqual(
+      expect.arrayContaining(['iterationId=2', '$compareTo=0', '$top=2000'])
+    )
+  })
+
+  it('follows iteration-change pagination', async () => {
+    const repo = makeTempRepo('git-city-azure-')
+    repo.git('remote', 'add', 'origin', 'https://dev.azure.com/acme/project/_git/repo')
+    const calls: string[][] = []
+    const run: CliRunner = async (_cwd, args) => {
+      calls.push(args)
+      if (args[0] === 'repos' && args[1] === 'pr' && args[2] === 'show') {
+        return ok(
+          JSON.stringify({
+            repository: {
+              id: 'repo-id',
+              project: { id: 'project-id' },
+              webUrl: 'https://dev.azure.com/acme/project/_git/repo'
+            }
+          })
+        )
+      }
+      if (args[0] === 'devops' && args.includes('pullRequestIterations')) {
+        return ok(JSON.stringify([{ id: 2 }]))
+      }
+      if (args.includes('$skip=2')) {
+        return ok(
+          JSON.stringify({
+            changeEntries: [{ item: { path: '/page-two.ts' } }],
+            nextSkip: 0,
+            nextTop: 0
+          })
+        )
+      }
+      return ok(
+        JSON.stringify({
+          changeEntries: [{ item: { path: '/page-one.ts' } }],
+          nextSkip: 2,
+          nextTop: 2000
+        })
+      )
+    }
+
+    await expect(createAzureProvider(run).pullRequestFiles(repo.path, 42)).resolves.toEqual({
+      ok: true,
+      files: [
+        { path: 'page-one.ts', additions: 0, deletions: 0 },
+        { path: 'page-two.ts', additions: 0, deletions: 0 }
+      ]
+    })
+    const changeCalls = calls.filter(
+      (args) => args[0] === 'devops' && args.includes('pullRequestIterationChanges')
+    )
+    expect(changeCalls).toHaveLength(2)
+    expect(changeCalls[1]).toEqual(
+      expect.arrayContaining(['$skip=2', '$top=2000', '$compareTo=0'])
+    )
   })
 
   it('reports unavailable changed files instead of a false empty success', async () => {

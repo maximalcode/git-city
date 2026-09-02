@@ -10,7 +10,7 @@ import type {
 import { classifyCliFailure, listFailureReason, opFailure, unreachable } from './cliFailure'
 import type { CliWording } from './cliFailure'
 import { cliRunner } from './cliRunner'
-import type { CliRunner } from './cliRunner'
+import type { CliResult, CliRunner } from './cliRunner'
 import type { HostProvider } from './host'
 import { detectHost, hostnameOf } from './hostUrl'
 
@@ -240,10 +240,21 @@ export function parsePrList(stdout: string): PullRequestInfo[] {
 
 const AZ_MISSING =
   "Azure CLI (az) not found. If it is installed, Git City cannot see it on this app's PATH."
+const AZ_EXTENSION_MISSING =
+  'Azure DevOps CLI extension is not installed. Install it with: az extension add --name azure-devops.'
 const AZ_WORDING: CliWording = { missing: AZ_MISSING, cli: 'az', subject: 'Azure DevOps' }
 
 const runAz: CliRunner = cliRunner({ binary: 'az', env: { AZURE_CORE_ONLY_SHOW_ERRORS: '1' } })
 const PR_PAGE = 50
+
+function missingAzureExtension(result: CliResult): boolean {
+  if (result.missing) return false
+  const output = result.stderr + result.stdout
+  return (
+    /\brepos\b.*not in the ['"]az['"] command group/i.test(output) ||
+    /azure[- ]devops.*extension|extension.*azure[- ]devops/i.test(output)
+  )
+}
 
 function parseIterationIds(stdout: string): number[] | null {
   try {
@@ -264,11 +275,23 @@ function parseIterationIds(stdout: string): number[] | null {
   }
 }
 
-function parseIterationChanges(stdout: string): PrFileChange[] | null {
+interface IterationChangesPage {
+  files: PrFileChange[]
+  nextSkip: number
+  nextTop: number
+}
+
+function parseIterationChanges(stdout: string): IterationChangesPage | null {
   try {
     const parsed: unknown = JSON.parse(stdout)
     if (!isRecord(parsed) || !Array.isArray(parsed.changeEntries)) return null
-    return parsePrFiles(JSON.stringify({ changeEntries: parsed.changeEntries }))
+    const nextSkip = parsed.nextSkip
+    const nextTop = parsed.nextTop
+    return {
+      files: parsePrFiles(JSON.stringify({ changeEntries: parsed.changeEntries })),
+      nextSkip: typeof nextSkip === 'number' && Number.isInteger(nextSkip) ? nextSkip : 0,
+      nextTop: typeof nextTop === 'number' && Number.isInteger(nextTop) ? nextTop : 0
+    }
   } catch {
     return null
   }
@@ -338,16 +361,19 @@ function routeFromOrigin(origin: string): AzureRoute | null {
       }
     })
   const gitIndex = parts.findIndex((part) => part.toLowerCase() === '_git')
+  const v3Ssh =
+    (host === 'ssh.dev.azure.com' || host === 'vs-ssh.visualstudio.com') &&
+    parts[0]?.toLowerCase() === 'v3'
   const project =
     gitIndex > 0
       ? parts[gitIndex - 1]
-      : host === 'ssh.dev.azure.com' && parts[0]?.toLowerCase() === 'v3'
+      : v3Ssh
         ? parts[2]
         : parts[0]
   const organization =
     host === 'dev.azure.com'
       ? parts[0]
-      : host === 'ssh.dev.azure.com'
+      : v3Ssh
         ? parts[1]
         : host.endsWith('.visualstudio.com')
           ? host.slice(0, -'.visualstudio.com'.length)
@@ -487,6 +513,17 @@ export function createAzureProvider(run: CliRunner): HostProvider {
         isRepo: false,
         login: null,
         reason: AZ_MISSING,
+        hint: 'install'
+      }
+    }
+    if (missingAzureExtension(repo)) {
+      return {
+        host: 'azure',
+        available: true,
+        authed: false,
+        isRepo: false,
+        login: null,
+        reason: AZ_EXTENSION_MISSING,
         hint: 'install'
       }
     }
@@ -654,13 +691,19 @@ export function createAzureProvider(run: CliRunner): HostProvider {
     if (iterationIds === null) {
       return { ok: false, reason: "Couldn't read changed files from Azure DevOps. Try ↻." }
     }
+    if (iterationIds.length === 0) return { ok: true, files: [] }
+    const latestIteration = Math.max(...iterationIds)
     const files = new Map<string, PrFileChange>()
-    for (const iterationId of iterationIds) {
+    let skip = 0
+    let top = 2000
+    do {
       const result = await run(
         repoPath,
-        invokeArgs(route, 'pullRequestIterationChanges', number, iterationId).concat([
+        invokeArgs(route, 'pullRequestIterationChanges', number, latestIteration).concat([
           '--query-parameters',
-          '$top=2000'
+          `$top=${top}`,
+          ...(skip > 0 ? [`$skip=${skip}`] : []),
+          '$compareTo=0'
         ])
       )
       if (result.code !== 0) {
@@ -670,8 +713,10 @@ export function createAzureProvider(run: CliRunner): HostProvider {
       if (parsed === null) {
         return { ok: false, reason: "Couldn't read changed files from Azure DevOps. Try ↻." }
       }
-      for (const file of parsed) files.set(file.path, file)
-    }
+      for (const file of parsed.files) files.set(file.path, file)
+      skip = parsed.nextSkip
+      top = parsed.nextTop > 0 ? parsed.nextTop : 2000
+    } while (skip > 0)
     return { ok: true, files: [...files.values()] }
   }
 

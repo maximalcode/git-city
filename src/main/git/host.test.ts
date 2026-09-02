@@ -36,6 +36,12 @@ describe('detectHost', () => {
     expect(detectHost('https://acme.visualstudio.com/project/_git/repo')).toBe('azure')
   })
 
+  it('recognises configured Azure SSH aliases only for v3 routes', () => {
+    expect(detectHost('git@devops_fabrikam:v3/Fabrikam/Project/repo')).toBe('azure')
+    expect(detectHost('git@devops_fabrikam:team/repo')).toBe('unknown')
+    expect(detectHost('git@random-host:v3/Fabrikam/Project/repo')).toBe('unknown')
+  })
+
   it('does not claim an Azure lookalike domain', () => {
     expect(detectHost('https://dev.azure.com.evil.example/acme/project/_git/repo')).toBe('unknown')
     expect(detectHost('https://evil.example.visualstudio.com/project/_git/repo')).toBe('unknown')

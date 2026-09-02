@@ -83,6 +83,14 @@ describe('Azure DevOps CI state', () => {
     expect(deriveCi([{ status: 'completed', result: 'canceled' }])).toBe('failing')
     expect(deriveCi([{ status: 'completed', result: 'succeeded' }])).toBe('passing')
   })
+
+  it('does not treat unresolved Azure states as passing', () => {
+    expect(deriveCi([{ status: 'notSet' }])).toBe('pending')
+    expect(deriveCi([{ status: 'cancelling' }])).toBe('pending')
+    expect(deriveCi([{ status: 'unknown' }])).toBe('pending')
+    expect(deriveCi([{ status: 'newStatusFromAzure' }])).toBe('pending')
+    expect(deriveCi([{}])).toBe('none')
+  })
 })
 
 describe('Azure DevOps provider CLI calls', () => {
@@ -107,7 +115,9 @@ describe('Azure DevOps provider CLI calls', () => {
         )
       }
       if (args[0] === 'repos' && args[1] === 'pr' && args[2] === 'policy') {
-        return ok(JSON.stringify([{ status: 'approved' }]))
+        return ok(
+          JSON.stringify([{ configuration: { type: { displayName: 'Build' } }, status: 'approved' }])
+        )
       }
       return ok()
     }
@@ -177,6 +187,19 @@ describe('Azure DevOps provider CLI calls', () => {
     expect(status.reason).not.toContain('--hostname')
   })
 
+  it('treats TF401019 access denial as an authentication problem', async () => {
+    const run: CliRunner = async () =>
+      err(
+        'TF401019: The Git repository with name or identifier repo does not exist or you do not have permissions for the operation.'
+      )
+    const status = await createAzureProvider(run).status(
+      '/repo',
+      'https://dev.azure.com/acme/project/_git/repo'
+    )
+    expect(status).toMatchObject({ available: true, authed: false, isRepo: false, hint: 'login' })
+    expect(status.reason).toContain('az devops login')
+  })
+
   it('distinguishes a missing azure-devops extension from a missing az binary', async () => {
     const calls: string[][] = []
     const run: CliRunner = async (_cwd, args) => {
@@ -209,7 +232,11 @@ describe('Azure DevOps provider CLI calls', () => {
           ])
         )
       }
-      if (args[2] === 'policy') return ok(JSON.stringify([{ status: 'approved' }]))
+      if (args[2] === 'policy') {
+        return ok(
+          JSON.stringify([{ configuration: { type: { displayName: 'Build' } }, status: 'approved' }])
+        )
+      }
       if (
         args[0] === 'devops' &&
         args.includes('pullRequestStatuses') &&
@@ -243,6 +270,65 @@ describe('Azure DevOps provider CLI calls', () => {
       ])
     )
     expect(calls.some((args) => args[2] === 'status')).toBe(false)
+  })
+
+  it('rolls up build and status-check policies, not reviewer policies', async () => {
+    const repo = makeTempRepo('git-city-azure-')
+    repo.git('remote', 'add', 'origin', 'https://dev.azure.com/acme/project/_git/repo')
+    const run: CliRunner = async (_cwd, args) => {
+      if (args[0] === 'repos' && args[1] === 'pr' && args[2] === 'list') {
+        return ok(JSON.stringify([{ pullRequestId: 1, title: 'One', status: 'active' }]))
+      }
+      if (args[2] === 'policy') {
+        return ok(
+          JSON.stringify([
+            {
+              configuration: { type: { displayName: 'Minimum number of reviewers' } },
+              status: 'rejected'
+            },
+            { configuration: { type: { displayName: 'Build' } }, status: 'approved' }
+          ])
+        )
+      }
+      return ok('[]')
+    }
+
+    const result = await createAzureProvider(run).listPullRequests(repo.path)
+    expect(result).toMatchObject({ ok: true, prs: [expect.objectContaining({ ci: 'passing' })] })
+  })
+
+  it('limits concurrent CI enrichment while preserving all PR results', async () => {
+    const repo = makeTempRepo('git-city-azure-')
+    repo.git('remote', 'add', 'origin', 'https://dev.azure.com/acme/project/_git/repo')
+    let active = 0
+    let maxActive = 0
+    const run: CliRunner = async (_cwd, args) => {
+      if (args[0] === 'repos' && args[1] === 'pr' && args[2] === 'list') {
+        return ok(
+          JSON.stringify(
+            Array.from({ length: 50 }, (_, index) => ({
+              pullRequestId: index + 1,
+              title: `PR ${index + 1}`,
+              status: 'active'
+            }))
+          )
+        )
+      }
+      active += 1
+      maxActive = Math.max(maxActive, active)
+      await new Promise((resolve) => setTimeout(resolve, 2))
+      active -= 1
+      return ok('[]')
+    }
+
+    const result = await createAzureProvider(run).listPullRequests(repo.path)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.prs).toHaveLength(50)
+    expect(result.prs.map((pr) => pr.number)).toEqual(
+      Array.from({ length: 50 }, (_, index) => index + 1)
+    )
+    expect(maxActive).toBeLessThanOrEqual(8)
   })
 
   it('reads changed files from pull request iteration changeEntries', async () => {

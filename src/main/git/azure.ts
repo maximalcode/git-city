@@ -12,7 +12,7 @@ import type { CliWording } from './cliFailure'
 import { cliRunner } from './cliRunner'
 import type { CliResult, CliRunner } from './cliRunner'
 import type { HostProvider } from './host'
-import { detectHost, hostnameOf } from './hostUrl'
+import { detectHost, hostnameOf, isAzureSshAlias } from './hostUrl'
 
 /**
  * Azure DevOps policy/build evaluations use a different vocabulary from the
@@ -29,13 +29,11 @@ export function deriveCi(evaluations: unknown): PullRequestInfo['ci'] {
         : []
   if (records.length === 0) return 'none'
 
-  let seen = false
   let pending = false
   let applicable = false
   for (const record of records) {
     const value = statusOf(record)
     if (!value || value === 'notapplicable' || value === 'not-applicable') continue
-    seen = true
     applicable = true
     if (
       [
@@ -62,13 +60,19 @@ export function deriveCi(evaluations: unknown): PullRequestInfo['ci'] {
         'waiting',
         'notstarted',
         'created',
-        'unknown'
+        'unknown',
+        'notset',
+        'cancelling'
       ].includes(value)
     ) {
       pending = true
+      continue
     }
+    if (['approved', 'succeeded', 'success', 'passed', 'pass'].includes(value)) continue
+    // Unknown Azure lifecycle/result values are unresolved, never passing.
+    pending = true
   }
-  if (!seen || !applicable) return 'none'
+  if (!applicable) return 'none'
   if (pending) return 'pending'
   return 'passing'
 }
@@ -85,7 +89,7 @@ function statusOf(value: unknown): string {
   // Azure build records commonly say { status: 'completed', result: 'failed' }.
   // The lifecycle is not the outcome: an explicitly reported result wins so a
   // completed failed/canceled build cannot be rendered as passing.
-  const result = value.result ?? value.conclusion
+  const result = value.result ?? value.conclusion ?? value.evaluationResult
   if (result != null) {
     const resultValue = isRecord(result) ? statusOf(result) : String(result)
     if (resultValue) return resultValue.toLowerCase().replace(/[ _-]/g, '')
@@ -174,6 +178,20 @@ function recordsOf(value: unknown): unknown[] {
   return []
 }
 
+function isCiPolicy(value: unknown): boolean {
+  if (!isRecord(value)) return false
+  const configuration = isRecord(value.configuration) ? value.configuration : null
+  const type = configuration && isRecord(configuration.type) ? configuration.type : null
+  const labels = [type?.displayName, type?.name, type?.id, value.policyType, value.type]
+  return labels.some(
+    (label) => typeof label === 'string' && /build|status(?:[- ]check)?/i.test(label)
+  )
+}
+
+function ciPolicies(value: unknown): unknown[] {
+  return recordsOf(value).filter(isCiPolicy)
+}
+
 function evaluationsOf(pr: RawAzurePr): unknown[] {
   return [pr.policyEvaluations, pr.policies, pr.statuses, pr.buildStatuses].flatMap(recordsOf)
 }
@@ -246,6 +264,25 @@ const AZ_WORDING: CliWording = { missing: AZ_MISSING, cli: 'az', subject: 'Azure
 
 const runAz: CliRunner = cliRunner({ binary: 'az', env: { AZURE_CORE_ONLY_SHOW_ERRORS: '1' } })
 const PR_PAGE = 50
+const CI_ENRICH_CONCURRENCY = 6
+
+async function mapWithConcurrency<T, R>(
+  values: T[],
+  limit: number,
+  callback: (value: T) => Promise<R>
+): Promise<R[]> {
+  const results = new Array<R>(values.length)
+  let next = 0
+  async function worker(): Promise<void> {
+    while (true) {
+      const index = next++
+      if (index >= values.length) return
+      results[index] = await callback(values[index])
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, values.length) }, () => worker()))
+  return results
+}
 
 function missingAzureExtension(result: CliResult): boolean {
   if (result.missing) return false
@@ -362,7 +399,7 @@ function routeFromOrigin(origin: string): AzureRoute | null {
     })
   const gitIndex = parts.findIndex((part) => part.toLowerCase() === '_git')
   const v3Ssh =
-    (host === 'ssh.dev.azure.com' || host === 'vs-ssh.visualstudio.com') &&
+    (host === 'ssh.dev.azure.com' || host === 'vs-ssh.visualstudio.com' || isAzureSshAlias(value)) &&
     parts[0]?.toLowerCase() === 'v3'
   const project =
     gitIndex > 0
@@ -449,6 +486,15 @@ function azureRepoProbeFailure(
   const output = result.stderr + result.stdout
   const failure = classifyCliFailure(output)
   if (failure !== 'other') return unreachable('Azure DevOps', failure)
+  if (/TF401019|you do not have permissions|permission(?:s)? denied/i.test(output)) {
+    const host = hostnameOf(origin)
+    return {
+      reason: host
+        ? `Azure DevOps CLI cannot access ${host} — run: az devops login and verify your repository permissions`
+        : 'Azure DevOps CLI cannot access this repository — run: az devops login and verify your repository permissions',
+      hint: 'login'
+    }
+  }
   if (
     /az (?:devops )?login|not logged in|unauthorized|authentication|TF400813|\b401\b/i.test(output)
   ) {
@@ -572,8 +618,10 @@ export function createAzureProvider(run: CliRunner): HostProvider {
       return { ok: false, reason: "Couldn't read the response from az. Try ↻." }
     }
     const route = await routeForList(repoPath, rawPrs[0])
-    const prs = await Promise.all(
-      rawPrs.slice(0, PR_PAGE).map((raw) => enrichCi(repoPath, mapPr(raw), route))
+    const prs = await mapWithConcurrency(
+      rawPrs.slice(0, PR_PAGE),
+      CI_ENRICH_CONCURRENCY,
+      (raw) => enrichCi(repoPath, mapPr(raw), route)
     )
     return { ok: true, prs, more: rawPrs.length > PR_PAGE }
   }
@@ -603,7 +651,7 @@ export function createAzureProvider(run: CliRunner): HostProvider {
     ])
     if (policies.code === 0) {
       try {
-        evaluations.push(...recordsOf(JSON.parse(policies.stdout)))
+        evaluations.push(...ciPolicies(JSON.parse(policies.stdout)))
       } catch {
         // An unavailable or malformed policy response is represented as
         // `none`; it must not make the whole open-PR list disappear.

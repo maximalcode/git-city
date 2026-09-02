@@ -678,6 +678,12 @@ describe('gitlab provider (fake runner)', () => {
 // ——— probeHost / providerFor through the HostProvider interface —————————
 
 describe('probeHost with injected providers (#109)', () => {
+  it('routes a configured Azure SSH alias to Azure', async () => {
+    const repoPath = tempRepo('git@devops_fabrikam:v3/Fabrikam/Project/repo')
+    const { provider } = await probeHost(repoPath)
+    expect(provider?.kind).toBe('azure')
+  })
+
   it('does not let Azure defaults claim a neutral remote', async () => {
     const repoPath = tempRepo('https://git.acme.com/team/thing.git')
     let calls = 0

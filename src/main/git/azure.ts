@@ -213,7 +213,7 @@ export function mapPr(pr: RawAzurePr): PullRequestInfo {
   }
 }
 
-function parsePrListResponse(stdout: string): PullRequestInfo[] | null {
+function parseRawPrListResponse(stdout: string): RawAzurePr[] | null {
   try {
     const parsed = JSON.parse(stdout)
     const values = Array.isArray(parsed)
@@ -222,10 +222,15 @@ function parsePrListResponse(stdout: string): PullRequestInfo[] | null {
         ? parsed.value
         : null
     if (!values) return null
-    return (values as RawAzurePr[]).filter(hasPrNumber).map(mapPr)
+    return (values as RawAzurePr[]).filter(hasPrNumber)
   } catch {
     return null
   }
+}
+
+function parsePrListResponse(stdout: string): PullRequestInfo[] | null {
+  const values = parseRawPrListResponse(stdout)
+  return values?.map(mapPr) ?? null
 }
 
 /** Parse an Azure PR list response. Exported for fixture-driven tests. */
@@ -298,6 +303,112 @@ function repositoryName(origin: string): string | null {
   const gitIndex = parts.findIndex((part) => part.toLowerCase() === '_git')
   const name = gitIndex >= 0 ? parts[gitIndex + 1] : parts.at(-1)
   return name ? name.replace(/\.git$/, '') : null
+}
+
+interface AzureRoute {
+  organization: string
+  project: string
+  repositoryId: string
+}
+
+/** Extract the REST route components from Azure's HTTPS and SSH remotes. */
+function routeFromOrigin(origin: string): AzureRoute | null {
+  const value = origin.trim()
+  const host = hostnameOf(value)
+  const repositoryId = repositoryName(value)
+  if (!host || !repositoryId) return null
+
+  const path = value.includes('://')
+    ? (() => {
+        try {
+          return new URL(value).pathname
+        } catch {
+          return ''
+        }
+      })()
+    : value.split(':').slice(1).join(':')
+  const parts = path
+    .split('/')
+    .filter(Boolean)
+    .map((part) => {
+      try {
+        return decodeURIComponent(part)
+      } catch {
+        return part
+      }
+    })
+  const gitIndex = parts.findIndex((part) => part.toLowerCase() === '_git')
+  const project =
+    gitIndex > 0
+      ? parts[gitIndex - 1]
+      : host === 'ssh.dev.azure.com' && parts[0]?.toLowerCase() === 'v3'
+        ? parts[2]
+        : parts[0]
+  const organization =
+    host === 'dev.azure.com'
+      ? parts[0]
+      : host === 'ssh.dev.azure.com'
+        ? parts[1]
+        : host.endsWith('.visualstudio.com')
+          ? host.slice(0, -'.visualstudio.com'.length)
+          : null
+  return organization && project ? { organization, project, repositoryId } : null
+}
+
+function routeFromMetadata(metadata: RawAzurePr, origin: string): AzureRoute | null {
+  const fromOrigin = routeFromOrigin(origin)
+  const fromRepository = routeFromOrigin(metadata.repository?.webUrl ?? '')
+  const repositoryId =
+    metadata.repository?.id ?? fromRepository?.repositoryId ?? fromOrigin?.repositoryId
+  const project =
+    metadata.repository?.project?.id ??
+    metadata.repository?.project?.name ??
+    fromRepository?.project ??
+    fromOrigin?.project
+  const organization = fromOrigin?.organization ?? fromRepository?.organization
+  return organization && project && repositoryId ? { organization, project, repositoryId } : null
+}
+
+function invokeArgs(
+  route: AzureRoute,
+  resource: string,
+  pullRequestId: number,
+  iterationId?: number
+): string[] {
+  const args = [
+    'devops',
+    'invoke',
+    '--area',
+    'git',
+    '--resource',
+    resource,
+    '--route-parameters',
+    `project=${route.project}`,
+    `repositoryId=${route.repositoryId}`,
+    `pullRequestId=${pullRequestId}`
+  ]
+  if (iterationId !== undefined) args.push(`iterationId=${iterationId}`)
+  args.push(
+    '--organization',
+    `https://dev.azure.com/${route.organization}`,
+    '--detect',
+    'true',
+    '--api-version',
+    '7.1',
+    '--output',
+    'json'
+  )
+  return args
+}
+
+async function originFor(repoPath: string): Promise<string> {
+  try {
+    return (await runGitResult(repoPath, ['remote', 'get-url', 'origin'])).stdout.trim()
+  } catch {
+    // The provider can still report a useful Azure response when the caller's
+    // test fixture or a transiently unavailable checkout has no git remote.
+    return ''
+  }
 }
 
 async function currentBranch(repoPath: string): Promise<string> {
@@ -419,35 +530,58 @@ export function createAzureProvider(run: CliRunner): HostProvider {
       'json'
     ])
     if (result.code !== 0) return { ok: false, reason: listFailureReason(result, AZ_WORDING) }
-    const all = parsePrListResponse(result.stdout)
-    if (!all) {
+    const rawPrs = parseRawPrListResponse(result.stdout)
+    if (!rawPrs) {
       return { ok: false, reason: "Couldn't read the response from az. Try ↻." }
     }
-    const prs = await Promise.all(all.slice(0, PR_PAGE).map((pr) => enrichCi(repoPath, pr)))
-    return { ok: true, prs, more: all.length > PR_PAGE }
+    const route = await routeForList(repoPath, rawPrs[0])
+    const prs = await Promise.all(
+      rawPrs.slice(0, PR_PAGE).map((raw) => enrichCi(repoPath, mapPr(raw), route))
+    )
+    return { ok: true, prs, more: rawPrs.length > PR_PAGE }
   }
 
-  async function enrichCi(repoPath: string, pr: PullRequestInfo): Promise<PullRequestInfo> {
+  async function routeForList(repoPath: string, firstPr?: RawAzurePr): Promise<AzureRoute | null> {
+    const origin = await originFor(repoPath)
+    return routeFromOrigin(origin) ?? (firstPr ? routeFromMetadata(firstPr, origin) : null)
+  }
+
+  async function enrichCi(
+    repoPath: string,
+    pr: PullRequestInfo,
+    route: AzureRoute | null
+  ): Promise<PullRequestInfo> {
     const evaluations: unknown[] = []
-    for (const command of ['policy', 'status']) {
-      const result = await run(repoPath, [
-        'repos',
-        'pr',
-        command,
-        'list',
-        '--id',
-        String(pr.number),
-        '--detect',
-        'true',
-        '--output',
-        'json'
-      ])
-      if (result.code !== 0) continue
+    const policies = await run(repoPath, [
+      'repos',
+      'pr',
+      'policy',
+      'list',
+      '--id',
+      String(pr.number),
+      '--detect',
+      'true',
+      '--output',
+      'json'
+    ])
+    if (policies.code === 0) {
       try {
-        evaluations.push(...recordsOf(JSON.parse(result.stdout)))
+        evaluations.push(...recordsOf(JSON.parse(policies.stdout)))
       } catch {
-        // An unavailable or malformed status is represented as `none`; it
-        // must not make the whole open-PR list disappear.
+        // An unavailable or malformed policy response is represented as
+        // `none`; it must not make the whole open-PR list disappear.
+      }
+    }
+    // `az repos pr status list` is not a supported Azure CLI command. Use the
+    // documented Git pull-request-statuses REST resource through `invoke`.
+    if (route) {
+      const statuses = await run(repoPath, invokeArgs(route, 'pullRequestStatuses', pr.number))
+      if (statuses.code === 0) {
+        try {
+          evaluations.push(...recordsOf(JSON.parse(statuses.stdout)))
+        } catch {
+          // An unavailable or malformed status is represented as `none`.
+        }
       }
     }
     return { ...pr, ci: deriveCi(evaluations) }
@@ -479,24 +613,8 @@ export function createAzureProvider(run: CliRunner): HostProvider {
     // One policy read for the branch PR keeps the HUD useful without making a
     // request per item in the open-PR list.
     if (pr.ci !== 'none') return pr
-    const policies = await run(repoPath, [
-      'repos',
-      'pr',
-      'policy',
-      'list',
-      '--id',
-      String(pr.number),
-      '--detect',
-      'true',
-      '--output',
-      'json'
-    ])
-    if (policies.code !== 0) return pr
-    try {
-      return { ...pr, ci: deriveCi(JSON.parse(policies.stdout)) }
-    } catch {
-      return pr
-    }
+    const route = await routeForList(repoPath)
+    return enrichCi(repoPath, pr, route)
   }
 
   async function pullRequestFiles(repoPath: string, number: number): Promise<PrFilesResult> {
@@ -517,30 +635,18 @@ export function createAzureProvider(run: CliRunner): HostProvider {
     if (metadata.code !== 0) {
       return { ok: false, reason: listFailureReason(metadata, AZ_WORDING) }
     }
-    let route: { project: string; repositoryId: string } | null = null
+    const origin = await originFor(repoPath)
+    let route: AzureRoute | null = null
     try {
       const parsed = JSON.parse(metadata.stdout) as RawAzurePr
-      const project = parsed.repository?.project?.id ?? parsed.repository?.project?.name
-      const repositoryId = parsed.repository?.id
-      if (project && repositoryId) route = { project, repositoryId }
+      route = routeFromMetadata(parsed, origin)
     } catch {
       // Report the unavailable result below rather than pretending there are no files.
     }
     if (!route) {
       return { ok: false, reason: "Couldn't read changed files from Azure DevOps. Try ↻." }
     }
-    const iterations = await run(repoPath, [
-      'repos',
-      'pr',
-      'iteration',
-      'list',
-      '--id',
-      String(number),
-      '--detect',
-      'true',
-      '--output',
-      'json'
-    ])
+    const iterations = await run(repoPath, invokeArgs(route, 'pullRequestIterations', number))
     if (iterations.code !== 0) {
       return { ok: false, reason: listFailureReason(iterations, AZ_WORDING) }
     }
@@ -550,27 +656,13 @@ export function createAzureProvider(run: CliRunner): HostProvider {
     }
     const files = new Map<string, PrFileChange>()
     for (const iterationId of iterationIds) {
-      const result = await run(repoPath, [
-        'devops',
-        'invoke',
-        '--area',
-        'git',
-        '--resource',
-        'pullRequestIterationChanges',
-        '--route-parameters',
-        `project=${route.project}`,
-        `repositoryId=${route.repositoryId}`,
-        `pullRequestId=${number}`,
-        `iterationId=${iterationId}`,
-        '--query-parameters',
-        '$top=2000',
-        '--detect',
-        'true',
-        '--api-version',
-        '7.1',
-        '--output',
-        'json'
-      ])
+      const result = await run(
+        repoPath,
+        invokeArgs(route, 'pullRequestIterationChanges', number, iterationId).concat([
+          '--query-parameters',
+          '$top=2000'
+        ])
+      )
       if (result.code !== 0) {
         return { ok: false, reason: listFailureReason(result, AZ_WORDING) }
       }
@@ -644,7 +736,9 @@ export function parsePrFiles(stdout: string): PrFileChange[] {
       : (parsed.files ?? parsed.changes ?? parsed.changeEntries ?? [])
     return (Array.isArray(files) ? files : [])
       .map((file) => ({
-        path: file.path ?? file.item?.path ?? '',
+        // Azure REST paths are rooted at `/`; the shared model is Git-relative
+        // like the GitHub and GitLab adapters.
+        path: (file.path ?? file.item?.path ?? '').replace(/^\/+/, ''),
         additions: file.additions ?? 0,
         deletions: file.deletions ?? 0
       }))

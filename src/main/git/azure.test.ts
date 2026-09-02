@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createAzureProvider, deriveCi, mapPr, parsePrList } from './azure'
+import { createAzureProvider, deriveCi, mapPr, parsePrFiles, parsePrList } from './azure'
 import type { CliResult, CliRunner } from './cliRunner'
 import { makeTempRepo } from './fixtures'
 
@@ -53,6 +53,19 @@ describe('Azure DevOps response mapping', () => {
     expect(parsePrList(fixture)).toHaveLength(1)
     expect(parsePrList(JSON.stringify(JSON.parse(fixture).value))).toHaveLength(1)
     expect(parsePrList('not json')).toEqual([])
+  })
+
+  it('normalizes Azure REST paths to Git-relative paths', () => {
+    expect(
+      parsePrFiles(
+        JSON.stringify({
+          changeEntries: [{ item: { path: '/src/one.ts' } }, { item: { path: 'README.md' } }]
+        })
+      )
+    ).toEqual([
+      { path: 'src/one.ts', additions: 0, deletions: 0 },
+      { path: 'README.md', additions: 0, deletions: 0 }
+    ])
   })
 })
 
@@ -165,6 +178,8 @@ describe('Azure DevOps provider CLI calls', () => {
   })
 
   it('enriches every listed PR with policy and build status', async () => {
+    const repo = makeTempRepo('git-city-azure-')
+    repo.git('remote', 'add', 'origin', 'https://dev.azure.com/acme/project/_git/repo')
     const calls: string[][] = []
     const run: CliRunner = async (_cwd, args) => {
       calls.push(args)
@@ -177,12 +192,16 @@ describe('Azure DevOps provider CLI calls', () => {
         )
       }
       if (args[2] === 'policy') return ok(JSON.stringify([{ status: 'approved' }]))
-      if (args[2] === 'status' && args.includes('2')) {
+      if (
+        args[0] === 'devops' &&
+        args.includes('pullRequestStatuses') &&
+        args.includes('pullRequestId=2')
+      ) {
         return ok(JSON.stringify([{ status: 'completed', result: 'failed' }]))
       }
       return ok('[]')
     }
-    const result = await createAzureProvider(run).listPullRequests('/repo')
+    const result = await createAzureProvider(run).listPullRequests(repo.path)
     expect(result).toEqual({
       ok: true,
       prs: [
@@ -192,10 +211,25 @@ describe('Azure DevOps provider CLI calls', () => {
       more: false
     })
     expect(calls.filter((args) => args[2] === 'policy')).toHaveLength(2)
-    expect(calls.filter((args) => args[2] === 'status')).toHaveLength(2)
+    const statusCalls = calls.filter(
+      (args) => args[0] === 'devops' && args.includes('pullRequestStatuses')
+    )
+    expect(statusCalls).toHaveLength(2)
+    expect(statusCalls[0]).toEqual(
+      expect.arrayContaining([
+        '--organization',
+        'https://dev.azure.com/acme',
+        'project=project',
+        'repositoryId=repo',
+        'pullRequestId=1'
+      ])
+    )
+    expect(calls.some((args) => args[2] === 'status')).toBe(false)
   })
 
   it('reads changed files from pull request iteration changeEntries', async () => {
+    const repo = makeTempRepo('git-city-azure-')
+    repo.git('remote', 'add', 'origin', 'https://dev.azure.com/acme/project/_git/repo')
     const calls: string[][] = []
     const run: CliRunner = async (_cwd, args) => {
       calls.push(args)
@@ -204,12 +238,13 @@ describe('Azure DevOps provider CLI calls', () => {
           JSON.stringify({
             repository: {
               id: 'repo-id',
-              project: { id: 'project-id' }
+              project: { id: 'project-id' },
+              webUrl: 'https://dev.azure.com/acme/project/_git/repo'
             }
           })
         )
       }
-      if (args[2] === 'iteration' && args[3] === 'list') {
+      if (args[0] === 'devops' && args.includes('pullRequestIterations')) {
         return ok(JSON.stringify([{ id: 1 }, { id: 2 }]))
       }
       return ok(
@@ -218,15 +253,27 @@ describe('Azure DevOps provider CLI calls', () => {
         })
       )
     }
-    const result = await createAzureProvider(run).pullRequestFiles('/repo', 42)
+    const result = await createAzureProvider(run).pullRequestFiles(repo.path, 42)
     expect(result).toEqual({
       ok: true,
       files: [
-        { path: '/src/one.ts', additions: 0, deletions: 0 },
-        { path: '/src/two.ts', additions: 0, deletions: 0 }
+        { path: 'src/one.ts', additions: 0, deletions: 0 },
+        { path: 'src/two.ts', additions: 0, deletions: 0 }
       ]
     })
-    expect(calls.some((args) => args[2] === 'iteration' && args[3] === 'list')).toBe(true)
+    expect(calls.some((args) => args[2] === 'iteration' && args[3] === 'list')).toBe(false)
+    expect(
+      calls.some(
+        (args) =>
+          args[0] === 'devops' &&
+          args.includes('pullRequestIterations') &&
+          args.includes('--organization') &&
+          args.includes('https://dev.azure.com/acme') &&
+          args.includes('project=project-id') &&
+          args.includes('repositoryId=repo-id') &&
+          args.includes('pullRequestId=42')
+      )
+    ).toBe(true)
     expect(
       calls.some(
         (args) =>

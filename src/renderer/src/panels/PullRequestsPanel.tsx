@@ -47,7 +47,7 @@ const VOCAB = {
     short: 'PR',
     cli: 'az',
     install: 'learn.microsoft.com/cli/azure/install-azure-cli',
-    login: 'az login'
+    login: 'az devops login (or az login)'
   }
 } as const
 

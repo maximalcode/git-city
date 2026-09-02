@@ -59,7 +59,7 @@ whatever login you already have:
   `glab auth login`
 - **Azure DevOps** — install the [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli),
   add its `azure-devops` extension with `az extension add --name azure-devops`,
-  then run `az login`
+  then run `az devops login` (or `az login` for Microsoft Entra authentication)
 
 If you installed the CLI while Git City was open, press **↻** in the panel.
 

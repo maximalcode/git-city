@@ -57,6 +57,9 @@ whatever login you already have:
 - **GitHub** — install [`gh`](https://cli.github.com), then `gh auth login`
 - **GitLab** — install [`glab`](https://gitlab.com/gitlab-org/cli), then
   `glab auth login`
+- **Azure DevOps** — install the [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli),
+  add its `azure-devops` extension with `az extension add --name azure-devops`,
+  then run `az login`
 
 If you installed the CLI while Git City was open, press **↻** in the panel.
 

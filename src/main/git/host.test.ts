@@ -30,6 +30,17 @@ describe('hostnameOf', () => {
 })
 
 describe('detectHost', () => {
+  it('recognises Azure DevOps remotes over every supported URL shape', () => {
+    expect(detectHost('https://dev.azure.com/acme/project/_git/repo')).toBe('azure')
+    expect(detectHost('git@ssh.dev.azure.com:v3/acme/project/repo')).toBe('azure')
+    expect(detectHost('https://acme.visualstudio.com/project/_git/repo')).toBe('azure')
+  })
+
+  it('does not claim an Azure lookalike domain', () => {
+    expect(detectHost('https://dev.azure.com.evil.example/acme/project/_git/repo')).toBe('unknown')
+    expect(detectHost('https://evil.example.visualstudio.com/project/_git/repo')).toBe('unknown')
+  })
+
   it('recognises github.com over every remote syntax', () => {
     expect(detectHost('git@github.com:owner/repo.git')).toBe('github')
     expect(detectHost('https://github.com/owner/repo.git')).toBe('github')

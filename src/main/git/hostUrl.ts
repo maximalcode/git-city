@@ -32,6 +32,15 @@ export function hostnameOf(originUrl: string): string | null {
 export function detectHost(originUrl: string): HostKind {
   const host = hostnameOf(originUrl)
   if (!host) return 'unknown'
+  // Azure Repos has modern dev.azure.com/SSH hosts and legacy organization
+  // subdomains. Keep the visualstudio match to one organization label.
+  if (
+    host === 'dev.azure.com' ||
+    host === 'ssh.dev.azure.com' ||
+    (host.endsWith('.visualstudio.com') && host.split('.').length === 3)
+  ) {
+    return 'azure'
+  }
   for (const vendor of ['github', 'gitlab'] as const) {
     if (matches(host, vendor)) return vendor
   }

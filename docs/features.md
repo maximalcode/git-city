@@ -109,11 +109,11 @@ and blame is one click away.
 **Commit graph** with branch topology, ref chips, and checkout or cherry-pick
 from any row.
 
-**Pull requests**, GitHub through the `gh` CLI and GitLab through `glab`. No
-token setup either way. List open PRs with rolled-up CI status, see the current
-branch's, check one out, open it in a browser, or create one. GitLab merge
-requests use the same model, and only the wording follows the host. A missing or
-logged-out CLI gets a clear hint.
+**Pull requests**, GitHub through the `gh` CLI, GitLab through `glab`, and Azure
+DevOps through `az`. No token setup either way. List open PRs with rolled-up CI
+status, see the current branch's, check one out, open it in a browser, or create
+one. GitLab merge requests use the same model, and only the wording follows the
+host. A missing or logged-out CLI gets a clear hint.
 
 **Review a PR in the city.** Pick any pull request and its changed files light
 up with beacons across the scene, so you see its blast radius at a glance. Step

@@ -11,12 +11,12 @@ const CI_LABEL: Record<PullRequestInfo['ci'], string> = {
 }
 
 /**
- * Pull requests for the repo, via the host's own CLI (no token setup — `gh` and
- * `glab` own the auth). Lists open PRs with rolled-up CI state, highlights the
+ * Pull requests for the repo, via the host's own CLI (no token setup — `gh`,
+ * `glab`, and `az` own the auth). Lists open PRs with rolled-up CI state, highlights the
  * current branch's PR, and lets you check one out, open it in the browser, or
  * create a PR for the current branch.
  *
- * GitLab merge requests come through the same model; only the wording below
+ * GitLab merge requests and Azure DevOps pull requests come through the same model; only the wording below
  * follows the host, so nothing downstream learns a second vocabulary.
  */
 
@@ -39,6 +39,15 @@ const VOCAB = {
     cli: 'glab',
     install: 'gitlab.com/gitlab-org/cli',
     login: 'glab auth login'
+  },
+  azure: {
+    plural: 'Pull Requests',
+    lower: 'pull requests',
+    one: 'pull request',
+    short: 'PR',
+    cli: 'az',
+    install: 'learn.microsoft.com/cli/azure/install-azure-cli',
+    login: 'az login'
   }
 } as const
 
@@ -72,7 +81,8 @@ export default function PullRequestsPanel(): React.JSX.Element | null {
   const reviewPrInCity = useStore((s) => s.reviewPrInCity)
 
   const branch = status?.branch ?? null
-  const words = VOCAB[auth?.host === 'gitlab' ? 'gitlab' : 'github']
+  const words =
+    VOCAB[auth?.host === 'gitlab' ? 'gitlab' : auth?.host === 'azure' ? 'azure' : 'github']
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
   // Empty, not 'main'. Both providers omit the flag when base is blank and the
@@ -145,7 +155,8 @@ export default function PullRequestsPanel(): React.JSX.Element | null {
             {hintOf(auth) === 'retry' && <p className="pr-hint">Press ↻ to try again.</p>}
             {hintOf(auth) === 'none' && auth.host === 'unknown' && (
               <p className="pr-hint">
-                Pull requests appear here for repositories hosted on GitHub or GitLab.
+                Pull requests appear here for repositories hosted on GitHub, GitLab, or Azure
+                DevOps.
               </p>
             )}
           </div>

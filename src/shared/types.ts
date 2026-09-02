@@ -372,11 +372,12 @@ export interface ReflogEntry {
 export type ResetMode = 'soft' | 'mixed' | 'keep' | 'hard'
 
 /** Which forge a repository's `origin` points at. */
-export type HostKind = 'github' | 'gitlab' | 'unknown'
+export type HostKind = 'github' | 'gitlab' | 'azure' | 'unknown'
 
 /**
  * Forge CLI availability + auth state for this repo — `gh` for GitHub, `glab`
- * for GitLab. Merge requests are surfaced as pull requests throughout; only the
+ * for GitLab, and `az` for Azure DevOps. Merge requests are surfaced as pull
+ * requests throughout; only the
  * panel's wording follows the host.
  */
 /**
@@ -599,7 +600,7 @@ export interface GitCityApi {
   /** Commit + file counts without replaying history, to warn before a slow open. */
   repoSize(repoPath: string): Promise<RepoSize>
 
-  // --- Pull/merge requests (GitHub via gh, GitLab via glab) ---
+  // --- Pull/merge requests (GitHub via gh, GitLab via glab, Azure via az) ---
   hostStatus(repoPath: string): Promise<HostAuth>
   listPullRequests(repoPath: string): Promise<PrListResult>
   currentBranchPr(repoPath: string): Promise<PullRequestInfo | null>

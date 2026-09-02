@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { createAzureProvider, deriveCi, mapPr, parsePrFiles, parsePrList } from './azure'
+import {
+  createAzureProvider,
+  deriveCi,
+  mapPr,
+  parsePrFiles,
+  parsePrList,
+  selectCurrentStatuses
+} from './azure'
 import type { CliResult, CliRunner } from './cliRunner'
 import { makeTempRepo } from './fixtures'
 
@@ -90,6 +97,28 @@ describe('Azure DevOps CI state', () => {
     expect(deriveCi([{ status: 'unknown' }])).toBe('pending')
     expect(deriveCi([{ status: 'newStatusFromAzure' }])).toBe('pending')
     expect(deriveCi([{}])).toBe('none')
+  })
+
+  it('uses the latest status for a check context across PR iterations', () => {
+    const statuses = [
+      {
+        id: 10,
+        iterationId: 1,
+        state: 'failed',
+        context: { genre: 'build', name: 'ci' },
+        updatedDate: '2024-01-01T00:00:00Z'
+      },
+      {
+        id: 11,
+        iterationId: 2,
+        state: 'succeeded',
+        context: { genre: 'build', name: 'ci' },
+        updatedDate: '2024-01-02T00:00:00Z'
+      }
+    ]
+
+    expect(deriveCi(statuses)).toBe('failing')
+    expect(deriveCi(selectCurrentStatuses(statuses))).toBe('passing')
   })
 })
 
@@ -272,6 +301,41 @@ describe('Azure DevOps provider CLI calls', () => {
     expect(calls.some((args) => args[2] === 'status')).toBe(false)
   })
 
+  it('does not let an older failed status override the latest successful iteration', async () => {
+    const repo = makeTempRepo('git-city-azure-')
+    repo.git('remote', 'add', 'origin', 'https://dev.azure.com/acme/project/_git/repo')
+    const run: CliRunner = async (_cwd, args) => {
+      if (args[0] === 'repos' && args[1] === 'pr' && args[2] === 'list') {
+        return ok(JSON.stringify([{ pullRequestId: 9, title: 'Latest CI', status: 'active' }]))
+      }
+      if (args[2] === 'policy') return ok('[]')
+      if (args[0] === 'devops' && args.includes('pullRequestStatuses')) {
+        return ok(
+          JSON.stringify([
+            {
+              id: 1,
+              iterationId: 1,
+              state: 'failed',
+              context: { genre: 'build', name: 'ci' }
+            },
+            {
+              id: 2,
+              iterationId: 2,
+              state: 'succeeded',
+              context: { genre: 'build', name: 'ci' }
+            }
+          ])
+        )
+      }
+      return ok('[]')
+    }
+
+    await expect(createAzureProvider(run).listPullRequests(repo.path)).resolves.toMatchObject({
+      ok: true,
+      prs: [expect.objectContaining({ number: 9, ci: 'passing' })]
+    })
+  })
+
   it('rolls up build and status-check policies, not reviewer policies', async () => {
     const repo = makeTempRepo('git-city-azure-')
     repo.git('remote', 'add', 'origin', 'https://dev.azure.com/acme/project/_git/repo')
@@ -302,6 +366,7 @@ describe('Azure DevOps provider CLI calls', () => {
     repo.git('remote', 'add', 'origin', 'https://dev.azure.com/acme/project/_git/repo')
     let active = 0
     let maxActive = 0
+    let ciCalls = 0
     const run: CliRunner = async (_cwd, args) => {
       if (args[0] === 'repos' && args[1] === 'pr' && args[2] === 'list') {
         return ok(
@@ -314,6 +379,7 @@ describe('Azure DevOps provider CLI calls', () => {
           )
         )
       }
+      ciCalls += 1
       active += 1
       maxActive = Math.max(maxActive, active)
       await new Promise((resolve) => setTimeout(resolve, 2))
@@ -328,7 +394,11 @@ describe('Azure DevOps provider CLI calls', () => {
     expect(result.prs.map((pr) => pr.number)).toEqual(
       Array.from({ length: 50 }, (_, index) => index + 1)
     )
-    expect(maxActive).toBeLessThanOrEqual(8)
+    // There is no list-wide CI endpoint: each PR needs one policy read and,
+    // when a route is available, one status read. Keep the documented 2N
+    // reads, but prove they remain bounded at six concurrent workers.
+    expect(ciCalls).toBe(100)
+    expect(maxActive).toBeLessThanOrEqual(6)
   })
 
   it('reads changed files from pull request iteration changeEntries', async () => {

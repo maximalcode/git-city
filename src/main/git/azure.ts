@@ -196,6 +196,92 @@ function evaluationsOf(pr: RawAzurePr): unknown[] {
   return [pr.policyEvaluations, pr.policies, pr.statuses, pr.buildStatuses].flatMap(recordsOf)
 }
 
+function statusContext(value: unknown): string | null {
+  if (!isRecord(value) || !isRecord(value.context)) return null
+  const name = value.context.name
+  if (typeof name !== 'string' || name.length === 0) return null
+  const genre = typeof value.context.genre === 'string' ? value.context.genre : ''
+  // Azure identifies a status by the (genre, name) pair. Use a separator that
+  // cannot be present in either field so `a/b` and `a` + `b` cannot collide.
+  return `${genre}\u0000${name}`
+}
+
+function statusIteration(value: unknown): number | null {
+  if (!isRecord(value)) return null
+  const iteration = value.iterationId
+  const number =
+    typeof iteration === 'number'
+      ? iteration
+      : typeof iteration === 'string'
+        ? Number(iteration)
+        : NaN
+  return Number.isInteger(number) && number >= 1 ? number : null
+}
+
+function statusDate(value: unknown): number {
+  if (!isRecord(value)) return Number.NEGATIVE_INFINITY
+  const date = value.updatedDate ?? value.creationDate
+  if (typeof date !== 'string') return Number.NEGATIVE_INFINITY
+  const timestamp = Date.parse(date)
+  return Number.isNaN(timestamp) ? Number.NEGATIVE_INFINITY : timestamp
+}
+
+function statusId(value: unknown): number {
+  if (!isRecord(value)) return Number.NEGATIVE_INFINITY
+  const id =
+    typeof value.id === 'number' ? value.id : typeof value.id === 'string' ? Number(value.id) : NaN
+  return Number.isFinite(id) ? id : Number.NEGATIVE_INFINITY
+}
+
+/**
+ * Keep the current Azure status for each check context. The status list API
+ * includes statuses posted against earlier PR iterations, and `deriveCi`
+ * intentionally treats any failure as authoritative. Selecting by the
+ * documented iteration/context metadata first prevents an old failed run from
+ * making a newer successful run appear failed.
+ */
+export function selectCurrentStatuses(value: unknown): unknown[] {
+  const statuses = recordsOf(value)
+  const current = new Map<
+    string,
+    { status: unknown; iteration: number; date: number; id: number; index: number }
+  >()
+  const unscoped: unknown[] = []
+  for (const [index, status] of statuses.entries()) {
+    const context = statusContext(status)
+    if (context === null) {
+      unscoped.push(status)
+      continue
+    }
+    // A pull-request-level status has no iteration and is current for the PR;
+    // rank it above iteration-scoped statuses when the context is the same.
+    const iteration = statusIteration(status) ?? Number.POSITIVE_INFINITY
+    const candidate = {
+      status,
+      iteration,
+      date: statusDate(status),
+      id: statusId(status),
+      index
+    }
+    const previous = current.get(context)
+    if (
+      !previous ||
+      candidate.iteration > previous.iteration ||
+      (candidate.iteration === previous.iteration &&
+        (candidate.date > previous.date ||
+          (candidate.date === previous.date &&
+            (candidate.id > previous.id ||
+              (candidate.id === previous.id && candidate.index > previous.index)))))
+    ) {
+      current.set(context, candidate)
+    }
+  }
+  return [
+    ...unscoped,
+    ...[...current.values()].sort((a, b) => a.index - b.index).map((entry) => entry.status)
+  ]
+}
+
 function prNumber(pr: RawAzurePr): number {
   const value = pr.pullRequestId ?? pr.number ?? pr.id
   return typeof value === 'number' ? value : Number(value) || 0
@@ -637,6 +723,11 @@ export function createAzureProvider(run: CliRunner): HostProvider {
     route: AzureRoute | null
   ): Promise<PullRequestInfo> {
     const evaluations: unknown[] = []
+    // Azure exposes policy evaluations and pull-request statuses through two
+    // separate, PR-scoped APIs (the CLI policy command also requires --id).
+    // Keep these reads sequential inside a bounded worker: both are needed to
+    // represent CI accurately, and there is no documented batch operation that
+    // can replace them for a list of distinct PRs.
     const policies = await run(repoPath, [
       'repos',
       'pr',
@@ -663,7 +754,7 @@ export function createAzureProvider(run: CliRunner): HostProvider {
       const statuses = await run(repoPath, invokeArgs(route, 'pullRequestStatuses', pr.number))
       if (statuses.code === 0) {
         try {
-          evaluations.push(...recordsOf(JSON.parse(statuses.stdout)))
+          evaluations.push(...selectCurrentStatuses(JSON.parse(statuses.stdout)))
         } catch {
           // An unavailable or malformed status is represented as `none`.
         }

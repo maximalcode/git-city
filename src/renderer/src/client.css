@@ -2382,6 +2382,9 @@
   color: var(--text-dim);
   font-size: 11px;
 }
+.settings-row input[type='range'] {
+  max-width: 160px;
+}
 .settings-row select {
   max-width: 160px;
   appearance: none;

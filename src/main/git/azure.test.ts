@@ -179,6 +179,17 @@ describe('Azure DevOps provider CLI calls', () => {
     expect(result).toMatchObject({ ok: true, prs: [expect.objectContaining({ ci: 'pending' })] })
   })
 
+  it.each(['status-empty-string', 'status-empty-object', 'status-empty-array'])(
+    'treats a %s outcome as incomplete',
+    async (statusFixture) => {
+      const result = await listWithCiFixtures(
+        azureCiFixture('policy-success'),
+        azureCiFixture(statusFixture)
+      )
+      expect(result).toMatchObject({ ok: true, prs: [expect.objectContaining({ ci: 'pending' })] })
+    }
+  )
+
   it('lists, creates, checks out, and enriches the current branch PR', async () => {
     const repo = makeTempRepo('git-city-azure-')
     repo.write('README.md', 'fixture\n')
@@ -204,6 +215,9 @@ describe('Azure DevOps provider CLI calls', () => {
         return ok(
           JSON.stringify([{ configuration: { type: { displayName: 'Build' } }, status: 'approved' }])
         )
+      }
+      if (args[0] === 'devops' && args.includes('pullRequestStatuses')) {
+        return azureCiFixture('status-success')
       }
       return ok('[]')
     }
@@ -330,6 +344,9 @@ describe('Azure DevOps provider CLI calls', () => {
       ) {
         return ok(JSON.stringify([{ status: 'completed', result: 'failed' }]))
       }
+      if (args[0] === 'devops' && args.includes('pullRequestStatuses')) {
+        return azureCiFixture('status-success')
+      }
       return ok('[]')
     }
     const result = await createAzureProvider(run).listPullRequests(repo.path)
@@ -365,7 +382,16 @@ describe('Azure DevOps provider CLI calls', () => {
       if (args[0] === 'repos' && args[1] === 'pr' && args[2] === 'list') {
         return ok(JSON.stringify([{ pullRequestId: 9, title: 'Latest CI', status: 'active' }]))
       }
-      if (args[2] === 'policy') return ok('[]')
+      if (args[2] === 'policy') {
+        return ok(
+          JSON.stringify([
+            {
+              configuration: { type: { displayName: 'Minimum number of reviewers' } },
+              status: 'approved'
+            }
+          ])
+        )
+      }
       if (args[0] === 'devops' && args.includes('pullRequestStatuses')) {
         return ok(
           JSON.stringify([
@@ -410,6 +436,9 @@ describe('Azure DevOps provider CLI calls', () => {
             { configuration: { type: { displayName: 'Build' } }, status: 'approved' }
           ])
         )
+      }
+      if (args[0] === 'devops' && args.includes('pullRequestStatuses')) {
+        return azureCiFixture('status-success')
       }
       return ok('[]')
     }

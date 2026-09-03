@@ -211,16 +211,25 @@ function parseCiRecords(stdout: string, source: 'policy' | 'status'): unknown[] 
     (source === 'policy' && isRecord(parsed) && Array.isArray(parsed.policyEvaluations))
       ? recordsOf(parsed)
       : null
-  if (!records || records.some((record) => !isCiRecord(record))) return null
+  if (!records || records.length === 0 || records.some((record) => !isCiRecord(record))) return null
   return records
 }
 
 function isCiRecord(value: unknown): value is Record<string, unknown> {
-  if (!isRecord(value)) return false
-  const outcome = ['status', 'state', 'result', 'conclusion', 'evaluationResult']
+  if (!isRecord(value) || Array.isArray(value)) return false
+  const outcomes = ['status', 'state', 'result', 'conclusion', 'evaluationResult']
     .map((key) => value[key])
-    .find((candidate) => candidate !== undefined && candidate !== null)
-  return typeof outcome === 'string' || isRecord(outcome)
+    .filter((candidate) => candidate !== undefined && candidate !== null)
+  // A present field is not enough: empty strings/objects/arrays are malformed
+  // responses and must not make the source look available. Keep the check
+  // aligned with `statusOf`, which is the mapper used for the eventual roll-up.
+  return outcomes.some(isUsableCiOutcome) && statusOf(value).length > 0
+}
+
+function isUsableCiOutcome(value: unknown): boolean {
+  if (typeof value === 'string') return value.trim().length > 0
+  if (!isRecord(value) || Array.isArray(value)) return false
+  return statusOf(value).length > 0
 }
 
 function evaluationsOf(pr: RawAzurePr): unknown[] {

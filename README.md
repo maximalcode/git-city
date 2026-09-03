@@ -84,7 +84,7 @@ only, and it never force-pushes.
 
 Also here: merge, rebase, cherry-pick, stash, tags, submodules, worktrees, signed
 commits, an interactive rebase editor, and an in-app conflict resolver. Pull
-requests come through `gh` or `glab`. Pick one and its changed files light up
+requests come through `gh`, `glab`, or `az` (Azure DevOps). Pick one and its changed files light up
 across the city, so you see its blast radius at a glance.
 
 **[The complete feature list](docs/features.md)** has all of it.
@@ -97,8 +97,8 @@ a Windows installer, DMGs for Apple Silicon and Intel Macs, and an AppImage plus
 `.deb` for Linux. The AppImage needs `chmod +x` and no install.
 
 You also need **git on your PATH**, because the app drives the real thing. It
-never asks for a token and stores nothing. Pull requests go through the `gh` or
-`glab` CLI, signing stays with gpg-agent or ssh-agent, and there is no telemetry.
+never asks for a token and stores nothing. Pull requests go through the `gh`,
+`glab`, or `az` CLI, signing stays with gpg-agent or ssh-agent, and there is no telemetry.
 
 > **The installers are unsigned.** Windows SmartScreen says "unknown publisher":
 > choose _More info → Run anyway_. macOS is blunter and calls the app

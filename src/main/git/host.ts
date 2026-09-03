@@ -8,14 +8,15 @@ import type {
 } from '../../shared/types'
 import { githubProvider } from './github'
 import { gitlabProvider } from './gitlab'
+import { azureProvider } from './azure'
 import type { HostKind } from './hostKind'
 import { detectHost, hostnameOf } from './hostUrl'
 
 /**
- * Which forge a repository lives on, and the one interface both of them satisfy.
+ * Which forge a repository lives on, and the one interface every provider satisfies.
  *
- * GitHub and GitLab are reached the same way: through the vendor's own CLI (`gh`
- * / `glab`), so the app never holds a token. The renderer only ever sees the
+ * GitHub, GitLab, and Azure DevOps are reached through the vendor's own CLIs
+ * (`gh` / `glab` / `az`), so the app never holds a token. The renderer only ever sees the
  * GitHub vocabulary — a GitLab merge request is mapped onto `PullRequestInfo`
  * and only the panel's wording changes.
  */
@@ -58,7 +59,8 @@ async function originUrlOf(repoPath: string): Promise<string> {
 
 const PROVIDERS: Record<Exclude<HostKind, 'unknown'>, HostProvider> = {
   github: githubProvider,
-  gitlab: gitlabProvider
+  gitlab: gitlabProvider,
+  azure: azureProvider
 }
 
 /**
@@ -97,11 +99,11 @@ const probed = new Map<string, { probe: HostProbe; at: number }>()
  *
  * `candidates` is injected so tests can drive the probe with fake-runner
  * providers — the seam the adapters expose since their runners were lifted
- * (#109). Production callers take the two real ones.
+ * (#109). Production callers take the three real ones.
  */
 export async function probeHost(
   repoPath: string,
-  candidates: HostProvider[] = [gitlabProvider, githubProvider]
+  candidates: HostProvider[] = [azureProvider, gitlabProvider, githubProvider]
 ): Promise<HostProbe> {
   const origin = await originUrlOf(repoPath)
   const kind = detectHost(origin)
@@ -113,9 +115,15 @@ export async function probeHost(
     return hit.probe
   }
 
+  // Azure's CLI can use a configured organization/project when `--detect` is
+  // omitted (or cannot inspect the remote). Never let those defaults claim a
+  // neutral or non-Azure URL: Azure is selected only by its known URL forms.
+  const allowedCandidates = candidates.filter(
+    (candidate) => candidate.kind !== 'azure' || detectHost(origin) === 'azure'
+  )
   const attempts: HostAuth[] = []
   let provider: HostProvider | null = null
-  for (const candidate of candidates) {
+  for (const candidate of allowedCandidates) {
     const auth = await candidate.status(repoPath, origin)
     attempts.push(auth)
     if (auth.isRepo) {
@@ -132,7 +140,7 @@ export async function probeHost(
 /** Just the provider, for callers that don't care why there isn't one. */
 export async function providerFor(
   repoPath: string,
-  candidates: HostProvider[] = [gitlabProvider, githubProvider]
+  candidates: HostProvider[] = [azureProvider, gitlabProvider, githubProvider]
 ): Promise<HostProvider | null> {
   return (await probeHost(repoPath, candidates)).provider
 }
@@ -148,15 +156,18 @@ export async function providerFor(
 export function bestAttempt(attempts: HostAuth[], origin: string): HostAuth {
   if (attempts.length > 0 && attempts.every((a) => !a.available)) {
     const where = hostnameOf(origin) ?? 'this remote'
+    const hasAzure = attempts.some((a) => a.host === 'azure')
     return {
       host: 'unknown',
       available: false,
       authed: false,
       isRepo: false,
       login: null,
-      reason:
-        `Neither gh nor glab is installed, so Git City can't tell which forge ${where} is. ` +
-        'Install gh (cli.github.com) or glab (gitlab.com/gitlab-org/cli).',
+      reason: hasAzure
+        ? `Neither gh, glab, nor az is installed, so Git City can't tell which forge ${where} is. ` +
+          'Install gh (cli.github.com), glab (gitlab.com/gitlab-org/cli), or az (learn.microsoft.com/cli/azure/install-azure-cli).'
+        : `Neither gh nor glab is installed, so Git City can't tell which forge ${where} is. ` +
+          'Install gh (cli.github.com) or glab (gitlab.com/gitlab-org/cli).',
       hint: 'install'
     }
   }
@@ -168,18 +179,20 @@ export function bestAttempt(attempts: HostAuth[], origin: string): HostAuth {
   if (informative) return informative
   const missing = attempts.find((a) => !a.available)
   if (missing) return missing
-  return unknownHostAuth()
+  return unknownHostAuth(attempts.some((a) => a.host === 'azure'))
 }
 
 /** The state shown when both CLIs were present, authenticated, and said no. */
-export function unknownHostAuth(): HostAuth {
+export function unknownHostAuth(includeAzure = true): HostAuth {
   return {
     host: 'unknown',
     available: false,
     authed: false,
     isRepo: false,
     login: null,
-    reason: 'This repository has no GitHub or GitLab remote.',
+    reason: includeAzure
+      ? 'This repository has no GitHub, GitLab, or Azure DevOps remote.'
+      : 'This repository has no GitHub or GitLab remote.',
     hint: 'none'
   }
 }

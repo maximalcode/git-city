@@ -179,6 +179,30 @@ describe('Azure DevOps provider CLI calls', () => {
     expect(result).toMatchObject({ ok: true, prs: [expect.objectContaining({ ci: 'pending' })] })
   })
 
+  it('treats a successful empty policy collection as available', async () => {
+    const result = await listWithCiFixtures(
+      azureCiFixture('policy-empty'),
+      azureCiFixture('status-success')
+    )
+    expect(result).toMatchObject({ ok: true, prs: [expect.objectContaining({ ci: 'passing' })] })
+  })
+
+  it('treats a successful empty status collection as available', async () => {
+    const result = await listWithCiFixtures(
+      azureCiFixture('policy-success'),
+      azureCiFixture('status-empty')
+    )
+    expect(result).toMatchObject({ ok: true, prs: [expect.objectContaining({ ci: 'passing' })] })
+  })
+
+  it('rolls up two successful empty collections as no CI checks', async () => {
+    const result = await listWithCiFixtures(
+      azureCiFixture('policy-empty'),
+      azureCiFixture('status-empty')
+    )
+    expect(result).toMatchObject({ ok: true, prs: [expect.objectContaining({ ci: 'none' })] })
+  })
+
   it.each(['status-empty-string', 'status-empty-object', 'status-empty-array'])(
     'treats a %s outcome as incomplete',
     async (statusFixture) => {

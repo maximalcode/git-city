@@ -211,7 +211,10 @@ function parseCiRecords(stdout: string, source: 'policy' | 'status'): unknown[] 
     (source === 'policy' && isRecord(parsed) && Array.isArray(parsed.policyEvaluations))
       ? recordsOf(parsed)
       : null
-  if (!records || records.length === 0 || records.some((record) => !isCiRecord(record))) return null
+  // A successful empty collection is a valid, available source. It means the
+  // endpoint answered successfully and found no policies/statuses; only
+  // malformed records should make the source unavailable.
+  if (!records || records.some((record) => !isCiRecord(record))) return null
   return records
 }
 

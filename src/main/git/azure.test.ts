@@ -1,3 +1,4 @@
+import { readFileSync } from 'fs'
 import { describe, expect, it } from 'vitest'
 import {
   createAzureProvider,
@@ -12,6 +13,29 @@ import { makeTempRepo } from './fixtures'
 
 const ok = (stdout = ''): CliResult => ({ code: 0, stdout, stderr: '', missing: false })
 const err = (stderr: string): CliResult => ({ code: 1, stdout: '', stderr, missing: false })
+const azureCiFixture = (name: string): CliResult =>
+  JSON.parse(
+    readFileSync(new URL(`./fixtures/azure-ci/${name}.json`, import.meta.url), 'utf8')
+  ) as CliResult
+
+function listFixturePr(): string {
+  return JSON.stringify([{ pullRequestId: 136, title: 'Partial CI', status: 'active' }])
+}
+
+async function listWithCiFixtures(
+  policy: CliResult,
+  status: CliResult
+): Promise<Awaited<ReturnType<ReturnType<typeof createAzureProvider>['listPullRequests']>>> {
+  const repo = makeTempRepo('git-city-azure-')
+  repo.git('remote', 'add', 'origin', 'https://dev.azure.com/acme/project/_git/repo')
+  const run: CliRunner = async (_cwd, args) => {
+    if (args[0] === 'repos' && args[1] === 'pr' && args[2] === 'list') return ok(listFixturePr())
+    if (args[0] === 'repos' && args[1] === 'pr' && args[2] === 'policy') return policy
+    if (args[0] === 'devops' && args.includes('pullRequestStatuses')) return status
+    return ok('[]')
+  }
+  return createAzureProvider(run).listPullRequests(repo.path)
+}
 
 describe('Azure DevOps response mapping', () => {
   it('maps the CLI fixture into PullRequestInfo', () => {
@@ -123,10 +147,43 @@ describe('Azure DevOps CI state', () => {
 })
 
 describe('Azure DevOps provider CLI calls', () => {
+  it('marks policy success plus status enrichment failure as incomplete', async () => {
+    const result = await listWithCiFixtures(
+      azureCiFixture('policy-success'),
+      azureCiFixture('status-failure')
+    )
+    expect(result).toMatchObject({ ok: true, prs: [expect.objectContaining({ ci: 'pending' })] })
+  })
+
+  it('marks policy enrichment failure plus status success as incomplete', async () => {
+    const result = await listWithCiFixtures(
+      azureCiFixture('policy-failure'),
+      azureCiFixture('status-success')
+    )
+    expect(result).toMatchObject({ ok: true, prs: [expect.objectContaining({ ci: 'pending' })] })
+  })
+
+  it('degrades to no CI state when both enrichment sources fail', async () => {
+    const result = await listWithCiFixtures(
+      azureCiFixture('policy-failure'),
+      azureCiFixture('status-failure')
+    )
+    expect(result).toMatchObject({ ok: true, prs: [expect.objectContaining({ ci: 'none' })] })
+  })
+
+  it('treats a malformed source response as incomplete', async () => {
+    const result = await listWithCiFixtures(
+      azureCiFixture('policy-success'),
+      azureCiFixture('status-malformed')
+    )
+    expect(result).toMatchObject({ ok: true, prs: [expect.objectContaining({ ci: 'pending' })] })
+  })
+
   it('lists, creates, checks out, and enriches the current branch PR', async () => {
     const repo = makeTempRepo('git-city-azure-')
     repo.write('README.md', 'fixture\n')
     repo.commitAll('fixture')
+    repo.git('remote', 'add', 'origin', 'https://dev.azure.com/acme/project/_git/repo')
     const calls: string[][] = []
     const run: CliRunner = async (_cwd, args) => {
       calls.push(args)
@@ -148,7 +205,7 @@ describe('Azure DevOps provider CLI calls', () => {
           JSON.stringify([{ configuration: { type: { displayName: 'Build' } }, status: 'approved' }])
         )
       }
-      return ok()
+      return ok('[]')
     }
     const provider = createAzureProvider(run)
     const listed = await provider.listPullRequests(repo.path)

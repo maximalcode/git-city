@@ -214,11 +214,11 @@ function parseCiRecords(stdout: string, source: 'policy' | 'status'): unknown[] 
   // A successful empty collection is a valid, available source. It means the
   // endpoint answered successfully and found no policies/statuses; only
   // malformed records should make the source unavailable.
-  if (!records || records.some((record) => !isCiRecord(record))) return null
+  if (!records || records.some((record) => !isCiRecord(record, source))) return null
   return records
 }
 
-function isCiRecord(value: unknown): value is Record<string, unknown> {
+function isCiRecord(value: unknown, source: 'policy' | 'status'): value is Record<string, unknown> {
   if (!isRecord(value) || Array.isArray(value)) return false
   const outcomes = ['status', 'state', 'result', 'conclusion', 'evaluationResult']
     .map((key) => value[key])
@@ -226,13 +226,34 @@ function isCiRecord(value: unknown): value is Record<string, unknown> {
   // A present field is not enough: empty strings/objects/arrays are malformed
   // responses and must not make the source look available. Keep the check
   // aligned with `statusOf`, which is the mapper used for the eventual roll-up.
-  return outcomes.some(isUsableCiOutcome) && statusOf(value).length > 0
+  if (!outcomes.some(isUsableCiOutcome) || statusOf(value).length === 0) return false
+  return source !== 'policy' || isUsablePolicyMetadata(value)
 }
 
 function isUsableCiOutcome(value: unknown): boolean {
   if (typeof value === 'string') return value.trim().length > 0
   if (!isRecord(value) || Array.isArray(value)) return false
   return statusOf(value).length > 0
+}
+
+function isUsablePolicyMetadata(value: Record<string, unknown>): boolean {
+  const configuration = value.configuration
+  if (configuration !== undefined && (!isRecord(configuration) || Array.isArray(configuration)))
+    return false
+  if (isRecord(configuration)) {
+    const type = configuration.type
+    if (type !== undefined && (!isRecord(type) || Array.isArray(type))) return false
+  }
+  const type = isRecord(configuration) ? configuration.type : undefined
+  const nestedType = isRecord(type) ? type : null
+  const labels = [
+    nestedType?.displayName,
+    nestedType?.name,
+    nestedType?.id,
+    value.policyType,
+    value.type
+  ]
+  return labels.some((label) => typeof label === 'string' && label.trim().length > 0)
 }
 
 function evaluationsOf(pr: RawAzurePr): unknown[] {

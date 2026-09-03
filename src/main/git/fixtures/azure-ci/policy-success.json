@@ -1,0 +1,6 @@
+{
+  "code": 0,
+  "stdout": "[{\"configuration\":{\"type\":{\"displayName\":\"Build\"}},\"status\":\"approved\"}]",
+  "stderr": "",
+  "missing": false
+}

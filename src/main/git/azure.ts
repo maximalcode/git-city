@@ -192,6 +192,90 @@ function ciPolicies(value: unknown): unknown[] {
   return recordsOf(value).filter(isCiPolicy)
 }
 
+/**
+ * Parse one of the two CI endpoints without turning an invalid response into
+ * an empty, apparently successful check set. The provider treats an invalid
+ * response as an unavailable source so the other source cannot become a
+ * definitive roll-up on its own.
+ */
+function parseCiRecords(stdout: string, source: 'policy' | 'status'): unknown[] | null {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(stdout)
+  } catch {
+    return null
+  }
+  const records =
+    Array.isArray(parsed) ||
+    (isRecord(parsed) && Array.isArray(parsed.value)) ||
+    (source === 'policy' && isRecord(parsed) && Array.isArray(parsed.policyEvaluations))
+      ? recordsOf(parsed)
+      : null
+  // A successful empty collection is a valid, available source. It means the
+  // endpoint answered successfully and found no policies/statuses; only
+  // malformed records should make the source unavailable.
+  if (!records || records.some((record) => !isCiRecord(record, source))) return null
+  return records
+}
+
+function isCiRecord(value: unknown, source: 'policy' | 'status'): value is Record<string, unknown> {
+  if (!isRecord(value) || Array.isArray(value)) return false
+  const outcomes = ciOutcomesOf(value)
+  // A present field is not enough: empty strings/objects/arrays are malformed
+  // responses and must not make the source look available. Keep the check
+  // aligned with `statusOf`, which is the mapper used for the eventual roll-up.
+  if (
+    outcomes.length === 0 ||
+    !outcomes.every(isUsableCiOutcome) ||
+    statusOf(value).length === 0
+  ) {
+    return false
+  }
+  return source !== 'policy' || isUsablePolicyMetadata(value)
+}
+
+function ciOutcomesOf(value: Record<string, unknown>): unknown[] {
+  return ['status', 'state', 'result', 'conclusion', 'evaluationResult']
+    .filter((key) => Object.prototype.hasOwnProperty.call(value, key))
+    .map((key) => value[key])
+}
+
+function isUsableCiOutcome(value: unknown): boolean {
+  if (typeof value === 'string') return value.trim().length > 0
+  if (!isRecord(value) || Array.isArray(value)) return false
+  const nestedOutcomes = ciOutcomesOf(value)
+  return (
+    nestedOutcomes.length > 0 &&
+    nestedOutcomes.every(isUsableCiOutcome) &&
+    statusOf(value).length > 0
+  )
+}
+
+function isUsablePolicyMetadata(value: Record<string, unknown>): boolean {
+  const configuration = value.configuration
+  if (configuration !== undefined && (!isRecord(configuration) || Array.isArray(configuration)))
+    return false
+  if (isRecord(configuration)) {
+    const type = configuration.type
+    if (type !== undefined && (!isRecord(type) || Array.isArray(type))) return false
+  }
+  const type = isRecord(configuration) ? configuration.type : undefined
+  const nestedType = isRecord(type) ? type : null
+  const labels = [
+    nestedType?.displayName,
+    nestedType?.name,
+    nestedType?.id,
+    value.policyType,
+    value.type
+  ]
+  const isLabel = (label: unknown): label is string =>
+    typeof label === 'string' && label.trim().length > 0
+  // A single usable ID cannot make a response trustworthy when another label
+  // supplied by Azure has an invalid shape. Otherwise that malformed record is
+  // silently filtered out by `ciPolicies` and can leave a false green roll-up.
+  return labels.some(isLabel) && labels.every((label) => label === undefined || isLabel(label))
+}
+
 function evaluationsOf(pr: RawAzurePr): unknown[] {
   return [pr.policyEvaluations, pr.policies, pr.statuses, pr.buildStatuses].flatMap(recordsOf)
 }
@@ -723,6 +807,8 @@ export function createAzureProvider(run: CliRunner): HostProvider {
     route: AzureRoute | null
   ): Promise<PullRequestInfo> {
     const evaluations: unknown[] = []
+    let policyAvailable = false
+    let statusAvailable = false
     // Azure exposes policy evaluations and pull-request statuses through two
     // separate, PR-scoped APIs (the CLI policy command also requires --id).
     // Keep these reads sequential inside a bounded worker: both are needed to
@@ -741,11 +827,10 @@ export function createAzureProvider(run: CliRunner): HostProvider {
       'json'
     ])
     if (policies.code === 0) {
-      try {
-        evaluations.push(...ciPolicies(JSON.parse(policies.stdout)))
-      } catch {
-        // An unavailable or malformed policy response is represented as
-        // `none`; it must not make the whole open-PR list disappear.
+      const records = parseCiRecords(policies.stdout, 'policy')
+      if (records) {
+        policyAvailable = true
+        evaluations.push(...ciPolicies(records))
       }
     }
     // `az repos pr status list` is not a supported Azure CLI command. Use the
@@ -753,14 +838,20 @@ export function createAzureProvider(run: CliRunner): HostProvider {
     if (route) {
       const statuses = await run(repoPath, invokeArgs(route, 'pullRequestStatuses', pr.number))
       if (statuses.code === 0) {
-        try {
-          evaluations.push(...selectCurrentStatuses(JSON.parse(statuses.stdout)))
-        } catch {
-          // An unavailable or malformed status is represented as `none`.
+        const records = parseCiRecords(statuses.stdout, 'status')
+        if (records) {
+          statusAvailable = true
+          evaluations.push(...selectCurrentStatuses(records))
         }
       }
     }
-    return { ...pr, ci: deriveCi(evaluations) }
+    const ci =
+      policyAvailable && statusAvailable
+        ? deriveCi(evaluations)
+        : policyAvailable || statusAvailable
+          ? 'pending'
+          : 'none'
+    return { ...pr, ci }
   }
 
   async function currentBranchPr(repoPath: string): Promise<PullRequestInfo | null> {
@@ -785,10 +876,9 @@ export function createAzureProvider(run: CliRunner): HostProvider {
     if (result.code !== 0) return null
     const [pr] = parsePrList(result.stdout)
     if (!pr) return null
-    // `az repos pr list` does not consistently include policy/build status.
-    // One policy read for the branch PR keeps the HUD useful without making a
-    // request per item in the open-PR list.
-    if (pr.ci !== 'none') return pr
+    // `az repos pr list` does not consistently include policy/build status, and
+    // any embedded result covers only one of the independent CI sources. Run
+    // both enrichment reads so the HUD never presents partial data as final.
     const route = await routeForList(repoPath)
     return enrichCi(repoPath, pr, route)
   }

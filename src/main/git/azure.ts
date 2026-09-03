@@ -220,9 +220,7 @@ function parseCiRecords(stdout: string, source: 'policy' | 'status'): unknown[] 
 
 function isCiRecord(value: unknown, source: 'policy' | 'status'): value is Record<string, unknown> {
   if (!isRecord(value) || Array.isArray(value)) return false
-  const outcomes = ['status', 'state', 'result', 'conclusion', 'evaluationResult']
-    .filter((key) => Object.prototype.hasOwnProperty.call(value, key))
-    .map((key) => value[key])
+  const outcomes = ciOutcomesOf(value)
   // A present field is not enough: empty strings/objects/arrays are malformed
   // responses and must not make the source look available. Keep the check
   // aligned with `statusOf`, which is the mapper used for the eventual roll-up.
@@ -236,10 +234,21 @@ function isCiRecord(value: unknown, source: 'policy' | 'status'): value is Recor
   return source !== 'policy' || isUsablePolicyMetadata(value)
 }
 
+function ciOutcomesOf(value: Record<string, unknown>): unknown[] {
+  return ['status', 'state', 'result', 'conclusion', 'evaluationResult']
+    .filter((key) => Object.prototype.hasOwnProperty.call(value, key))
+    .map((key) => value[key])
+}
+
 function isUsableCiOutcome(value: unknown): boolean {
   if (typeof value === 'string') return value.trim().length > 0
   if (!isRecord(value) || Array.isArray(value)) return false
-  return statusOf(value).length > 0
+  const nestedOutcomes = ciOutcomesOf(value)
+  return (
+    nestedOutcomes.length > 0 &&
+    nestedOutcomes.every(isUsableCiOutcome) &&
+    statusOf(value).length > 0
+  )
 }
 
 function isUsablePolicyMetadata(value: Record<string, unknown>): boolean {

@@ -203,6 +203,14 @@ describe('Azure DevOps provider CLI calls', () => {
     expect(result).toMatchObject({ ok: true, prs: [expect.objectContaining({ ci: 'pending' })] })
   })
 
+  it('treats malformed nested status outcomes as incomplete', async () => {
+    const result = await listWithCiFixtures(
+      azureCiFixture('policy-success'),
+      azureCiFixture('status-nested-malformed')
+    )
+    expect(result).toMatchObject({ ok: true, prs: [expect.objectContaining({ ci: 'pending' })] })
+  })
+
   it('treats a successful empty policy collection as available', async () => {
     const result = await listWithCiFixtures(
       azureCiFixture('policy-empty'),
@@ -305,6 +313,40 @@ describe('Azure DevOps provider CLI calls', () => {
     }
     const current = await createAzureProvider(run).currentBranchPr(repo.path)
     expect(current?.ci).toBe('none')
+  })
+
+  it('does not trust embedded CI when status enrichment is unavailable', async () => {
+    const repo = makeTempRepo('git-city-azure-')
+    repo.write('README.md', 'fixture\n')
+    repo.commitAll('fixture')
+    repo.git('remote', 'add', 'origin', 'https://dev.azure.com/acme/project/_git/repo')
+    const run: CliRunner = async (_cwd, args) => {
+      if (args[0] === 'repos' && args[1] === 'pr' && args[2] === 'list') {
+        return ok(
+          JSON.stringify([
+            {
+              pullRequestId: 8,
+              title: 'Embedded CI',
+              sourceRefName: 'refs/heads/main',
+              targetRefName: 'refs/heads/develop',
+              status: 'active',
+              statuses: [{ state: 'succeeded' }]
+            }
+          ])
+        )
+      }
+      if (args[0] === 'repos' && args[1] === 'pr' && args[2] === 'policy') {
+        return ok(
+          JSON.stringify([{ configuration: { type: { displayName: 'Build' } }, status: 'approved' }])
+        )
+      }
+      if (args[0] === 'devops' && args.includes('pullRequestStatuses')) {
+        return err('status endpoint unavailable')
+      }
+      return ok('[]')
+    }
+    const current = await createAzureProvider(run).currentBranchPr(repo.path)
+    expect(current?.ci).toBe('pending')
   })
 
   it('probes repository access directly, without requiring az account login', async () => {

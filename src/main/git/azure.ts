@@ -253,7 +253,12 @@ function isUsablePolicyMetadata(value: Record<string, unknown>): boolean {
     value.policyType,
     value.type
   ]
-  return labels.some((label) => typeof label === 'string' && label.trim().length > 0)
+  const isLabel = (label: unknown): label is string =>
+    typeof label === 'string' && label.trim().length > 0
+  // A single usable ID cannot make a response trustworthy when another label
+  // supplied by Azure has an invalid shape. Otherwise that malformed record is
+  // silently filtered out by `ciPolicies` and can leave a false green roll-up.
+  return labels.some(isLabel) && labels.every((label) => label === undefined || isLabel(label))
 }
 
 function evaluationsOf(pr: RawAzurePr): unknown[] {

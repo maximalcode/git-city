@@ -221,12 +221,18 @@ function parseCiRecords(stdout: string, source: 'policy' | 'status'): unknown[] 
 function isCiRecord(value: unknown, source: 'policy' | 'status'): value is Record<string, unknown> {
   if (!isRecord(value) || Array.isArray(value)) return false
   const outcomes = ['status', 'state', 'result', 'conclusion', 'evaluationResult']
+    .filter((key) => Object.prototype.hasOwnProperty.call(value, key))
     .map((key) => value[key])
-    .filter((candidate) => candidate !== undefined && candidate !== null)
   // A present field is not enough: empty strings/objects/arrays are malformed
   // responses and must not make the source look available. Keep the check
   // aligned with `statusOf`, which is the mapper used for the eventual roll-up.
-  if (!outcomes.some(isUsableCiOutcome) || statusOf(value).length === 0) return false
+  if (
+    outcomes.length === 0 ||
+    !outcomes.every(isUsableCiOutcome) ||
+    statusOf(value).length === 0
+  ) {
+    return false
+  }
   return source !== 'policy' || isUsablePolicyMetadata(value)
 }
 

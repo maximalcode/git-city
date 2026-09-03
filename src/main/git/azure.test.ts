@@ -195,6 +195,14 @@ describe('Azure DevOps provider CLI calls', () => {
     expect(result).toMatchObject({ ok: true, prs: [expect.objectContaining({ ci: 'pending' })] })
   })
 
+  it('treats a mixed valid and malformed status outcome as incomplete', async () => {
+    const result = await listWithCiFixtures(
+      azureCiFixture('policy-success'),
+      azureCiFixture('status-mixed-malformed')
+    )
+    expect(result).toMatchObject({ ok: true, prs: [expect.objectContaining({ ci: 'pending' })] })
+  })
+
   it('treats a successful empty policy collection as available', async () => {
     const result = await listWithCiFixtures(
       azureCiFixture('policy-empty'),

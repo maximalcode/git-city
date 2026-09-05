@@ -2382,9 +2382,34 @@
   color: var(--text-dim);
   font-size: 11px;
 }
-.settings-row select,
 .settings-row input[type='range'] {
   max-width: 160px;
+}
+.settings-row select {
+  max-width: 160px;
+  appearance: none;
+  -webkit-appearance: none;
+  font: inherit;
+  color: var(--text);
+  background-color: var(--panel);
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--text-dim) 50%),
+    linear-gradient(135deg, var(--text-dim) 50%, transparent 50%);
+  background-position:
+    calc(100% - 13px) 50%,
+    calc(100% - 9px) 50%;
+  background-repeat: no-repeat;
+  background-size: 5px 5px, 5px 5px;
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  padding: 6px 30px 6px 10px;
+  cursor: pointer;
+  outline: none;
+}
+.settings-row select:focus-visible {
+  border-color: var(--accent-2);
+  outline: 2px solid var(--accent-2);
+  outline-offset: 1px;
 }
 .settings-row.toggle input[type='checkbox'] {
   width: 16px;

@@ -8,7 +8,7 @@ der Arbeit an dessen Versionsgeschichte und Arbeitsständen.
 **Probelauf (Rehearsal)**:
 Die isolierte Ausführung einer beabsichtigten Git-Aktion, deren Ergebnis vor einer
 Übernahme geprüft und bearbeitet werden kann.
-_Avoid_: Simulation, wenn damit eine bloße Vorhersage ohne Ausführung gemeint ist.
+_Avoid_: Dry Run; Simulation, wenn damit eine bloße Vorhersage ohne Ausführung gemeint ist.
 
 **Sandbox**:
 Die isolierte Arbeitskopie eines Probelaufs, in der auch dessen Konflikte gelöst
@@ -28,9 +28,14 @@ Ein eigener Checkout mit eigenem Arbeitsverzeichnis und Index, der mit anderen
 Worktrees desselben Repositorys unter anderem die Branches teilt.
 _Avoid_: Sandbox als Synonym für einen verknüpften Worktree.
 
+**Ursprünglicher Worktree**:
+Der echte Worktree, in dem ein Probelauf begonnen wurde und zu dem dessen
+Ergebnis gehört.
+
 **Veralteter Probelauf**:
-Ein erhaltener Probelauf, dessen ursprünglicher Worktree seit seiner Erstellung
-verändert wurde. Er kann angesehen, aber nicht mehr übernommen werden.
+Ein erhaltener Probelauf, dessen ursprünglicher Worktree oder betroffene
+Referenzen seit seiner Erstellung verändert wurden. Er kann angesehen, aber
+nicht mehr übernommen werden.
 _Avoid_: Fehlgeschlagener Probelauf.
 
 **Aktueller Probelauf**:
@@ -41,6 +46,20 @@ Probeläufe bleiben als Historie erhalten, werden aber nie automatisch übernomm
 Ein erhaltener Probelauf, dessen Git-Aktion vor ihrem regulären Ende gestoppt
 wurde. Er wird nur durch ausdrückliches Verwerfen gelöscht.
 _Avoid_: Veralteter Probelauf.
+
+**Behalten (Keep)**:
+Das Aufbewahren eines Probelaufs einschließlich seiner Bearbeitungen zur späteren
+Ansicht oder Weiterarbeit.
+_Avoid_: Übernahme.
+
+**Verwerfen (Discard)**:
+Das ausdrücklich bestätigte Löschen eines aufbewahrten Probelaufs.
+_Avoid_: Schließen, Abbrechen.
+
+**Übernahme rückgängig machen (Undo Apply)**:
+Das sichere Rückgängigmachen der letzten exakten Übernahme, sofern sich die
+betroffenen Referenzen nicht weiterbewegt haben.
+_Avoid_: Erzwungenes Zurücksetzen.
 
 **Wiederherstellungszustand**:
 Ein erkannter Zwischenzustand einer Übernahme, der erst kontrolliert abgeschlossen

@@ -6,6 +6,10 @@ Branch verschieben, der in einem anderen Worktree ausgecheckt ist. In diesem Fal
 stoppt Git City mit einer Erklärung, anstatt Dateien oder Index des anderen
 Worktrees automatisch anzupassen.
 
+Diese Unterstützung gehört bereits zur ersten nutzbaren Integration.
+git-rehearse muss dafür sicher erweitert werden; seine bisherige Ablehnung von
+Repositorys mit mehreren Worktrees lediglich zu entfernen, genügt nicht.
+
 Worktrees teilen Branch-Referenzen, besitzen aber jeweils eigenes HEAD, Index und
 Arbeitsverzeichnis. Die verworfene Alternative, nur die gemeinsamen Referenzen zu
 verschieben, ließe einen anderen Worktree mit widersprüchlichem Zustand zurück.

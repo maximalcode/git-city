@@ -25,11 +25,12 @@ Ein Worktree darf mehrere offene Probeläufe besitzen. Einer wird als aktuell
 hervorgehoben, ältere bleiben als Historie sichtbar. Textkonflikte und
 Binärkonflikte werden mit den bereits in Git City verfügbaren Möglichkeiten in
 der Sandbox gelöst; Lösch- und Umbenennungskonflikte werden zunächst ausdrücklich
-an einen externen Editor übergeben. Die letzte Übernahme kann über die
-git-rehearse-Sicherheitsprüfungen rückgängig gemacht werden; veränderte Branches
-führen zu einer Ablehnung statt zu einem erzwungenen Rücksetzen.
+an einen externen Editor übergeben. Die Integration muss das sichere
+Rückgängigmachen der letzten exakten Übernahme anbieten; inzwischen veränderte
+betroffene Referenzen führen zu einer Ablehnung statt zu einem erzwungenen
+Rücksetzen.
 
-Die Vorschau besitzt ein eigenes Panel für Branches, Commits, Dateien, Konflikte,
+Die Vorschau besitzt ein eigenes Panel für Referenzen, Commits, Dateien, Konflikte,
 unerwartete Inhaltsänderungen und mitgenommene lokale Arbeit. Zusätzlich kann die
 Stadt zwischen dem Zustand vor und nach dem Probelauf wechseln; zwei parallele
 3D-Szenen sind nicht erforderlich. Das Schließen des Panels bewahrt den
@@ -44,9 +45,10 @@ Die englische Oberfläche nennt die Funktion `Rehearse` und verwendet `Apply`,
 `Keep`, `Discard` und `Undo Apply`; die Modi heißen `Automatic`, `Ask` und `Off`.
 `Dry Run` wird vermieden, weil Git in der Sandbox tatsächlich ausgeführt wird.
 Vor jeder Übernahme zeigt ein Bestätigungsdialog den ursprünglichen Worktree, die
-Aktion, betroffene Branches und lokale Änderungen. `Apply rehearsal` genügt als
-bewusste Bestätigung; unmittelbar davor werden die Sicherheitsbedingungen erneut
-geprüft und eine unzulässige Übernahme gesperrt.
+Aktion, betroffene Branches und lokale Änderungen. `Apply` genügt als bewusste
+Bestätigung; eine eingetippte Bestätigungsphrase ist nicht erforderlich.
+Unmittelbar vor der Übernahme werden die Sicherheitsbedingungen erneut geprüft;
+bei jeder Abweichung ist `Apply` deaktiviert.
 
 Der gesamte Ablauf einschließlich Konfliktlösung, Übernahme, Verwerfen und
 Rückgängigmachen ist per Tastatur bedienbar. Fokusführung macht den nächsten
@@ -55,4 +57,7 @@ mit Farbe vermittelt.
 
 Dies dokumentiert die am 5. September 2026 bestätigten Entscheidungen aus
 [Issue #139](https://github.com/maximalcode/git-city/issues/139), keine bereits
-implementierte Funktion. Sie bilden die Grundlage für die folgende Spezifikation.
+implementierte Funktion. Der Eigentümer hat das gemeinsame Verständnis und den
+Abschluss des Designinterviews ausdrücklich bestätigt; offene Designfragen gibt
+es nicht mehr. Der nächste Schritt ist eine Implementierungsspezifikation,
+gefolgt von Umsetzungstickets.

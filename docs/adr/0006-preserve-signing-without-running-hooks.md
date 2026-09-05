@@ -4,7 +4,10 @@ Probeläufe und ihre Übernahme führen keine Repository-Hooks aus. Git City wei
 in der Vorschau ausdrücklich darauf hin; direkte Aktionen im Modus `Off` behalten
 das heutige Hook-Verhalten. Ein Hook-Opt-in wird nicht angeboten, weil Code aus
 dem Repository auch aus einer Sandbox heraus beliebige externe Nebenwirkungen
-haben könnte. Die Übernahme muss als hook-frei garantiert und getestet werden.
+haben könnte. Sowohl Probelauf als auch Übernahme müssen als hook-frei garantiert
+und getestet werden. Im `SECURITY.md` von git-rehearse ist vor der Integration
+die falsche Aussage zu korrigieren, ein tatsächlich nicht vorhandenes
+`--with-hooks`-Flag erlaube ein Hook-Opt-in.
 
 Signierungseinstellungen werden dagegen respektiert, weil in der Sandbox erzeugte
 Commits später unverändert übernommen werden. Fehlt Schlüssel oder

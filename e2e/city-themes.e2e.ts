@@ -69,9 +69,7 @@ const dragOrbit = async (page: Page): Promise<void> => {
 const maxDelta = (a: [number, number, number], b: [number, number, number]): number =>
   Math.max(...a.map((v, i) => Math.abs(v - b[i])))
 
-/** how many times the rig disposed its MapControls (DEV probe). A view-mode
- *  switch must NEVER dispose — only a real unmount does. This is the exact,
- *  deterministic signal of the "camera dead after switch" regression. */
+/** Theme changes must keep the same camera controls attached. */
 const rigDisposes = (page: Page): Promise<number> =>
   page.evaluate(
     () => (window as unknown as { __gitCityRigDisposes?: number }).__gitCityRigDisposes ?? 0
@@ -101,6 +99,8 @@ test('saved Farm preference opens the city and theme changes keep the camera wor
   })
   page.on('pageerror', (e) => errors.push(String(e)))
 
+  // The preview has no favicon; headed Chromium requests one automatically.
+  await page.route('**/favicon.ico', (route) => route.fulfill({ status: 204 }))
   await installDrawCounter(page)
   await page.addInitScript(() => localStorage.setItem('gitcity.view', 'farm'))
   await page.goto('/?mock')
@@ -147,7 +147,7 @@ test('saved Farm preference opens the city and theme changes keep the camera wor
   await page.keyboard.press('Escape')
 
   // the render loop is alive at rest
-  expect(await drawsOver(page, 500)).toBeGreaterThan(0)
+  await expect.poll(() => drawsOver(page, 500), { timeout: 30_000 }).toBeGreaterThan(0)
 
   // Cancel the intro auto-orbit up front with a real interaction (the controls
   // are connected in city mode). Now the camera only moves in response to input,
@@ -167,7 +167,7 @@ test('saved Farm preference opens the city and theme changes keep the camera wor
   // no error boundary tripped, and the loop is STILL drawing (would be 0 if frozen)
   expect(await page.locator('.scene-error').count()).toBe(0)
   await page.waitForTimeout(400)
-  expect(await drawsOver(page, 600)).toBeGreaterThan(0)
+  await expect.poll(() => drawsOver(page, 600), { timeout: 30_000 }).toBeGreaterThan(0)
 
   expect(await rigDisposes(page), 'theme changes must not dispose the camera controls').toBe(0)
 

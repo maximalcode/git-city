@@ -98,3 +98,30 @@ it('queries recovery after an IPC response loss and never repeats Apply', async 
     })
   }
 })
+
+it('queries the original recovery worktree after a lost reply during a repository switch', async () => {
+  let reject!: (error: Error) => void
+  const rehearsalRecover = vi.fn().mockImplementation(
+    () =>
+      new Promise((_resolve, fail) => {
+        reject = fail
+      })
+  )
+  const recovery = {
+    state: 'unknown',
+    repository: '/first',
+    can_complete: false,
+    can_rollback: false,
+    message: 'blocked'
+  }
+  const rehearsalRecovery = vi.fn().mockResolvedValue(recovery)
+  setBridge({ rehearsalRecover, rehearsalRecovery } as unknown as GitCityApi)
+  useStore.setState({ repoPath: '/first', rehearsalRecovery: {} })
+  const pending = useStore.getState().recoverRehearsal('exact-id', 'complete')
+  useStore.setState({ repoPath: '/second' })
+  reject(new Error('lost reply'))
+  await pending
+  expect(rehearsalRecovery).toHaveBeenCalledExactlyOnceWith('/first')
+  expect(useStore.getState().rehearsalRecovery['/first']).toEqual(recovery)
+  expect(useStore.getState().rehearsalRecovery['/second']).toBeUndefined()
+})

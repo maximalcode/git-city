@@ -125,6 +125,7 @@ export default function RehearsalPanel(): React.JSX.Element | null {
   const dialog = useRef<HTMLDialogElement>(null)
   const input = useRef<HTMLInputElement>(null)
   const status = useRef<HTMLDivElement>(null)
+  const wasBlocked = useRef(false)
   const recoveryHeading = useRef<HTMLHeadingElement>(null)
   const trigger = useRef<HTMLButtonElement>(null)
   const repo = useStore((s) => s.repoPath)
@@ -146,6 +147,8 @@ export default function RehearsalPanel(): React.JSX.Element | null {
 
   useEffect(() => {
     if (blocked) recoveryHeading.current?.focus()
+    else if (wasBlocked.current) trigger.current?.focus()
+    wasBlocked.current = !!blocked
   }, [blocked])
   useEffect(() => {
     void checkRecovery()
@@ -265,7 +268,7 @@ export default function RehearsalPanel(): React.JSX.Element | null {
             type="submit"
             disabled={busy || !!blocked || confirming || !available || !target.trim()}
           >
-            {busy ? 'Rehearsing…' : 'Rehearse'}
+            {busy ? 'Working…' : 'Rehearse'}
           </button>
         </form>
         <div ref={status} tabIndex={-1} aria-live="polite" aria-busy={busy}>

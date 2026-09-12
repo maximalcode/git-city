@@ -499,6 +499,20 @@ interface GitCityState {
   continueOp(): Promise<OpResult>
 }
 
+async function readRehearsalRecovery(api: GitCityApi, repo: string): Promise<RehearsalRecovery> {
+  try {
+    return await api.rehearsalRecovery(repo)
+  } catch (error) {
+    return {
+      state: 'unknown',
+      repository: repo,
+      can_complete: false,
+      can_rollback: false,
+      message: `Repository writes are blocked. ${cleanError(error)}`
+    }
+  }
+}
+
 let lastFingerprint = ''
 
 export const useStore = create<GitCityState>((set, get) => ({
@@ -508,18 +522,7 @@ export const useStore = create<GitCityState>((set, get) => ({
     const api = bridge()
     const repo = get().repoPath
     if (!api?.rehearsalRecovery || !repo) return
-    let recovery: RehearsalRecovery
-    try {
-      recovery = await api.rehearsalRecovery(repo)
-    } catch (error) {
-      recovery = {
-        state: 'unknown',
-        repository: repo,
-        can_complete: false,
-        can_rollback: false,
-        message: `Repository writes are blocked. ${cleanError(error)}`
-      }
-    }
+    const recovery = await readRehearsalRecovery(api, repo)
     set((state) => ({ rehearsalRecovery: { ...state.rehearsalRecovery, [repo]: recovery } }))
   },
   applyRehearsal: async (identity) => {
@@ -531,18 +534,7 @@ export const useStore = create<GitCityState>((set, get) => ({
     try {
       result = await api.rehearsalApply(identity)
     } catch (error) {
-      let recovery: RehearsalRecovery
-      try {
-        recovery = await api.rehearsalRecovery(repo)
-      } catch {
-        recovery = {
-          state: 'unknown',
-          repository: repo,
-          can_complete: false,
-          can_rollback: false,
-          message: 'Recovery status is unknown. Repository writes remain blocked.'
-        }
-      }
+      const recovery = await readRehearsalRecovery(api, repo)
       result = {
         kind: 'uncertain',
         message: `Apply response lost; status queried without retry. ${cleanError(error)}`,
@@ -568,7 +560,8 @@ export const useStore = create<GitCityState>((set, get) => ({
       const recovery = await api.rehearsalRecover(repo, id, action)
       set((state) => ({ rehearsalRecovery: { ...state.rehearsalRecovery, [repo]: recovery } }))
     } catch {
-      await get().checkRehearsalRecovery()
+      const recovery = await readRehearsalRecovery(api, repo)
+      set((state) => ({ rehearsalRecovery: { ...state.rehearsalRecovery, [repo]: recovery } }))
     } finally {
       set({ rehearsalBusy: false })
     }

@@ -88,6 +88,11 @@ describe.skipIf(!tool)('real Apply and Recovery CLI', () => {
     const root = await fixture()
     const preview = await rehearseMerge(tool, root, 'topic')
     if (preview.kind !== 'report') throw new Error(JSON.stringify(preview))
+    const original = await snapshot(root)
+    expect(
+      (await applyRehearsal(tool, { ...preview.report, command: ['merge', 'different'] })).kind
+    ).toBe('refused')
+    expect(await snapshot(root)).toEqual(original)
     await writeFile(join(root, 'local.txt'), 'new work\n')
     const before = await snapshot(root)
     expect((await applyRehearsal(tool, preview.report)).kind).toBe('refused')

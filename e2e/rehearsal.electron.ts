@@ -91,13 +91,18 @@ test('real Electron merge preview preserves the original and supports keyboard k
     await page.reload()
     await page.getByRole('button', { name: 'Open a local repository…' }).click()
     await entry.click()
-    await expect(page.getByRole('dialog').getByRole('alert')).toContainText(
+    await expect(page.getByText(/^⚠ Could not start the configured tool/)).toContainText(
       'Could not start the configured tool'
     )
     await expect(page.getByRole('button', { name: 'Rehearse', exact: true })).toBeDisabled()
     await expect(target).toBeDisabled()
   } finally {
     await app.close()
+    try {
+      execFileSync(tool!, ['--json', 'recover', '--rollback'], { cwd: root })
+    } catch {
+      /* no pending recovery */
+    }
     const listing = JSON.parse(
       execFileSync(tool!, ['--json', 'list'], { cwd: root, encoding: 'utf8' })
     )

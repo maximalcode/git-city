@@ -34,12 +34,8 @@ export function layoutKey(analysis: RepoAnalysis): string {
  * Wrap a model builder so an analysis that lays out identically reuses the
  * model already built.
  *
- * Weights determine plot geometry. Farm crop classes use raw peak lines, but
- * square-root compression is strictly increasing for positive line counts, so
- * every class transition changes the digest too. Empty and one-line files share
- * both a weight and a crop class. Two repos that happen to weigh the same may
- * legitimately share a model. If a model ever
- * gains a field that is *not* derived from the weights, that stops being true
+ * Weights determine plot geometry. Two repos that weigh the same may share
+ * a model. If a model ever gains a field that is *not* derived from the weights, that stops being true
  * and this key has to grow to cover it.
  *
  * A digest collision would hand back a model laid out for different weights:

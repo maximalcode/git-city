@@ -43,7 +43,7 @@ interface Overlay {
 
 /**
  * Translucent, bloom-lit boxes around the files with uncommitted changes —
- * buildings in the city, fields on the farm. Only rendered in "live" mode
+ * buildings in the city. Only rendered in "live" mode
  * (viewing HEAD with a matching status); scrubbing the timeline hides the whole
  * layer. Conflicted files pulse.
  */
@@ -54,7 +54,7 @@ export default function StatusOverlay({
 }: {
   model: PlotSource
   targets: HeightSource
-  /** shortest the box may be, so a low crop still reads as marked */
+  /** minimum marker height */
   floor?: number
 }): React.JSX.Element | null {
   const workingStatus = useStore((s) => s.workingStatus)

@@ -41,17 +41,6 @@ const drawsOver = async (page: Page, ms: number): Promise<number> => {
   return (await draws(page)) - before
 }
 
-const setMode = (page: Page, mode: 'city' | 'farm'): Promise<void> =>
-  page.evaluate((m) => {
-    ;(
-      window as unknown as {
-        __gitCityMock: { store: { getState(): { setViewMode(x: string): void } } }
-      }
-    ).__gitCityMock.store
-      .getState()
-      .setViewMode(m)
-  }, mode)
-
 /** the r3f camera position via the DEV probe CameraRig exposes, or null */
 const camPos = (page: Page): Promise<[number, number, number] | null> =>
   page.evaluate(() => {
@@ -103,7 +92,9 @@ const setTheme = (page: Page, id: string): Promise<void> =>
       .setTheme(t)
   }, id)
 
-test('city/farm switching never freezes the render loop or errors', async ({ page }) => {
+test('saved Farm preference opens the city and theme changes keep the camera working', async ({
+  page
+}) => {
   const errors: string[] = []
   page.on('console', (m) => {
     if (m.type() === 'error') errors.push(m.text())
@@ -111,6 +102,7 @@ test('city/farm switching never freezes the render loop or errors', async ({ pag
   page.on('pageerror', (e) => errors.push(String(e)))
 
   await installDrawCounter(page)
+  await page.addInitScript(() => localStorage.setItem('gitcity.view', 'farm'))
   await page.goto('/?mock')
   await sceneCanvas(page).waitFor({ state: 'visible', timeout: 30_000 })
   await page.waitForFunction(
@@ -134,6 +126,26 @@ test('city/farm switching never freezes the render loop or errors', async ({ pag
       .dismissOnboarding()
   )
 
+  expect(
+    await page.evaluate(
+      () =>
+        (
+          window as unknown as { __gitCityMock: { store: { getState(): { viewMode: string } } } }
+        ).__gitCityMock.store.getState().viewMode
+    )
+  ).toBe('city')
+  await expect(page.getByTitle('View (V)', { exact: true })).toHaveCount(0)
+  await page.keyboard.press('v')
+  await page.keyboard.press(',')
+  await expect(page.locator('.settings-panel')).toBeVisible()
+  await expect(page.locator('.settings-panel').getByText('View', { exact: true })).toHaveCount(0)
+  await expect(page.locator('.settings-panel select option')).toHaveCount(5)
+  await page.locator('.settings-panel').getByRole('button', { name: 'Close', exact: true }).click()
+  await page.keyboard.press('ControlOrMeta+k')
+  await page.locator('.palette input').fill('farm')
+  await expect(page.locator('.palette')).toContainText('No matching command')
+  await page.keyboard.press('Escape')
+
   // the render loop is alive at rest
   expect(await drawsOver(page, 500)).toBeGreaterThan(0)
 
@@ -149,23 +161,15 @@ test('city/farm switching never freezes the render loop or errors', async ({ pag
   const themes = ['realistic-day', 'realistic-night', 'neon', 'golden-hour', 'midnight-ink']
   for (const t of themes) {
     await setTheme(page, t)
-    for (let i = 0; i < 3; i++) {
-      await setMode(page, i % 2 ? 'city' : 'farm')
-      await page.waitForTimeout(150)
-    }
+    await page.waitForTimeout(450)
   }
 
   // no error boundary tripped, and the loop is STILL drawing (would be 0 if frozen)
   expect(await page.locator('.scene-error').count()).toBe(0)
-  await setMode(page, 'farm')
   await page.waitForTimeout(400)
   expect(await drawsOver(page, 600)).toBeGreaterThan(0)
 
-  // DETERMINISTIC regression guard: none of those view-mode switches tore down
-  // the camera controls. If the rig ever disposes on a worldSize change again,
-  // this is non-zero and the camera would be dead (city citySize != farm
-  // worldSize, so worldSize changes on every switch).
-  expect(await rigDisposes(page), 'view-mode switches must not dispose the camera controls').toBe(0)
+  expect(await rigDisposes(page), 'theme changes must not dispose the camera controls').toBe(0)
 
   // End-to-end sanity: the camera still responds to a drag after all the
   // switching (intro orbit was cancelled up front, so movement == input).
@@ -181,7 +185,7 @@ test('city/farm switching never freezes the render loop or errors', async ({ pag
   const after = await camPos(page)
   expect(
     maxDelta(rest2!, after!),
-    'camera should still respond to drag after a view-mode switch'
+    'camera should still respond to drag after a theme change'
   ).toBeGreaterThan(2)
 
   expect(errors, errors.join('\n')).toEqual([])

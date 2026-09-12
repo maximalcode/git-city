@@ -1,6 +1,6 @@
 # Git City — working notes
 
-Electron desktop app that renders a git repository as a 3D city (or farm) and
+Electron desktop app that renders a git repository as a 3D city and
 puts a full git client on top of it. React 19 + react-three-fiber for the scene,
 zustand for state, git driven by raw `spawn` in the Electron main process.
 
@@ -20,7 +20,7 @@ gh issue view 12
 The loop for a piece of work:
 
 1. Pick an issue (or file one).
-2. Branch from `develop`: `git checkout develop && git pull && git checkout -b feat/12-farm-mode`
+2. Branch from `develop`: `git checkout develop && git pull && git checkout -b feat/12-history-playback`
    — naming is `<type>/<issue-number>-<slug>` with type one of
    `feat` / `fix` / `refactor` / `docs` / `infra` / `chore`.
 3. Build it. Reference the issue in commit messages (`#12`).
@@ -83,8 +83,8 @@ npx vite -c vite.preview.config.ts   # browser-only renderer preview, port 5199
                                      # open /?mock for a synthetic 250-file repo
 ```
 
-The preview is the fast path for anything visual: no Electron, no real repo, both
-view modes fully explorable with deterministic mock data.
+The preview is the fast path for anything visual: no Electron, no real repo, the city
+fully explorable with deterministic mock data.
 
 ## Architecture
 
@@ -100,8 +100,8 @@ view modes fully explorable with deterministic mock data.
 - **`src/preload/`** — the typed `window.gitCity` bridge.
 - **`src/renderer/src/`**
   - `layout/` — pure, unit-tested scene math: `treemap.ts` (squarified treemap →
-    plots, districts, roads), `roads.ts` (street graph), `farm.ts` (farm model).
-    No three.js imports here. This is the abstraction a new view mode reuses.
+    plots, districts, roads), `roads.ts` (street graph).
+    No three.js imports here. The scene reuses these tested layout functions.
   - `city/` — the 3D scene. `SceneView.tsx` is the mode-agnostic shell (canvas,
     camera rig, effects, HUD) that mounts the active mode from the `modes.tsx`
     registry — adding a view mode is one entry there plus its scene.
@@ -205,6 +205,5 @@ here that turns a guard into a lie.
 too. It switches off this repo's commit hook, which is the last check before
 content the gate has not seen becomes a commit. If the hook is failing for a
 reason that is not your change, say so — do not route around it.
-
 
 <!-- END maxi-quality agent-guard -->

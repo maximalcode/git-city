@@ -56,7 +56,7 @@ No check can verify prose, which is exactly why it is written down here.
   at it.
 - `main` is release-only. It moves through `develop` → `main` pull requests, and
   a release is a version tag on top (see [RELEASING.md](RELEASING.md)).
-- Name branches `<type>/<issue-number>-<slug>`, e.g. `feat/12-farm-mode`,
+- Name branches `<type>/<issue-number>-<slug>`, e.g. `feat/12-history-playback`,
   `fix/31-diff-scroll`.
 - Put `Closes #12` in the pull request body so the issue closes on merge.
 

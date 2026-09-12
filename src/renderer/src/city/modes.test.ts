@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { RepoAnalysis } from '../../../shared/types'
 import { buildAnalysis, materializeSnapshot } from '../../../shared/snapshots'
-import { DEFAULT_MODE, MODES, getMode, isViewMode, nextMode, type PreparedScene } from './modes'
+import { DEFAULT_MODE, MODES, getMode, isViewMode, type PreparedScene } from './modes'
 
 /** One snapshot per frame; each frame is the files and their sizes at it. */
 function analysisFrom(frames: { path: string; loc: number }[][]): RepoAnalysis {
@@ -37,13 +37,12 @@ function analysis(): RepoAnalysis {
 /**
  * The registry replaced a per-mode ternary repeated across the shell, so
  * these guard the properties that made that removal safe: every mode is fully
- * specified, lookups never return undefined, and cycling covers all of them
- * rather than flipping between two.
+ * specified, lookups never return undefined, and removed modes fall back to the city.
  */
 
 describe('mode registry', () => {
   it('fully specifies every mode', () => {
-    expect(MODES.length).toBeGreaterThanOrEqual(2)
+    expect(MODES.map((mode) => mode.id)).toEqual(['city'])
     for (const m of MODES) {
       expect(m.id).toBeTruthy()
       expect(m.name).toBeTruthy()
@@ -75,7 +74,7 @@ describe('mode registry', () => {
 
   it('resolves a known id and falls back for anything else', () => {
     expect(getMode('city').id).toBe('city')
-    expect(getMode('farm').id).toBe('farm')
+    expect(getMode('farm').id).toBe('city')
     // a mode removed in a later version must not strand the app
     expect(getMode('atlantis').id).toBe(MODES[0].id)
     expect(getMode('').id).toBe(MODES[0].id)
@@ -83,24 +82,12 @@ describe('mode registry', () => {
 
   it('validates persisted values against the registry', () => {
     expect(isViewMode('city')).toBe(true)
-    expect(isViewMode('farm')).toBe(true)
+    expect(isViewMode('farm')).toBe(false)
     // removed in a later version — must not validate
     expect(isViewMode('forest')).toBe(false)
     expect(isViewMode('atlantis')).toBe(false)
     expect(isViewMode(null)).toBe(false)
     expect(isViewMode(2)).toBe(false)
-  })
-
-  it('cycles through every mode and wraps', () => {
-    let id = DEFAULT_MODE
-    const seen = [id]
-    for (let i = 0; i < MODES.length - 1; i++) {
-      id = nextMode(id).id
-      seen.push(id)
-    }
-    expect(new Set(seen).size).toBe(MODES.length)
-    // one more step returns to the start
-    expect(nextMode(id).id).toBe(DEFAULT_MODE)
   })
 
   it('defaults to a mode the registry knows', () => {
@@ -157,13 +144,5 @@ describe('model reuse across analyses', () => {
       const after = sceneFor(mode, two)
       expect(after.dots()).not.toBe(before.dots())
     }
-  })
-
-  it('keeps each mode its own model, so switching back does not relayout', () => {
-    const a = analysis()
-    const city = sceneFor(MODES[0], a)
-    const farm = sceneFor(MODES[1], a)
-    expect(farm.dots()).not.toBe(city.dots())
-    expect(sceneFor(MODES[0], a).dots()).toBe(city.dots())
   })
 })

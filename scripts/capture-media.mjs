@@ -24,33 +24,27 @@ const FRAMES = resolve(process.cwd(), 'docs/media/.frames')
 // hero without the text turning to mush
 const VIEWPORT = { width: 1280, height: 800 }
 // 1.25x lands the stills at 1600px wide — sharp on a HiDPI screen, and small
-// enough as JPEG that five of them cost about a megabyte in the repo
+// enough as JPEG to keep the screenshot set small
 const SCALE = 1.25
 const JPEG_QUALITY = 88
 
-/** Stills worth having: both view modes, and a spread of themes and encodings. */
+/** Stills worth having: a spread of city themes and encodings. */
 const STILLS = [
-  { name: 'city-night', theme: 'realistic-night', view: 'city', color: 'language' },
-  { name: 'city-neon', theme: 'neon', view: 'city', color: 'activity' },
-  { name: 'city-author', theme: 'golden-hour', view: 'city', color: 'author' },
-  { name: 'farm', theme: 'realistic-day', view: 'farm', color: 'language' },
-  { name: 'farm-night', theme: 'realistic-night', view: 'farm', color: 'language' }
+  { name: 'city-night', theme: 'realistic-night', color: 'language' },
+  { name: 'city-neon', theme: 'neon', color: 'activity' },
+  { name: 'city-author', theme: 'golden-hour', color: 'author' }
 ]
 
 const ONLY = process.argv.includes('--stills') ? 'stills' : null
 
 const settle = (page, ms = 2200) => page.waitForTimeout(ms)
 
-/** Theme and view persist in localStorage; colour mode does not, so it is set on the store. */
-async function prime(page, { theme, view }) {
-  await page.addInitScript(
-    ([theme, view]) => {
-      localStorage.setItem('gitcity.theme', theme)
-      localStorage.setItem('gitcity.view', view)
-      localStorage.setItem('gitcity.onboarded', '1') // no first-run card over the shot
-    },
-    [theme, view]
-  )
+/** Themes persist in localStorage; colour mode does not, so it is set on the store. */
+async function prime(page, { theme }) {
+  await page.addInitScript((theme) => {
+    localStorage.setItem('gitcity.theme', theme)
+    localStorage.setItem('gitcity.onboarded', '1') // no first-run card over the shot
+  }, theme)
 }
 
 async function setColor(page, color) {
@@ -99,7 +93,7 @@ async function main() {
   // Hero: replay the history from the first commit while grabbing frames.
   const ctx = await browser.newContext({ viewport: VIEWPORT, deviceScaleFactor: 1 })
   const page = await ctx.newPage()
-  await prime(page, { theme: 'realistic-night', view: 'city', color: 'language' })
+  await prime(page, { theme: 'realistic-night', color: 'language' })
   await page.goto(`${BASE}/?mock`, { waitUntil: 'load' })
   await settle(page)
 

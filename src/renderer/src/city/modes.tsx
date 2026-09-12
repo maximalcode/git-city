@@ -4,10 +4,8 @@ import type { RepoAnalysis, Snapshot } from '../../../shared/types'
 import type { ColorMode } from './colorModes'
 import type { IconName } from '../lib/icons'
 import { buildCityModel, snapshotTargets, type CityModel } from './cityData'
-import { buildFarmModel, farmTargets, type FarmModel } from '../layout/farm'
 import { cacheByLayout } from './modelCache'
 import CityScene from './CityScene'
-import FarmScene from './FarmScene'
 
 /**
  * The registry of view modes.
@@ -21,7 +19,7 @@ import FarmScene from './FarmScene'
  * non-null assertions the old binary needed.
  */
 
-export type ViewMode = 'city' | 'farm'
+export type ViewMode = 'city'
 
 export interface MinimapDot {
   x: number
@@ -39,7 +37,7 @@ export interface SceneProps {
 export interface PreparedScene {
   /** world extent, for the camera rig, fog and minimap scale */
   worldSize: number
-  /** satisfies HudModel and ColorContext — both models already do */
+  /** satisfies HudModel and ColorContext */
   hud: { paths: string[]; langColors: Color[]; totalFiles: number; capped: boolean }
   /** where the camera should fly for a file, or null if absent from this scene */
   focus(path: string): Vector3 | null
@@ -60,14 +58,7 @@ export interface ModeDef {
    * darkens the canopy interiors into mud, so modes opt in.
    */
   ao: boolean
-  /**
-   * How far back the camera starts, as a multiple of the world size.
-   *
-   * The city's detail is its skyline, which reads from a distance. The farm's
-   * is at ground level — livestock, crop rows, the lit barn windows — and at
-   * the city's framing the herds were specks (#22). Its world is also flatter,
-   * so there is no skyline to lose by coming in closer.
-   */
+  /** Initial camera distance as a multiple of the world size. */
   cameraScale: number
   /** first-run guide rows; the colour row follows the active colour mode */
   rows(colorName: string): { icon: IconName; title: string; body: string }[]
@@ -90,10 +81,8 @@ function commonRows(colorName: string): { icon: IconName; title: string; body: s
   ]
 }
 
-// One cache per mode, so switching modes back and forth never re-runs a layout
-// algorithm. See modelCache.ts for what they are keyed on and why.
+// Cache the layout across snapshots and analyses.
 const cityModelFor = cacheByLayout<CityModel>(buildCityModel)
-const farmModelFor = cacheByLayout<FarmModel>(buildFarmModel)
 
 /**
  * Minimap dots, cached per model.
@@ -158,53 +147,8 @@ const cityMode: ModeDef = {
   }
 }
 
-const farmMode: ModeDef = {
-  id: 'farm',
-  name: 'Farm',
-  glyph: '🚜',
-  icon: 'farm',
-  hint: 'Files as fields on a working farm',
-  noun: 'farm',
-  // two-thirds of the city's framing: the farm's detail is at ground level
-  cameraScale: 0.66,
-  // the crop is foliage, not massing: AO just darkens it into mud
-  ao: false,
-  rows: (colorName) => [
-    { icon: 'farm', title: 'Fields are files', body: 'Taller crop = more lines of code.' },
-    {
-      icon: 'branch',
-      title: 'Parcels are folders',
-      body: 'Each fenced holding gathers one directory, with its own barn.'
-    },
-    ...commonRows(colorName)
-  ],
-  prepare(analysis, snapshot, colorMode) {
-    const model = farmModelFor(analysis)
-    const targets = farmTargets(model, snapshot, colorMode)
-    return {
-      worldSize: model.worldSize,
-      hud: model,
-      focus(path) {
-        const i = model.indexOf.get(path)
-        if (i === undefined) return null
-        return new Vector3(model.centers[i * 2], 3, model.centers[i * 2 + 1])
-      },
-      dots() {
-        return cachedDots(model, () =>
-          model.langColors.map((color, i) => ({
-            x: model.centers[i * 2],
-            z: model.centers[i * 2 + 1],
-            color
-          }))
-        )
-      },
-      render: (props) => <FarmScene model={model} targets={targets} {...props} />
-    }
-  }
-}
-
-/** Every mode, in the order the picker and the `V` key cycle through them. */
-export const MODES: ModeDef[] = [cityMode, farmMode]
+/** Available scene definitions. */
+export const MODES: ModeDef[] = [cityMode]
 
 export const DEFAULT_MODE: ViewMode = 'city'
 
@@ -215,10 +159,4 @@ export function getMode(id: string): ModeDef {
 /** True only for an id the registry actually knows — used to validate storage. */
 export function isViewMode(v: unknown): v is ViewMode {
   return typeof v === 'string' && MODES.some((m) => m.id === v)
-}
-
-/** The mode after `id`, wrapping — what the `V` key and the palette entry use. */
-export function nextMode(id: ViewMode): ModeDef {
-  const i = MODES.findIndex((m) => m.id === id)
-  return MODES[(i + 1) % MODES.length]
 }

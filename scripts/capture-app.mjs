@@ -52,7 +52,6 @@ const QUALITY = 88
  * @property {string}   name     output basename → docs/media/<name>.<jpg|png|gif>
  * @property {'hero'}   [kind]   replay history into a GIF instead of a still
  * @property {string}   [theme]  theme id (default 'realistic-night')
- * @property {'city'|'farm'} [view]  (default 'city')
  * @property {string}   [color]  colour-mode id, see COLORS (default 'language')
  * @property {string[]} [keys]   hotkeys pressed in order once the scene is up
  * @property {(page: import('playwright').Page) => Promise<void>} [setup]
@@ -70,8 +69,6 @@ const SHOTS = [
   { name: 'app-city-night', theme: 'realistic-night', color: 'language' },
   { name: 'app-city-activity', theme: 'neon', color: 'activity' },
   { name: 'app-city-author', theme: 'golden-hour', color: 'author' },
-  { name: 'app-farm', theme: 'realistic-day', view: 'farm', color: 'language' },
-  { name: 'app-farm-night', theme: 'realistic-night', view: 'farm', color: 'language' },
 
   // ── The git client ───────────────────────────────────────────────────────
   // Lit themes behind the panels on purpose. This repository is 260 files, and
@@ -154,8 +151,8 @@ mkdirSync(outDir, { recursive: true })
 // the next one show a "History changed" pill in the top bar.
 const stage = mkdtempSync(join(tmpdir(), 'git-city-media-'))
 
-/** The three HUD pickers, left to right. */
-const PICKER = { view: 0, color: 1, theme: 2 }
+/** The two HUD pickers, left to right. */
+const PICKER = { color: 0, theme: 1 }
 
 /** Menu order, which is the order of the source arrays these are built from. */
 const THEMES = ['realistic-day', 'realistic-night', 'neon', 'golden-hour', 'midnight-ink']
@@ -338,19 +335,11 @@ try {
     console.warn('         commit or stash your work, then run this again.')
   }
 
-  let currentView = 'city'
-
   for (const shot of shots) {
     try {
       await reset(page)
 
       if (shot.theme) await pick(page, PICKER.theme, THEMES.indexOf(shot.theme))
-      const view = shot.view ?? 'city'
-      if (view !== currentView) {
-        await page.keyboard.press('v')
-        await page.waitForTimeout(1600) // the scene is rebuilt from scratch
-        currentView = view
-      }
       if (shot.color) await pick(page, PICKER.color, COLORS.indexOf(shot.color))
 
       for (const key of shot.keys ?? []) {

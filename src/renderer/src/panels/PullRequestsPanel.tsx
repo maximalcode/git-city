@@ -268,7 +268,6 @@ function PrRow({
   onReview: (n: number, title: string) => void
   busy: boolean
 }): React.JSX.Element {
-  // "Review in city" was still the label with a farm on screen
   const noun = getMode(useStore((s) => s.viewMode)).noun
   return (
     <div className={`pr-row ${current ? 'current' : ''}`}>

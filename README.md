@@ -49,16 +49,6 @@ owner. A speckled one is shared ground.
 Recency, size and kind round out the six.
 [What the colours mean](docs/colour-modes.md) explains them all.
 
-## Or make it a farm
-
-Press `V`. Files become fields whose crop rises and falls with the line count.
-Folders become fenced parcels, each with a barn and silo. Herds graze across the
-holding and a tractor works the tracks. After dark the steadings light up.
-
-![The same repository as a farm](docs/media/app-farm.jpg)
-
-![The farm after dark, its steadings lit](docs/media/app-farm-night.jpg)
-
 ## It is a real git client
 
 Not a viewer with a commit button. Stage by file, by hunk, or by clicking
@@ -111,13 +101,12 @@ Anything else that goes wrong on first run is in
 
 ## Shortcuts
 
-| Key              | Does                         |
-| ---------------- | ---------------------------- |
-| `Ctrl`/`Cmd`+`K` | Command palette              |
-| `V`              | Switch between city and farm |
-| `Space`          | Play or pause the timeline   |
-| `/`              | Find a file and fly to it    |
-| `,`              | Settings                     |
+| Key              | Does                       |
+| ---------------- | -------------------------- |
+| `Ctrl`/`Cmd`+`K` | Command palette            |
+| `Space`          | Play or pause the timeline |
+| `/`              | Find a file and fly to it  |
+| `,`              | Settings                   |
 
 The other nine are on [the shortcuts page](docs/shortcuts.md), and the command
 palette lists every one of them without leaving the app.
@@ -132,12 +121,12 @@ commit's added and deleted line counts reproduces the exact size of every file a
 every mainline commit, with no checkouts and no per-file git calls. About 50
 evenly spaced snapshots feed the timeline, re-spaced every time you commit from
 inside the app so the stops never bunch up at the end. The treemap layout is
-computed once over every file that ever existed, with city plots and farm fields
+computed once over every file that ever existed, with city plots
 weighted by the square root of peak line count (at least one for empty files).
-Buildings and crops rise, shrink and vanish, but never move while you scrub —
+Buildings rise, shrink and vanish, but never move while you scrub —
 and the same layout survives a commit, unless it changes the peak sizes the
 layout is built from. Existing repositories get a new layout once with this
-compression; their building heights and crop classes keep the same scales.
+compression; their building heights keep the same scales.
 
 Git operations run in the Electron main process behind a per-repo lock, so two of
 our own commands never race for `index.lock`. A file watcher keeps the UI live

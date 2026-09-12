@@ -4,10 +4,7 @@ import type { HeightSource, PlotSource } from './plots'
 /**
  * Bright translucent box around the hovered / selected file (picked up by bloom).
  *
- * World-agnostic: it needs a plot rectangle and a height, which the city and the
- * farm both have. `floor` is what a world says its marker may shrink to — a
- * building of zero height is not there at all, while a field still occupies its
- * rectangle whatever is growing on it.
+ * Markers follow the plot rectangle and building height.
  */
 export default function Highlight({
   model,

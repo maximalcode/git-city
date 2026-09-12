@@ -6,7 +6,7 @@ import { peakLocByPath } from '../../../shared/snapshots'
  * union of every file that ever existed. Compression keeps generated outliers
  * from dominating the ground area (#102).
  *
- * Both model builders lay out from this and nothing else, which is what keeps a
+ * The city model lays out from this and nothing else, which is what keeps a
  * building in one place while you scrub — it rises, shrinks and vanishes, but
  * the plot it stands on was decided by its peak, not by its size at the frame
  * on screen. Read straight off the columnar snapshots, so nothing is

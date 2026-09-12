@@ -140,7 +140,7 @@ export function snapshotAtCommit(analysis: RepoAnalysis, commitIndex: number): n
 
 /**
  * Peak line count per path across the whole history — the union pass the
- * city and farm layouts are built from, straight off the columns so no
+ * city layouts are built from, straight off the columns so no
  * snapshot has to be materialized for it.
  *
  * Only paths that ever existed appear as keys (a path present with 0 lines

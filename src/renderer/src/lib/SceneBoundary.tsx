@@ -11,7 +11,7 @@ interface State {
 
 /**
  * Catches render-phase errors in the 3D scene (e.g. a postprocessing chain
- * reconciliation throwing during a view-mode switch) so a glitch degrades to a
+ * reconciliation throwing during a scene size change) so a glitch degrades to a
  * recoverable message instead of a frozen canvas. "Reload view" remounts the
  * subtree from scratch.
  */

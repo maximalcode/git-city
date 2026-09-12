@@ -60,7 +60,7 @@ export default function EmptyRepoView(): React.JSX.Element {
           </p>
           <p className="empty-repo-steps">
             Open <strong>Changes</strong> (C) → stage your files → write a message → commit. The
-            first {noun === 'farm' ? 'fields are sown' : 'buildings rise'} the moment you do.
+            first buildings rise the moment you do.
           </p>
           <div className="empty-repo-actions">
             <button className="primary" onClick={() => setPanel('changes')}>

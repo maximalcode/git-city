@@ -40,7 +40,7 @@ export interface CappedFiles {
 /**
  * Keep the largest `max` files and say how many were dropped.
  *
- * Ranked by weight, which both model builders define as the square root of a
+ * Ranked by weight, which the city model defines as the square root of a
  * path's *peak* line count across history. Compression preserves the ranking
  * (empty files still tie with one-line files), so these remain the largest
  * files — not the largest in the current snapshot. That

@@ -1,6 +1,6 @@
 # Git City
 
-Git City verbindet die Darstellung eines Git-Repositorys als Stadt oder Farm mit
+Git City verbindet die Darstellung eines Git-Repositorys als Stadt mit
 der Arbeit an dessen Versionsgeschichte und Arbeitsständen.
 
 ## Language

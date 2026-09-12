@@ -6,7 +6,6 @@ import { formatDate } from '../lib/format'
 import Icon, { type IconName } from '../lib/icons'
 import { THEMES } from './themes'
 import { COLOR_MODES } from './colorModes'
-import { nextMode } from './modes'
 import type { CommitHit, GrepHit } from '../../../shared/types'
 
 interface Command {
@@ -78,14 +77,6 @@ export default function CommandPalette({
     }
     const list: Command[] = []
 
-    const other = nextMode(s.viewMode)
-    list.push({
-      id: 'view',
-      group: 'View',
-      icon: other.icon,
-      label: `Switch to ${other.name} view`,
-      run: act(() => s.setViewMode(other.id))
-    })
     list.push({
       id: 'play',
       group: 'Playback',

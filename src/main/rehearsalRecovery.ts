@@ -29,19 +29,17 @@ const object = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
 const exactId = (id: unknown): id is string => typeof id === 'string' && /^[a-zA-Z0-9_-]+$/.test(id)
 
-/** No metadata is interpreted here. Presence checks fail closed when the tool is absent.
- * These storage names are pinned to the supported development CLI contract. */
+/** Check only journal presence, never interpret metadata. The CLI's OS lock file
+ * persists even after successful recovery, so its mere existence proves nothing. */
 async function hasRecoveryFiles(repo: string): Promise<boolean> {
   const common = await commonRepository(repo)
-  for (const name of ['rehearse-apply', 'rehearse-apply.lock']) {
-    try {
-      await lstat(join(common, name))
-      return true
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
-    }
+  try {
+    await lstat(join(common, 'rehearse-apply'))
+    return true
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+    return false
   }
-  return false
 }
 
 export async function inspectRecovery(

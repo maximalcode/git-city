@@ -512,8 +512,48 @@ export interface GitVersion {
   supported: boolean
 }
 
+/** Exact CLI identity; never substitute the implicitly latest rehearsal. */
+export interface RehearsalIdentity {
+  id: string
+  repository: string
+  origin_worktree: string
+  repository_id: string
+}
+
+/** Validated subset of the public git-rehearse schema, never private metadata. */
+export interface RehearsalReport extends RehearsalIdentity {
+  schema: 1
+  command: string[]
+  checkout: { kind: 'branch' | 'detached'; target: string }
+  pre_state: Record<string, string>
+  lifecycle: 'kept'
+  /** Bounded process diagnostics for a failed Git command, not persisted metadata. */
+  diagnostics?: string
+  outcome: 'clean' | 'stopped' | 'failed' | 'incomplete'
+  conflicted: boolean
+  refs: { name: string; before?: string; after?: string }[]
+  conflicts: { path: string; hunks: number }[]
+  drift: {
+    reference: string
+    files: { status: string; path: string }[]
+    commits_before: number
+    commits_after: number
+    replay: { changed: string[]; dropped: string[]; added: string[]; compared: boolean }
+  }[]
+  drift_unexpected: boolean
+  carried?: { paths: string[]; status: string; conflicts: string[]; reason?: string }
+}
+
+export type RehearsalResult =
+  | { kind: 'report'; report: RehearsalReport }
+  | { kind: 'unavailable' | 'refused' | 'error'; message: string }
+
 /** API exposed to the renderer via the preload bridge. */
 export interface GitCityApi {
+  rehearsalAvailability(): Promise<{ available: boolean; configured: boolean; message: string }>
+  rehearseMerge(repoPath: string, target: string): Promise<RehearsalResult>
+  rehearsalShow(identity: RehearsalIdentity): Promise<RehearsalResult>
+
   /** The installed git, or null if there isn't one on PATH. */
   checkGit(): Promise<GitVersion | null>
   selectFolder(): Promise<string | null>

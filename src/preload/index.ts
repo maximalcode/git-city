@@ -2,6 +2,9 @@ import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import type { GitCityApi, ProgressInfo, RepoChangeReason } from '../shared/types'
 
 const api: GitCityApi = {
+  rehearsalAvailability: () => ipcRenderer.invoke('git-city:rehearsal-availability'),
+  rehearseMerge: (repo, target) => ipcRenderer.invoke('git-city:rehearse-merge', repo, target),
+  rehearsalShow: (identity) => ipcRenderer.invoke('git-city:rehearsal-show', identity),
   checkGit: () => ipcRenderer.invoke('git-city:check-git'),
   selectFolder: () => ipcRenderer.invoke('git-city:select-folder'),
   // Electron 35 removed File.path; webUtils is the supported way to resolve a dropped folder

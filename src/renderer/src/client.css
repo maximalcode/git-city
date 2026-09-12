@@ -2695,3 +2695,61 @@
 .hunk-lines .diff-line.picked .diff-gutter {
   color: var(--accent-2);
 }
+
+.rehearsal-trigger {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 100;
+}
+.rehearsal-dialog {
+  margin: auto;
+  font-size: 14px;
+  line-height: 1.5;
+  width: min(720px, 90vw);
+  max-height: 85vh;
+  overflow: auto;
+  padding: 24px;
+  color: var(--text, #eee);
+  background: var(--panel-bg, #20242c);
+  border: 1px solid #727986;
+  border-radius: 12px;
+  overflow-wrap: anywhere;
+}
+.rehearsal-dialog::backdrop {
+  background: #0009;
+}
+.rehearsal-dialog input {
+  display: block;
+  width: 100%;
+  margin: 8px 0;
+}
+.rehearsal-dialog :focus-visible {
+  outline: 2px solid #77c9ff;
+  outline-offset: 3px;
+}
+.rehearsal-dialog h2 {
+  margin-bottom: 12px;
+}
+.rehearsal-dialog h3,
+.rehearsal-dialog h4 {
+  margin-top: 16px;
+  margin-bottom: 6px;
+}
+.rehearsal-dialog p {
+  margin: 8px 0;
+}
+.rehearsal-dialog ul {
+  padding-left: 20px;
+}
+.rehearsal-dialog form {
+  margin: 16px 0;
+}
+.rehearsal-dialog input {
+  padding: 8px 10px;
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  background: var(--panel-bg, #20242c);
+  color: inherit;
+  font: inherit;
+}

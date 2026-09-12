@@ -4,6 +4,10 @@ import type { GitCityApi, ProgressInfo, RepoChangeReason } from '../shared/types
 const api: GitCityApi = {
   rehearsalAvailability: () => ipcRenderer.invoke('git-city:rehearsal-availability'),
   rehearseMerge: (repo, target) => ipcRenderer.invoke('git-city:rehearse-merge', repo, target),
+  rehearsalApply: (identity) => ipcRenderer.invoke('git-city:rehearsal-apply', identity),
+  rehearsalRecovery: (repo) => ipcRenderer.invoke('git-city:rehearsal-recovery', repo),
+  rehearsalRecover: (repo, id, action) =>
+    ipcRenderer.invoke('git-city:rehearsal-recover', repo, id, action),
   rehearsalShow: (identity) => ipcRenderer.invoke('git-city:rehearsal-show', identity),
   checkGit: () => ipcRenderer.invoke('git-city:check-git'),
   selectFolder: () => ipcRenderer.invoke('git-city:select-folder'),

@@ -39,7 +39,7 @@ import { addWorktree, listWorktrees, removeWorktree } from './git/worktrees'
 import { checkForUpdate } from './updates'
 import { readConflictFile, resolveConflictFile, resolveWholeFile } from './git/conflicts'
 import { mergeAbort, mergeBranch, mergeContinue } from './git/merge'
-import { withRepoLock } from './git/queue'
+import { inspectRecovery, withRepositoryWrite } from './rehearsalRecovery'
 import { FriendlyError, failFromError, stripNoise } from './git/result'
 import { discardFiles, stageFiles, unstageFiles } from './git/stage'
 import { stashApply, stashDrop, stashList, stashPop, stashPush } from './git/stash'
@@ -106,12 +106,22 @@ function mutating(
   fn: (repoPath: string, ...args: never[]) => Promise<OpResult>
 ): void {
   ipcMain.handle(`git-city:${channel}`, (_event, repoPath: string, ...args: unknown[]) =>
-    withRepoLock(repoPath, async () => {
+    withRepositoryWrite(repoPath, async () => {
       watcher.mute()
       try {
+        const recovery = await inspectRecovery(
+          app.isPackaged ? undefined : process.env.GIT_CITY_REHEARSE_BIN,
+          repoPath
+        )
+        if (recovery.state !== 'none') return { ok: false, message: recovery.message }
         let result = await fn(repoPath, ...(args as never[]))
         if (!result.ok && result.gitOutput?.includes('index.lock')) {
           await sleep(300)
+          const retryRecovery = await inspectRecovery(
+            app.isPackaged ? undefined : process.env.GIT_CITY_REHEARSE_BIN,
+            repoPath
+          )
+          if (retryRecovery.state !== 'none') return { ok: false, message: retryRecovery.message }
           result = await fn(repoPath, ...(args as never[]))
         }
         return result
@@ -259,9 +269,14 @@ export function registerOpsIpc(): void {
     ) => Promise<OpResult>
   ): void => {
     ipcMain.handle(`git-city:${channel}`, (event, repoPath: string, ...args: unknown[]) =>
-      withRepoLock(repoPath, async () => {
+      withRepositoryWrite(repoPath, async () => {
         watcher.mute()
         try {
+          const recovery = await inspectRecovery(
+            app.isPackaged ? undefined : process.env.GIT_CITY_REHEARSE_BIN,
+            repoPath
+          )
+          if (recovery.state !== 'none') return { ok: false, message: recovery.message }
           return await fn(repoPath, progressTo(event.sender), ...(args as never[]))
         } catch (err) {
           return failFromError(err)

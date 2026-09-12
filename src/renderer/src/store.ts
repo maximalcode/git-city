@@ -1,6 +1,9 @@
 import { create } from 'zustand'
 import type {
   RehearsalResult,
+  RehearsalRecovery,
+  RehearsalApplyResult,
+  RehearsalReport,
   BranchInfo,
   GitCityApi,
   GitVersion,
@@ -304,6 +307,11 @@ interface GitCityState {
   recentRepos: string[]
   searchOpen: boolean
 
+  rehearsalRecovery: Record<string, RehearsalRecovery>
+  rehearsalApplications: Record<string, RehearsalApplyResult>
+  checkRehearsalRecovery(): Promise<void>
+  applyRehearsal(identity: RehearsalReport): Promise<void>
+  recoverRehearsal(id: string, action: 'complete' | 'rollback'): Promise<void>
   rehearsalOpen: boolean
   rehearsalBusy: boolean
   rehearsalResults: Record<string, RehearsalResult>
@@ -494,6 +502,82 @@ interface GitCityState {
 let lastFingerprint = ''
 
 export const useStore = create<GitCityState>((set, get) => ({
+  rehearsalRecovery: {},
+  rehearsalApplications: {},
+  checkRehearsalRecovery: async () => {
+    const api = bridge()
+    const repo = get().repoPath
+    if (!api?.rehearsalRecovery || !repo) return
+    let recovery: RehearsalRecovery
+    try {
+      recovery = await api.rehearsalRecovery(repo)
+    } catch (error) {
+      recovery = {
+        state: 'unknown',
+        repository: repo,
+        can_complete: false,
+        can_rollback: false,
+        message: `Repository writes are blocked. ${cleanError(error)}`
+      }
+    }
+    set((state) => ({ rehearsalRecovery: { ...state.rehearsalRecovery, [repo]: recovery } }))
+  },
+  applyRehearsal: async (identity) => {
+    const api = bridge()
+    const repo = get().repoPath
+    if (!api || !repo || get().rehearsalBusy || get().rehearsalApplications[identity.id]) return
+    set({ rehearsalBusy: true })
+    let result: RehearsalApplyResult
+    try {
+      result = await api.rehearsalApply(identity)
+    } catch (error) {
+      let recovery: RehearsalRecovery
+      try {
+        recovery = await api.rehearsalRecovery(repo)
+      } catch {
+        recovery = {
+          state: 'unknown',
+          repository: repo,
+          can_complete: false,
+          can_rollback: false,
+          message: 'Recovery status is unknown. Repository writes remain blocked.'
+        }
+      }
+      result = {
+        kind: 'uncertain',
+        message: `Apply response lost; status queried without retry. ${cleanError(error)}`,
+        recovery
+      }
+    }
+    set((state) => ({
+      rehearsalBusy: false,
+      rehearsalApplications: { ...state.rehearsalApplications, [identity.id]: result },
+      rehearsalRecovery: { ...state.rehearsalRecovery, [repo]: result.recovery }
+    }))
+    if (get().repoPath === repo) {
+      await get().resync()
+      if (get().repoPath === repo && result.recovery.state === 'none') await get().refreshAnalysis()
+    }
+  },
+  recoverRehearsal: async (id, action) => {
+    const api = bridge()
+    const repo = get().repoPath
+    if (!api || !repo || get().rehearsalBusy) return
+    set({ rehearsalBusy: true })
+    try {
+      const recovery = await api.rehearsalRecover(repo, id, action)
+      set((state) => ({ rehearsalRecovery: { ...state.rehearsalRecovery, [repo]: recovery } }))
+    } catch {
+      await get().checkRehearsalRecovery()
+    } finally {
+      set({ rehearsalBusy: false })
+    }
+    if (get().repoPath === repo) {
+      await get().resync()
+      if (get().repoPath === repo && get().rehearsalRecovery[repo]?.state === 'none')
+        await get().refreshAnalysis()
+    }
+  },
   rehearsalOpen: false,
   rehearsalBusy: false,
   rehearsalResults: {},
@@ -585,6 +669,7 @@ export const useStore = create<GitCityState>((set, get) => ({
     if (!api) return
     api.onProgress((p) => set({ progress: p }))
     api.onRepoChanged(async (reasons) => {
+      void get().checkRehearsalRecovery()
       // awaited, not fired and forgotten, because the reload pill below is
       // decided by comparing the HEAD this brings back against the analysis
       await get().refreshStatus()
@@ -1279,6 +1364,7 @@ async function runOp(
   }
   set({ opInProgress: null })
 
+  await get().checkRehearsalRecovery()
   await resync(set, get)
 
   if (!result.ok) {
@@ -1290,7 +1376,9 @@ async function runOp(
       // opMessage, not result.message: for the codes we recognise, git's own
       // first line is written for someone mid-task in a terminal and reads
       // badly in a toast with no context (#26).
-      set({ opError: { message: opMessage(result), code: result.code, gitOutput: result.gitOutput } })
+      set({
+        opError: { message: opMessage(result), code: result.code, gitOutput: result.gitOutput }
+      })
     }
     return result
   }

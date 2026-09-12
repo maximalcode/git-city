@@ -523,6 +523,7 @@ export interface RehearsalIdentity {
 /** Validated subset of the public git-rehearse schema, never private metadata. */
 export interface RehearsalReport extends RehearsalIdentity {
   schema: 1
+  can_apply?: boolean
   command: string[]
   checkout: { kind: 'branch' | 'detached'; target: string }
   pre_state: Record<string, string>
@@ -548,10 +549,41 @@ export type RehearsalResult =
   | { kind: 'report'; report: RehearsalReport }
   | { kind: 'unavailable' | 'refused' | 'error'; message: string }
 
+/** Recovery permissions are issued by the CLI, never inferred from the phase. */
+export interface RehearsalRecovery {
+  state:
+    | 'none'
+    | 'before_ref_change'
+    | 'after_ref_change'
+    | 'complete'
+    | 'rolling_back'
+    | 'ambiguous'
+    | 'unknown'
+  repository: string
+  rehearsal?: string
+  operation?: 'apply' | 'undo'
+  can_complete: boolean
+  can_rollback: boolean
+  message: string
+}
+
+export interface RehearsalApplyResult {
+  kind: 'applied' | 'refused' | 'uncertain'
+  message: string
+  recovery: RehearsalRecovery
+}
+
 /** API exposed to the renderer via the preload bridge. */
 export interface GitCityApi {
   rehearsalAvailability(): Promise<{ available: boolean; configured: boolean; message: string }>
   rehearseMerge(repoPath: string, target: string): Promise<RehearsalResult>
+  rehearsalApply(identity: RehearsalReport): Promise<RehearsalApplyResult>
+  rehearsalRecovery(repo: string): Promise<RehearsalRecovery>
+  rehearsalRecover(
+    repo: string,
+    id: string,
+    action: 'complete' | 'rollback'
+  ): Promise<RehearsalRecovery>
   rehearsalShow(identity: RehearsalIdentity): Promise<RehearsalResult>
 
   /** The installed git, or null if there isn't one on PATH. */

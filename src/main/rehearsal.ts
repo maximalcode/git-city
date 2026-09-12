@@ -7,7 +7,7 @@ import { searchPath } from './git/exec'
 const repair =
   'Rehearse is internal. Configure GIT_CITY_REHEARSE_BIN with an absolute path to a compatible development build of git-rehearse.'
 
-function run(
+export function runRehearsalTool(
   tool: string,
   args: string[],
   cwd?: string
@@ -53,7 +53,7 @@ export async function rehearsalAvailability(
   if (!tool || !isAbsolute(tool))
     return { available: false, configured: Boolean(tool), message: repair }
   try {
-    const result = await run(tool, ['--version'])
+    const result = await runRehearsalTool(tool, ['--version'])
     // The development contract is pinned until bundled-tool compatibility is shipped.
     if (result.code !== 0 || result.stdout.trim() !== 'git-rehearse 1.2.0') {
       return {
@@ -65,7 +65,7 @@ export async function rehearsalAvailability(
     return {
       available: true,
       configured: true,
-      message: 'Internal merge preview; Apply is unavailable.'
+      message: 'Internal merge rehearsal with checked Apply and recovery.'
     }
   } catch {
     return {
@@ -89,6 +89,7 @@ const arrayOf = (v: unknown, check: (entry: unknown) => boolean): boolean =>
 function isReport(v: Record<string, unknown>): v is Record<string, unknown> & RehearsalReport {
   return (
     v.schema === 1 &&
+    (v.can_apply === undefined || typeof v.can_apply === 'boolean') &&
     string(v.id) &&
     v.id.length > 0 &&
     string(v.repository) &&
@@ -145,7 +146,7 @@ async function report(
     return { kind: 'unavailable', message: availability.message }
   try {
     const origin = await realpath(cwd)
-    const result = await run(tool, ['--json', ...args], origin)
+    const result = await runRehearsalTool(tool, ['--json', ...args], origin)
     const value: unknown = JSON.parse(result.stdout)
     if (!object(value) || value.schema !== 1)
       throw new Error(

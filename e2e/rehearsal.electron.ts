@@ -51,7 +51,7 @@ test('real Electron merge preview preserves the original and supports keyboard k
     await expect(page.getByRole('heading', { name: 'Merge preview completed' })).toBeVisible({
       timeout: 30_000
     })
-    await expect(page.getByRole('button', { name: 'Apply', exact: true })).toBeDisabled()
+    await expect(page.getByRole('button', { name: 'Apply', exact: true })).toBeEnabled()
     await expect(page.getByText(/Repository hooks were not run/)).toBeVisible()
     await expect(page.getByText('M file.txt')).toBeVisible()
     await page.keyboard.press('Escape')
@@ -64,6 +64,18 @@ test('real Electron merge preview preserves the original and supports keyboard k
     expect(await readFile(join(root, '.git/index'))).toEqual(before.index)
     expect(await readFile(join(root, 'file.txt'))).toEqual(before.file)
     await page.screenshot({ path: 'test-results/rehearsal-electron.png' })
+    await page.getByRole('button', { name: 'Apply', exact: true }).focus()
+    await page.keyboard.press('Enter')
+    await expect(page.getByRole('button', { name: 'Cancel Apply' })).toBeFocused()
+    await page.keyboard.press('Escape')
+    await expect(page.getByRole('heading', { name: 'Apply rehearsal' })).not.toBeVisible()
+    await page.getByRole('button', { name: 'Apply', exact: true }).click()
+    await page.keyboard.press('Tab')
+    await expect(page.getByRole('button', { name: 'Apply rehearsal', exact: true })).toBeFocused()
+    await page.keyboard.press('Enter')
+    await expect(page.getByText('The checked rehearsal was applied.')).toBeVisible()
+    expect(git('rev-parse', 'HEAD')).toBe(git('rev-parse', 'topic'))
+    expect(await readFile(join(root, 'file.txt'), 'utf8')).toBe('preview\n')
     await target.fill('missing-merge-target')
     await page.getByRole('button', { name: 'Rehearse', exact: true }).click()
     await expect(
@@ -79,7 +91,9 @@ test('real Electron merge preview preserves the original and supports keyboard k
     await page.reload()
     await page.getByRole('button', { name: 'Open a local repository…' }).click()
     await entry.click()
-    await expect(page.getByRole('alert')).toContainText('Could not start the configured tool')
+    await expect(page.getByRole('dialog').getByRole('alert')).toContainText(
+      'Could not start the configured tool'
+    )
     await expect(page.getByRole('button', { name: 'Rehearse', exact: true })).toBeDisabled()
     await expect(target).toBeDisabled()
   } finally {

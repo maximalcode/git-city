@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import type { GitCityApi, RehearsalResult } from '../../shared/types'
+import type { GitCityApi, RehearsalResult, RehearsalReport } from '../../shared/types'
 import { setBridge } from './lib/bridge'
 import { useStore } from './store'
 
@@ -47,4 +47,54 @@ it('keeps a late result on its original worktree and prevents duplicate starts',
   expect(useStore.getState().rehearsalResults['/second']).toBeUndefined()
   expect(useStore.getState().rehearsalResults['/first'].kind).toBe('error')
   expect(useStore.getState().rehearsalBusy).toBe(false)
+})
+
+it('queries recovery after an IPC response loss and never repeats Apply', async () => {
+  const recovery = {
+    state: 'none',
+    repository: '/original',
+    can_complete: false,
+    can_rollback: false,
+    message: 'clear'
+  }
+  const rehearsalApply = vi.fn().mockRejectedValue(new Error('Lost response'))
+  const rehearsalRecovery = vi.fn().mockResolvedValue(recovery)
+  const resync = vi.fn().mockResolvedValue(undefined)
+  const refreshAnalysis = vi.fn().mockResolvedValue(undefined)
+  setBridge({ rehearsalApply, rehearsalRecovery } as unknown as GitCityApi)
+  const originalResync = useStore.getState().resync
+  const originalRefresh = useStore.getState().refreshAnalysis
+  const identity: RehearsalReport = {
+    schema: 1,
+    command: ['merge', 'topic'],
+    checkout: { kind: 'branch', target: 'main' },
+    pre_state: {},
+    lifecycle: 'kept',
+    outcome: 'clean',
+    conflicted: false,
+    refs: [],
+    conflicts: [],
+    drift: [],
+    drift_unexpected: false,
+    id: 'exact-id',
+    repository: '/original',
+    origin_worktree: '/original',
+    repository_id: '/common'
+  }
+  useStore.setState({ repoPath: '/original', rehearsalApplications: {}, resync, refreshAnalysis })
+  try {
+    await useStore.getState().applyRehearsal(identity)
+    await useStore.getState().applyRehearsal(identity)
+    expect(rehearsalApply).toHaveBeenCalledExactlyOnceWith(identity)
+    expect(rehearsalRecovery).toHaveBeenCalledExactlyOnceWith('/original')
+    expect(useStore.getState().rehearsalApplications['exact-id'].kind).toBe('uncertain')
+    expect(resync).toHaveBeenCalledOnce()
+  } finally {
+    useStore.setState({
+      resync: originalResync,
+      refreshAnalysis: originalRefresh,
+      rehearsalApplications: {},
+      rehearsalRecovery: {}
+    })
+  }
 })

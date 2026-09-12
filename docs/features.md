@@ -158,6 +158,8 @@ fly-to.
 
 An explicitly configured git-rehearse development build enables an internal
 merge preview with retained results, branch/commit and file consequences,
-conflicts and textual content warnings. Closing keeps the preview. Apply and
-public entry points remain unavailable pending the complete safety workflow.
+conflicts and textual content warnings. Closing keeps the preview. Confirmed
+Apply adopts the checked result after backend revalidation. Interrupted Apply
+blocks repository writes across worktrees and offers backend-approved recovery.
+Public entry points remain unavailable pending the complete safety workflow.
 See [development setup and limitations](rehearsal-development.md).

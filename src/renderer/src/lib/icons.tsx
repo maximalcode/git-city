@@ -17,7 +17,6 @@ export type IconName =
   | 'pull'
   | 'push'
   | 'city'
-  | 'farm'
   | 'color'
   | 'theme'
   | 'open'
@@ -34,15 +33,6 @@ export type IconName =
   | 'record'
 
 const PATHS: Record<IconName, JSX.Element> = {
-  farm: (
-    <>
-      <path d="M3 20V10l6-4 6 4v10" />
-      <path d="M3 10l6-4 6 4" />
-      <path d="M7 20v-5h4v5" />
-      <path d="M17 20v-8h4v8" />
-      <path d="M17 12h4" />
-    </>
-  ),
   branch: (
     <>
       <circle cx="6" cy="6" r="2.4" />

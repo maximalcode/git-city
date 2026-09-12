@@ -3,14 +3,14 @@ import { defineConfig, devices } from '@playwright/test'
 /**
  * Renderer end-to-end tests. These drive the REAL 3D app (via the browser
  * preview with ?mock data) to catch things unit tests structurally cannot —
- * e.g. a view-mode switch freezing the render loop. Chromium background
+ * e.g. a theme change freezing the render loop. Chromium background
  * throttling is disabled so the requestAnimationFrame loop keeps running and
  * a freeze is observable as "draw calls stop advancing".
  */
 export default defineConfig({
   testDir: './e2e',
   testMatch: '**/*.e2e.ts',
-  // headless software-GPU rendering + many mode switches is slow; give the
+  // headless software-GPU rendering + many theme changes is slow; give the
   // single end-to-end test generous room so an assertion fails on its merits
   // rather than on a global timeout
   timeout: 150_000,

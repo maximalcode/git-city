@@ -9,17 +9,13 @@ const dummy = new Object3D()
  * Untracked/added files that don't yet have a plot in the (stable) layout appear
  * as low blue wireframe boxes on a grid strip past the world's +Z edge — so
  * brand-new files are visible without triggering a relayout.
- *
- * A marked-out plot with nothing on it yet reads the same on a farm as in a
- * city, so both worlds use this; all it needs is the world's extent to know
- * where its edge is.
  */
 export default function ConstructionSites({
   model,
   size
 }: {
   model: { indexOf: Map<string, number> }
-  /** world extent — citySize in the city, worldSize on the farm */
+  /** city extent */
   size: number
 }): React.JSX.Element | null {
   const workingStatus = useStore((s) => s.workingStatus)

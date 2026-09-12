@@ -7,11 +7,10 @@ import { AheadBehind, formatDate } from '../lib/format'
 import { commitTimeLabel } from '../lib/daytime'
 import Picker from '../lib/Picker'
 import Icon from '../lib/icons'
-import { useStore, type ColorMode, type ViewMode } from '../store'
+import { useStore, type ColorMode } from '../store'
 import { THEMES, getTheme } from './themes'
 import { COLOR_MODES, type ColorContext } from './colorModes'
 import { cappedLabel } from '../layout/cap'
-import { MODES, getMode, nextMode } from './modes'
 import Legend from './Legend'
 import SearchBox from './SearchBox'
 import SideRail from './SideRail'
@@ -35,8 +34,6 @@ export default function Hud({ snapshot, model }: Props): React.JSX.Element {
   const setColorMode = useStore((s) => s.setColorMode)
   const themeId = useStore((s) => s.themeId)
   const setTheme = useStore((s) => s.setTheme)
-  const viewMode = useStore((s) => s.viewMode)
-  const setViewMode = useStore((s) => s.setViewMode)
   const hovered = useStore((s) => s.hovered)
   const selected = useStore((s) => s.selected)
   const setSelected = useStore((s) => s.setSelected)
@@ -111,10 +108,6 @@ export default function Hud({ snapshot, model }: Props): React.JSX.Element {
       g: () => useStore.getState().setGraphOpen(!useStore.getState().graphOpen),
       u: () => useStore.getState().setReflogOpen(!useStore.getState().reflogOpen),
       p: () => useStore.getState().setPrPanelOpen(!useStore.getState().prPanelOpen),
-      v: () => {
-        const st = useStore.getState()
-        st.setViewMode(nextMode(st.viewMode).id)
-      },
       '/': () => useStore.getState().setSearchOpen(true),
       space: () => {
         const st = useStore.getState()
@@ -241,8 +234,7 @@ export default function Hud({ snapshot, model }: Props): React.JSX.Element {
         </div>
 
         <div className="hud-zone hud-right">
-          <ViewPicker viewMode={viewMode} setViewMode={setViewMode} />
-          <ColorModePicker colorMode={colorMode} setColorMode={setColorMode} viewMode={viewMode} />
+          <ColorModePicker colorMode={colorMode} setColorMode={setColorMode} />
           <ThemePicker themeId={themeId} setTheme={setTheme} />
           <TimeOfDayControl timeOfDay={timeOfDay} setTimeOfDay={setTimeOfDay} />
           <button
@@ -472,53 +464,18 @@ function TimeOfDayControl({
   )
 }
 
-function ViewPicker({
-  viewMode,
-  setViewMode
-}: {
-  viewMode: ViewMode
-  setViewMode: (m: ViewMode) => void
-}): React.JSX.Element {
-  const active = getMode(viewMode)
-  return (
-    <Picker
-      buttonLabel={
-        <>
-          {active.glyph} {active.name}
-        </>
-      }
-      title="View (V)"
-      items={MODES.map((m) => ({
-        id: m.id,
-        label: (
-          <>
-            <span className="theme-glyph">{m.glyph}</span> {m.name}
-          </>
-        ),
-        hint: m.hint
-      }))}
-      activeId={viewMode}
-      onPick={(id) => setViewMode(id as ViewMode)}
-    />
-  )
-}
-
 function ColorModePicker({
   colorMode,
-  setColorMode,
-  viewMode
+  setColorMode
 }: {
   colorMode: ColorMode
   setColorMode: (m: ColorMode) => void
-  viewMode: ViewMode
 }): React.JSX.Element {
   const active = COLOR_MODES.find((m) => m.id === colorMode) ?? COLOR_MODES[0]
   return (
     <Picker
       buttonLabel={<>◑ {active.name}</>}
-      // the registry already names each world; saying "city" in the farm was
-      // the kind of drift a second mode makes easy
-      title={`Color the ${getMode(viewMode).noun} by…`}
+      title="Color the city by…"
       items={COLOR_MODES.map((m) => ({ id: m.id, label: m.name, hint: m.hint }))}
       activeId={colorMode}
       onPick={(id) => setColorMode(id as ColorMode)}

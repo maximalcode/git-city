@@ -1,6 +1,5 @@
 import { useStore } from '../store'
 import { THEMES } from '../city/themes'
-import { MODES } from '../city/modes'
 
 /**
  * One home for every persisted preference. Most are also reachable from the top
@@ -14,8 +13,6 @@ export default function SettingsPanel(): React.JSX.Element | null {
 
   const themeId = useStore((s) => s.themeId)
   const setTheme = useStore((s) => s.setTheme)
-  const viewMode = useStore((s) => s.viewMode)
-  const setViewMode = useStore((s) => s.setViewMode)
   const timeOfDay = useStore((s) => s.timeOfDay)
   const setTimeOfDay = useStore((s) => s.setTimeOfDay)
   const sunFollowsCommit = useStore((s) => s.sunFollowsCommit)
@@ -41,7 +38,7 @@ export default function SettingsPanel(): React.JSX.Element | null {
   const confirmReset = (): void => {
     askConfirm({
       title: 'Reset all preferences?',
-      body: 'Theme, view, time of day, motion, diff layout and the first-run guide return to defaults. Your repositories and history are untouched.',
+      body: 'Theme, time of day, motion, diff layout and the first-run guide return to defaults. Your repositories and history are untouched.',
       confirmLabel: 'Reset',
       danger: true,
       onConfirm: () => resetPreferences()
@@ -74,21 +71,6 @@ export default function SettingsPanel(): React.JSX.Element | null {
             </select>
           </label>
 
-          <div className="settings-row">
-            <span>View</span>
-            <div className="seg">
-              {MODES.map((m) => (
-                <button
-                  key={m.id}
-                  className={viewMode === m.id ? 'active' : ''}
-                  onClick={() => setViewMode(m.id)}
-                >
-                  {m.name}
-                </button>
-              ))}
-            </div>
-          </div>
-
           <label className="settings-row toggle">
             <span>
               Sky follows commit time
@@ -120,7 +102,7 @@ export default function SettingsPanel(): React.JSX.Element | null {
           <label className="settings-row toggle">
             <span>
               Reduce motion
-              <small>No intro orbit, no traffic, no wandering livestock</small>
+              <small>No intro orbit or moving traffic</small>
             </span>
             <input type="checkbox" checked={reduceMotion} onChange={toggleReduceMotion} />
           </label>

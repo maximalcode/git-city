@@ -5,9 +5,6 @@ inventory, for anyone deciding whether the app covers what they need.
 
 ## Seeing the repository
 
-**Two view modes.** City and Farm, switched with `V`, remembered between
-sessions.
-
 **The city.** A district per folder, a building per file. Buildings have real
 facades: window grids in three styles, ground-floor shopfronts, rooftop clutter
 (AC units, water tanks, antennas) and a contact shadow at the base. Streets are
@@ -16,25 +13,15 @@ manholes, parked cars at the curb and traffic lights at the big junctions.
 Traffic is weighted by commit activity and comes in four body styles, plus
 bikes. Lamp posts and street trees line the roads.
 
-**The farm.** Every file is a cultivated field. The crop rises and falls with
-the live line count, and the crop class follows the file's peak line count: leafy rows for
-small files, standing cereal for mid-size, orchards for the largest. Folders are
-fenced parcels with a barn and silo, and wind pumps on the big ones. Herds of
-cattle, sheep, pigs and chickens graze across the holding, walking with a
-footfall bob. One or two tractors work the dirt tracks. After dark the
-steadings light up: hayloft windows, the spill under the big door, a yard lamp
-on a post.
-
-**Compressed plot areas.** City plots and farm fields are weighted by the square
+**Compressed plot areas.** City plots are weighted by the square
 root of each file's peak line count, with a minimum of one for empty files.
 Lockfiles, generated code and other outliers still get larger plots, but leave
 more ground for smaller source files. Building heights keep their square-root
-scale, crops keep their logarithmic height scale, and crop classes still use raw
-peak line counts. Repositories above the draw ceiling keep the same largest
+scale. Repositories above the draw ceiling keep the same largest
 20,000 files, with ties broken by path.
 
 **A layout that stays put.** Plots use peaks across the whole history rather
-than sizes right now, so buildings and crops rise, shrink and vanish as you scrub
+than sizes right now, so buildings rise, shrink and vanish as you scrub
 but never move. That holds across commits you make in the app too: the layout is
 rebuilt only when its inputs change, including a one-line increase in a peak.
 The switch to compressed areas rearranges existing repositories once.
@@ -43,11 +30,10 @@ The switch to compressed areas rearranges existing repositories once.
 about ten seconds.
 
 **Five themes.** Daylight, Night, Neon, Golden Hour, Midnight Ink. Each has
-procedural lit windows, its own sky gradient and ambient occlusion. A theme that
-lights the city lights the farm too, and a test holds that together.
+procedural lit windows, its own sky gradient and ambient occlusion.
 
 **Six colour modes.** Language, activity, author, recency, size and kind. Each
-has an always-visible legend, and the encoding is identical in both view modes.
+has an always-visible legend.
 See [what the colours mean](colour-modes.md).
 
 **Time of day**, decoupled from the theme. Drag the sun from night through noon
@@ -57,7 +43,7 @@ then walks the city from a morning commit's light into a late-night commit's
 dark.
 
 **Activity hotspots.** The files churning most this week pulse with a beacon
-over the roof or canopy.
+over the roof.
 
 **Orientation minimap** with a compass marker that tracks the camera, north up,
 so a big repository never loses you.
@@ -125,7 +111,7 @@ files. Escape ends the review.
 ## Around the edges
 
 **The command palette** (`Ctrl`/`Cmd`+`K`) fuzzy-searches every action, jumps to
-any file with a camera fly-to, switches branch, pops a stash, and changes view,
+any file with a camera fly-to, switches branch, pops a stash, and changes
 theme or colour. Two extra modes by leading character: `@` searches commits by
 message, author or hash across all refs, and `:` greps code in tracked files. A
 commit hit opens a detail panel with signature state, changed files, cherry-pick
@@ -136,11 +122,10 @@ make the first commit from inside Git City. The city grows the moment you do.
 Detached HEAD is labelled clearly, and a missing git install is explained on the
 welcome screen.
 
-**Settings** (`,`) gathers every preference: theme, view, time of day, sky
+**Settings** (`,`) gathers every preference: theme, time of day, sky
 follows commit time, reduce motion, activity hotspots and the default diff
 layout. Reduce motion skips the intro orbit, stills the wind, and parks traffic
-and tractors where they stand. A mid-stride animal settles flat instead of
-freezing tilted. The panel also re-shows the first-run guide, clears recent
+where they stand. The panel also re-shows the first-run guide, clears recent
 repositories and resets all preferences.
 
 **Update check.** On launch the app asks GitHub Releases whether a newer version

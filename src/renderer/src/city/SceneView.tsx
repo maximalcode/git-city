@@ -145,8 +145,6 @@ export default function SceneView(): React.JSX.Element {
           key={canvasKey}
           shadows
           dpr={[1, 1.75]}
-          // cameraScale: the farm's detail is at ground level, so the city's
-          // framing left its herds and lit barns as specks (#22)
           camera={{
             position: [
               size * 0.9 * mode.cameraScale,

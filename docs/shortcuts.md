@@ -28,7 +28,6 @@ panel.
 | Key              | Does                                                        |
 | ---------------- | ----------------------------------------------------------- |
 | `Space`          | Play / pause the history replay                             |
-| `V`              | Switch view mode — City ⇄ Farm                              |
 | `/`              | Find a file and fly to it                                   |
 | `Ctrl`/`Cmd` `K` | Command palette — everything the app can do, fuzzy-searched |
 

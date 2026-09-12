@@ -5,9 +5,6 @@ line count**, and a **district is a folder**. Colour is the free variable, and
 Git City has six encodings for it. Switch with the picker in the top bar; the
 legend in the bottom-right always describes the one in use.
 
-The same six apply to the farm, where a field is a file and the crop's growth
-stands in for the line count.
-
 ## Language — the default
 
 Each programming language gets its own colour, the way GitHub's language bars

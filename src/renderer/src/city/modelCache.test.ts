@@ -3,7 +3,6 @@ import type { FileState, RepoAnalysis, Snapshot } from '../../../shared/types'
 import { buildAnalysis } from '../../../shared/snapshots'
 import { cacheByLayout, layoutKey } from './modelCache'
 import { buildCityModel } from './cityData'
-import { buildFarmModel, CROP_KINDS } from '../layout/farm'
 
 const file = (path: string, loc: number): FileState => ({
   path,
@@ -60,22 +59,18 @@ describe('layoutKey', () => {
 })
 
 describe('cacheByLayout', () => {
-  it('rebuilds both worlds when a one-line peak increase changes a fractional weight', () => {
+  it('rebuilds the city when a one-line peak increase changes a fractional weight', () => {
     const before = analysis([snap(0, [file('a.ts', 1199), file('b.ts', 100)])])
     const after = analysis([
       snap(0, [file('a.ts', 1199), file('b.ts', 100)]),
       snap(1, [file('a.ts', 1200), file('b.ts', 100)])
     ])
-    for (const build of [buildCityModel, buildFarmModel]) {
+    for (const build of [buildCityModel]) {
       const cached = cacheByLayout<ReturnType<typeof build>>(build)
       const first = cached(before)
       const grown = cached(after)
       expect(grown).not.toBe(first)
       expect(grown.layout.plots).not.toEqual(first.layout.plots)
-      if ('kinds' in first && 'kinds' in grown) {
-        expect(CROP_KINDS[first.kinds[first.indexOf.get('a.ts')!]]).toBe('row')
-        expect(CROP_KINDS[grown.kinds[grown.indexOf.get('a.ts')!]]).toBe('orchard')
-      }
     }
   })
 
@@ -121,16 +116,16 @@ describe('cacheByLayout', () => {
     expect(calls()).toBe(3)
   })
 
-  it('gives each builder its own entry, so modes do not evict each other', () => {
+  it('gives each builder its own entry, so builders do not evict each other', () => {
     const city = counting()
-    const farm = counting()
+    const other = counting()
     const cachedCity = cacheByLayout(city.fn)
-    const cachedFarm = cacheByLayout(farm.fn)
+    const cachedOther = cacheByLayout(other.fn)
     const a = analysis([snap(0, [file('a.ts', 40)])])
     const c = cachedCity(a)
-    cachedFarm(a)
+    cachedOther(a)
     expect(cachedCity(a)).toBe(c)
     expect(city.calls()).toBe(1)
-    expect(farm.calls()).toBe(1)
+    expect(other.calls()).toBe(1)
   })
 })

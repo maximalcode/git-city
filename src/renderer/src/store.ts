@@ -57,14 +57,6 @@ function loadViewMode(): ViewMode {
     return DEFAULT_MODE
   }
 }
-function saveViewMode(mode: ViewMode): void {
-  try {
-    localStorage.setItem(VIEW_KEY, mode)
-  } catch {
-    /* private mode / no storage — view just won't persist */
-  }
-}
-
 const TOD_KEY = 'gitcity.tod'
 function loadTimeOfDay(): number {
   try {
@@ -401,7 +393,6 @@ interface GitCityState {
   setSelected(path: string | null): void
   setColorMode(mode: ColorMode): void
   setTheme(id: string): void
-  setViewMode(mode: ViewMode): void
   setDiffOpen(open: boolean, rev?: string): void
   setFileView(view: 'none' | 'history' | 'blame'): void
   setGraphOpen(open: boolean): void
@@ -669,11 +660,6 @@ export const useStore = create<GitCityState>((set, get) => ({
   setTheme: (themeId) => {
     saveTheme(themeId)
     set({ themeId })
-  },
-  // user preference like the theme: persisted, survives repo switches
-  setViewMode: (viewMode) => {
-    saveViewMode(viewMode)
-    set({ viewMode })
   },
   // Opening without an explicit rev replaces the history/blame panel (they share
   // the same spot); opening WITH a rev (from a history commit) keeps history
@@ -1244,7 +1230,7 @@ async function runOp(
     result = await fn(api, repoPath)
   } catch (err) {
     const failure: OpResult = { ok: false, message: cleanError(err) }
-set({ opInProgress: null, opError: { message: failure.message ?? '', code: failure.code } })
+    set({ opInProgress: null, opError: { message: failure.message ?? '', code: failure.code } })
     return failure
   }
   set({ opInProgress: null })
@@ -1260,7 +1246,9 @@ set({ opInProgress: null, opError: { message: failure.message ?? '', code: failu
       // opMessage, not result.message: for the codes we recognise, git's own
       // first line is written for someone mid-task in a terminal and reads
       // badly in a toast with no context (#26).
-      set({ opError: { message: opMessage(result), code: result.code, gitOutput: result.gitOutput } })
+      set({
+        opError: { message: opMessage(result), code: result.code, gitOutput: result.gitOutput }
+      })
     }
     return result
   }

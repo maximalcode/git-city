@@ -45,8 +45,8 @@ export default function CameraRig({
   const tween = useRef<{ target: Vector3; pos: Vector3 } | null>(null)
 
   // Create once. dispose() detaches the DOM listeners, so it must run ONLY on
-  // unmount — never when worldSize changes (a view-mode switch changes it,
-  // since the modes size their worlds differently). If it ran on every switch the
+  // unmount — never when worldSize changes (a scene size change changes it,
+  // when a repository gains files). If it ran on every switch the
   // memoized controls would be disposed and never reconnected, leaving the
   // camera dead. Size/angle limits live in the separate effect below.
   useEffect(() => {
@@ -62,7 +62,7 @@ export default function CameraRig({
     return () => {
       controls.removeEventListener('start', stopAuto)
       controls.dispose()
-      // DEV probe: a view-mode switch must NOT reach here (see e2e). If this
+      // DEV probe: a scene size change must NOT reach here (see e2e). If this
       // increments on a switch, the controls were torn down and the camera dies.
       if (import.meta.env.DEV) {
         const w = window as unknown as { __gitCityRigDisposes?: number }
@@ -88,7 +88,7 @@ export default function CameraRig({
   }, [controls, worldSize, maxPolarAngle])
 
   // DEV only: expose the camera so the preview/e2e can assert it still responds
-  // to input after a view-mode switch (the regression this rig guards against).
+  // to input after a scene size change (the regression this rig guards against).
   useEffect(() => {
     if (import.meta.env.DEV) {
       const w = window as unknown as {

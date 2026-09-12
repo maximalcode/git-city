@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type {
+  RehearsalResult,
   BranchInfo,
   GitCityApi,
   GitVersion,
@@ -303,6 +304,13 @@ interface GitCityState {
   recentRepos: string[]
   searchOpen: boolean
 
+  rehearsalOpen: boolean
+  rehearsalBusy: boolean
+  rehearsalResults: Record<string, RehearsalResult>
+  openRehearsal(): void
+  closeRehearsal(): void
+  rehearseMerge(target: string): Promise<void>
+
   // --- live repo state ---
   repoPath: string | null
   workingStatus: WorkingStatus | null
@@ -486,6 +494,28 @@ interface GitCityState {
 let lastFingerprint = ''
 
 export const useStore = create<GitCityState>((set, get) => ({
+  rehearsalOpen: false,
+  rehearsalBusy: false,
+  rehearsalResults: {},
+  openRehearsal: () => set({ rehearsalOpen: true }),
+  closeRehearsal: () => set({ rehearsalOpen: false }),
+  rehearseMerge: async (target) => {
+    const api = bridge()
+    const repo = get().repoPath
+    if (!api || !repo || get().rehearsalBusy) return
+    set({ rehearsalBusy: true })
+    let result: RehearsalResult
+    try {
+      result = await api.rehearseMerge(repo, target)
+    } catch (error) {
+      result = { kind: 'error', message: cleanError(error) }
+    }
+    // Keep ownership even if the user switched repositories while the CLI ran.
+    set((state) => ({
+      rehearsalBusy: false,
+      rehearsalResults: { ...state.rehearsalResults, [repo]: result }
+    }))
+  },
   screen: 'welcome',
   pendingRepo: null,
   analysis: null,
@@ -1244,7 +1274,7 @@ async function runOp(
     result = await fn(api, repoPath)
   } catch (err) {
     const failure: OpResult = { ok: false, message: cleanError(err) }
-set({ opInProgress: null, opError: { message: failure.message ?? '', code: failure.code } })
+    set({ opInProgress: null, opError: { message: failure.message ?? '', code: failure.code } })
     return failure
   }
   set({ opInProgress: null })

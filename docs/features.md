@@ -153,3 +153,11 @@ MediaRecorder, so it needs no extra dependency.
 
 **Recent repositories**, drag-and-drop a folder to open, and file search with
 fly-to.
+
+### Internal merge rehearsal (development only)
+
+An explicitly configured git-rehearse development build enables an internal
+merge preview with retained results, branch/commit and file consequences,
+conflicts and textual content warnings. Closing keeps the preview. Apply and
+public entry points remain unavailable pending the complete safety workflow.
+See [development setup and limitations](rehearsal-development.md).

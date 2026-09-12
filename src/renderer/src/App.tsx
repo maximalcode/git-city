@@ -8,6 +8,7 @@ import ConfirmDialog from './panels/ConfirmDialog'
 import LargeRepoDialog from './panels/LargeRepoDialog'
 import OpErrorToast from './panels/OpErrorToast'
 import UpdateBanner from './panels/UpdateBanner'
+import RehearsalPanel from './panels/RehearsalPanel'
 
 export default function App(): React.JSX.Element {
   const screen = useStore((s) => s.screen)
@@ -27,6 +28,7 @@ export default function App(): React.JSX.Element {
       <LargeRepoDialog />
       <OpErrorToast />
       <UpdateBanner />
+      <RehearsalPanel />
     </>
   )
 }

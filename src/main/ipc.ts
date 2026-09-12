@@ -1,5 +1,7 @@
 import { app, BrowserWindow, dialog, ipcMain } from 'electron'
 import { basename } from 'path'
+import { rehearsalAvailability, rehearseMerge, rehearsalShow } from './rehearsal'
+import type { RehearsalIdentity } from '../shared/types'
 import type { ProgressInfo } from '../shared/types'
 import { analyze, checkGitInstalled } from './git/analyze'
 import { cloneRepo } from './git/clone'
@@ -10,6 +12,17 @@ import { registerOpsIpc } from './ipcOps'
 
 export function registerIpc(): void {
   registerOpsIpc()
+
+  // Deliberately outside the retrying mutation helper; never fall back to git merge.
+  const rehearsalTool = (): string | undefined =>
+    app.isPackaged ? undefined : process.env.GIT_CITY_REHEARSE_BIN
+  ipcMain.handle('git-city:rehearsal-availability', () => rehearsalAvailability(rehearsalTool()))
+  ipcMain.handle('git-city:rehearse-merge', (_event, repo: string, target: string) =>
+    rehearseMerge(rehearsalTool(), repo, target)
+  )
+  ipcMain.handle('git-city:rehearsal-show', (_event, identity: RehearsalIdentity) =>
+    rehearsalShow(rehearsalTool(), identity)
+  )
 
   ipcMain.handle('git-city:check-git', () => checkGitInstalled())
 

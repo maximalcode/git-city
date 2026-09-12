@@ -527,6 +527,8 @@ export interface RehearsalReport extends RehearsalIdentity {
   checkout: { kind: 'branch' | 'detached'; target: string }
   pre_state: Record<string, string>
   lifecycle: 'kept'
+  /** Bounded process diagnostics for a failed Git command, not persisted metadata. */
+  diagnostics?: string
   outcome: 'clean' | 'stopped' | 'failed' | 'incomplete'
   conflicted: boolean
   refs: { name: string; before?: string; after?: string }[]

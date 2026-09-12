@@ -22,6 +22,7 @@ function Report({ report }: { report: RehearsalReport }): React.JSX.Element {
   return (
     <>
       <h3 tabIndex={-1}>{status}</h3>
+      {report.diagnostics && <p role="alert">⚠ {report.diagnostics}</p>}
       <p>
         Kept rehearsal: <code>{report.id}</code>
       </p>
@@ -104,7 +105,12 @@ function Report({ report }: { report: RehearsalReport }): React.JSX.Element {
 }
 
 export default function RehearsalPanel(): React.JSX.Element | null {
-  const [available, setAvailable] = useState(false)
+  const [availability, setAvailability] = useState({
+    configured: false,
+    available: false,
+    message: ''
+  })
+  const { configured, available } = availability
   const [target, setTarget] = useState('')
   const dialog = useRef<HTMLDialogElement>(null)
   const input = useRef<HTMLInputElement>(null)
@@ -123,23 +129,29 @@ export default function RehearsalPanel(): React.JSX.Element | null {
     if (!import.meta.env.DEV) return
     void bridge()
       ?.rehearsalAvailability()
-      .then((value) => setAvailable(value.configured))
-      .catch(() => setAvailable(false))
+      .then(setAvailability)
+      .catch(() =>
+        setAvailability({
+          configured: false,
+          available: false,
+          message: 'Could not check Rehearse availability.'
+        })
+      )
   }, [])
   useEffect(() => {
-    if (open && available && repo) {
+    if (open && configured && repo) {
       dialog.current?.showModal()
       input.current?.focus()
     } else {
       dialog.current?.close()
-      if (available) trigger.current?.focus()
+      if (configured) trigger.current?.focus()
     }
-  }, [open, available, repo])
+  }, [open, configured, repo])
   useEffect(() => {
     if (result && open && !busy) status.current?.focus()
   }, [result, open, busy])
 
-  if (!available || !repo) return null
+  if (!configured || !repo) return null
   return (
     <>
       <button ref={trigger} className="rehearsal-trigger" onClick={openPanel}>
@@ -160,10 +172,11 @@ export default function RehearsalPanel(): React.JSX.Element | null {
           Internal development preview. Closing keeps the rehearsal; it does not stop a running
           merge.
         </p>
+        {!available && <p role="alert">⚠ {availability.message}</p>}
         <form
           onSubmit={(event) => {
             event.preventDefault()
-            void rehearse(target)
+            if (available && !busy) void rehearse(target)
           }}
         >
           <label htmlFor="rehearsal-target">
@@ -174,10 +187,10 @@ export default function RehearsalPanel(): React.JSX.Element | null {
             ref={input}
             value={target}
             onChange={(event) => setTarget(event.target.value)}
-            disabled={busy}
+            disabled={busy || !available}
             required
           />
-          <button type="submit" disabled={busy || !target.trim()}>
+          <button type="submit" disabled={busy || !available || !target.trim()}>
             {busy ? 'Rehearsing…' : 'Rehearse'}
           </button>
         </form>
@@ -198,9 +211,7 @@ export default function RehearsalPanel(): React.JSX.Element | null {
             )
           )}
         </div>
-        <p id="apply-unavailable">
-          Apply is not available in this internal preview.
-        </p>
+        <p id="apply-unavailable">Apply is not available in this internal preview.</p>
         <button disabled aria-describedby="apply-unavailable">
           Apply
         </button>{' '}

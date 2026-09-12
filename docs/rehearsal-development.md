@@ -21,7 +21,9 @@ stop it. Reopening shows the current worktree's result. A response arriving afte
 switching repositories stays associated with its original worktree.
 
 The panel distinguishes conflicts, stopped/failed execution, no-op, refusal and
-technical errors. It shows the original checkout, action, exact retained ID,
+technical errors. Failed Git commands include their bounded diagnostic output.
+An unavailable configured tool shows repair guidance immediately and disables
+submission. It shows the original checkout, action, exact retained ID,
 branch/commit movements, file consequences, conflicts and unexpected content
 changes. Warnings are textual. Repository hooks are disabled by git-rehearse;
 a conflict-free result still requires content review. Untracked files are not
@@ -41,7 +43,10 @@ To also run the real CLI safety test, export `GIT_CITY_REHEARSE_BIN` for the tes
 command. Without it the real-tool test is explicitly skipped. It creates a real
 repository, verifies retention and exact identity, and compares HEAD, raw index
 bytes and working file bytes before/after merge. It also verifies a no-op and an isolated conflicting merge. The
-fixture removes only its own exact rehearsal IDs.
+fixture removes only its own exact rehearsal IDs, including after assertion
+failures. A merge-commit fixture installs sentinel hooks through a custom hooks
+directory and checks that rehearsal does not execute them; a real commit serves
+as the positive control.
 
 Build with `npm run build`, then run the Electron/real-tool check with
 `npx playwright test -c playwright.rehearsal.config.ts` and the same exported

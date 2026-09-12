@@ -64,6 +64,24 @@ test('real Electron merge preview preserves the original and supports keyboard k
     expect(await readFile(join(root, '.git/index'))).toEqual(before.index)
     expect(await readFile(join(root, 'file.txt'))).toEqual(before.file)
     await page.screenshot({ path: 'test-results/rehearsal-electron.png' })
+    await target.fill('missing-merge-target')
+    await page.getByRole('button', { name: 'Rehearse', exact: true }).click()
+    await expect(
+      page.getByRole('heading', { name: 'Git could not complete the merge' })
+    ).toBeVisible()
+    await expect(page.getByRole('alert')).toContainText('missing-merge-target')
+    await app.evaluate(
+      (_electron, missing) => {
+        process.env.GIT_CITY_REHEARSE_BIN = missing
+      },
+      join(userData, 'missing-tool')
+    )
+    await page.reload()
+    await page.getByRole('button', { name: 'Open a local repository…' }).click()
+    await entry.click()
+    await expect(page.getByRole('alert')).toContainText('Could not start the configured tool')
+    await expect(page.getByRole('button', { name: 'Rehearse', exact: true })).toBeDisabled()
+    await expect(target).toBeDisabled()
   } finally {
     await app.close()
     const listing = JSON.parse(

@@ -11,7 +11,7 @@ function run(
   tool: string,
   args: string[],
   cwd?: string
-): Promise<{ code: number; stdout: string }> {
+): Promise<{ code: number; stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
     const child = spawn(tool, args, {
       cwd,
@@ -25,6 +25,7 @@ function run(
       }
     })
     let stdout = ''
+    let stderr = ''
     let bytes = 0
     child.stdout.setEncoding('utf8')
     child.stdout.on('data', (chunk: string) => {
@@ -36,9 +37,13 @@ function run(
         )
       } else stdout += chunk
     })
-    child.stderr.resume()
+    child.stderr.setEncoding('utf8')
+    child.stderr.on('data', (chunk: string) => {
+      // Retain a bounded explanation while continuing to drain the pipe.
+      stderr = (stderr + chunk).slice(-64 * 1024)
+    })
     child.on('error', reject)
-    child.on('close', (code) => resolve({ code: code ?? -1, stdout }))
+    child.on('close', (code) => resolve({ code: code ?? -1, stdout, stderr }))
   })
 }
 
@@ -178,7 +183,16 @@ async function report(
     ) {
       throw new Error('Rehearse returned a different action from the requested merge.')
     }
-    return { kind: 'report', report: value }
+    return {
+      kind: 'report',
+      report: {
+        ...value,
+        diagnostics:
+          value.outcome === 'failed'
+            ? result.stderr.trim() || 'Git failed without a diagnostic message.'
+            : undefined
+      }
+    }
   } catch (error) {
     return {
       kind: 'error',

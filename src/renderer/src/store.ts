@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type {
+  RehearsalAction,
   RehearsalResult,
   RehearsalRecovery,
   RehearsalApplyResult,
@@ -315,7 +316,10 @@ interface GitCityState {
   rehearsalOpen: boolean
   rehearsalBusy: boolean
   rehearsalResults: Record<string, RehearsalResult>
-  openRehearsal(): void
+  rehearsalConfigured: boolean
+  rehearsalRequest: { repo: string; action: RehearsalAction; target: string } | null
+  openRehearsal(request?: { action: RehearsalAction; target: string }): void
+  rehearse(action: RehearsalAction, target: string): Promise<void>
   closeRehearsal(): void
   rehearseMerge(target: string): Promise<void>
 
@@ -578,16 +582,32 @@ export const useStore = create<GitCityState>((set, get) => ({
   rehearsalOpen: false,
   rehearsalBusy: false,
   rehearsalResults: {},
-  openRehearsal: () => set({ rehearsalOpen: true }),
+  rehearsalConfigured: false,
+  rehearsalRequest: null,
+  openRehearsal: (request) => {
+    const repo = get().repoPath
+    if (!repo || (request && get().rehearsalBusy)) return
+    const results = { ...get().rehearsalResults }
+    if (request) delete results[repo]
+    set({
+      rehearsalResults: results,
+      rehearsalOpen: true,
+      rehearsalRequest: request ? { ...request, repo } : null
+    })
+  },
   closeRehearsal: () => set({ rehearsalOpen: false }),
-  rehearseMerge: async (target) => {
+  rehearseMerge: (target) => get().rehearse('merge', target),
+  rehearse: async (action, target) => {
     const api = bridge()
     const repo = get().repoPath
     if (!api || !repo || get().rehearsalBusy) return
     set({ rehearsalBusy: true })
     let result: RehearsalResult
     try {
-      result = await api.rehearseMerge(repo, target)
+      result =
+        action === 'merge'
+          ? await api.rehearseMerge(repo, target)
+          : await api.rehearse(repo, action, target)
     } catch (error) {
       result = { kind: 'error', message: cleanError(error) }
     }

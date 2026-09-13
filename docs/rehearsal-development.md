@@ -1,6 +1,6 @@
-# Internal merge rehearsal
+# Internal rehearsal
 
-Merge rehearsal is an internal development preview for #143–#144, not a public
+Merge, normal rebase and single-commit cherry-pick rehearsal are an internal development preview for #143–#145, not a public
 feature. Packaged applications have no entry point and reject these operations.
 Checked Apply and mandatory recovery are available only in development. Public
 activation remains gated on the complete cross-platform safety workflow.
@@ -12,7 +12,7 @@ the older published 1.2.0 does not supply the required report fields. Set
 The adapter checks that version and validates the JSON schema and required fields;
 unknown fields are tolerated, incompatible results are reported as errors without
 deleting retained data. It never searches PATH for this executable or falls back
-to a direct merge. Separate tool installation is only for development.
+to a direct Git action. Separate tool installation is only for development.
 
 Open a repository, activate **Rehearse (internal)**, enter a branch or commit,
 and press **Rehearse**. Tab navigates the native modal, Enter submits the form,
@@ -20,6 +20,15 @@ and Escape or **Keep and close** closes it. Focus moves to the result on complet
 and returns to the entry button on closing. Closing during execution does not
 stop it. Reopening shows the current worktree's result. A response arriving after
 switching repositories stays associated with its original worktree.
+
+For normal rebase, open **Branches** and activate **Rehearse rebase** beside the
+chosen destination branch. For one cherry-pick, select a commit in **Graph** or
+open its detail from commit search, then activate **Rehearse cherry-pick**.
+The shared panel displays the selected branch or full commit ID as read-only;
+focus starts on **Rehearse**. Enter runs the preview, and closing returns focus
+to the entry that opened it. These explicit development entries do not change
+the existing direct actions. Automatic/Ask/Off routing belongs to a later ticket.
+There is no range selector, interactive rebase or pull-rebase entry here.
 
 The panel distinguishes conflicts, stopped/failed execution, no-op, refusal and
 technical errors. Failed Git commands include their bounded diagnostic output.
@@ -30,7 +39,7 @@ changes. Warnings are textual. Repository hooks are disabled by git-rehearse;
 a conflict-free result still requires content review. Untracked files are not
 represented as carried work.
 
-The CLI receives `--json --keep merge <target>` with separate arguments and no
+The CLI receives `--json --keep <merge|rebase|cherry-pick> <target>` with separate arguments and no
 interactive stdin. Closing never issues discard. The bridge's show operation uses
 the exact ID and checks repository/worktree identity on the returned report.
 Persistent in-app listing and conflict editing belong to later tickets. For now, after restarting the app, use the configured CLI's `--json list`
@@ -90,3 +99,9 @@ Build with `npm run build`, then run the Electron/real-tool check with
 the UI and checks keyboard submission, focus, text warnings, confirmed Apply,
 keep/reopen and unchanged original contents. It starts a development renderer
 on port 5199; the packaged renderer keeps the entry hidden.
+
+The real CLI tests also exercise clean rebase and single cherry-pick, retained
+identity and origin, exact adopted commit IDs, carried work, and refusal to apply
+conflicted results. Electron tests select branches and commits through the real
+branch, graph and detail views and verify keyboard submission, focus restoration
+and confirmed adoption.

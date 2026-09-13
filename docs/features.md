@@ -154,12 +154,15 @@ MediaRecorder, so it needs no extra dependency.
 **Recent repositories**, drag-and-drop a folder to open, and file search with
 fly-to.
 
-### Internal merge rehearsal (development only)
+### Internal rehearsal (development only)
 
 An explicitly configured git-rehearse development build enables an internal
-merge preview with retained results, branch/commit and file consequences,
+merge, normal rebase and single-commit cherry-pick preview with retained results,
+branch/commit and file consequences,
 conflicts and textual content warnings. Closing keeps the preview. Confirmed
 Apply adopts the checked result after backend revalidation. Interrupted Apply
 blocks repository writes across worktrees and offers backend-approved recovery.
 Public entry points remain unavailable pending the complete safety workflow.
+Rebase starts from the selected branch; cherry-pick starts from one commit in
+the graph or commit detail view. Both reuse the shared preview and confirmation.
 See [development setup and limitations](rehearsal-development.md).

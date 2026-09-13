@@ -1,7 +1,12 @@
 import { spawn } from 'child_process'
 import { realpath } from 'fs/promises'
 import { isAbsolute } from 'path'
-import type { RehearsalIdentity, RehearsalReport, RehearsalResult } from '../shared/types'
+import type {
+  RehearsalAction,
+  RehearsalIdentity,
+  RehearsalReport,
+  RehearsalResult
+} from '../shared/types'
 import { searchPath } from './git/exec'
 
 const repair =
@@ -65,7 +70,7 @@ export async function rehearsalAvailability(
     return {
       available: true,
       configured: true,
-      message: 'Internal merge rehearsal with checked Apply and recovery.'
+      message: 'Internal rehearsal with checked Apply and recovery.'
     }
   } catch {
     return {
@@ -179,10 +184,10 @@ async function report(
     if (
       !expected &&
       (value.command.length !== 2 ||
-        value.command[0] !== 'merge' ||
+        value.command[0] !== args.at(-2) ||
         value.command[1] !== args.at(-1))
     ) {
-      throw new Error('Rehearse returned a different action from the requested merge.')
+      throw new Error('Rehearse returned a different action from the requested action.')
     }
     return {
       kind: 'report',
@@ -198,17 +203,29 @@ async function report(
     return {
       kind: 'error',
       message:
-        error instanceof Error ? error.message : 'Rehearse failed. No direct merge was attempted.'
+        error instanceof Error ? error.message : 'Rehearse failed. No direct action was attempted.'
     }
   }
 }
 
-export async function rehearseMerge(
+export function rehearseMerge(
   tool: string | undefined,
   repo: string,
   target: string
 ): Promise<RehearsalResult> {
+  return rehearse(tool, repo, 'merge', target)
+}
+
+export async function rehearse(
+  tool: string | undefined,
+  repo: string,
+  action: RehearsalAction,
+  target: string
+): Promise<RehearsalResult> {
   if (
+    !['merge', 'rebase', 'cherry-pick'].includes(action) ||
+    (action === 'cherry-pick' &&
+      (typeof target !== 'string' || !/^(?:[a-fA-F0-9]{40}|[a-fA-F0-9]{64})$/.test(target))) ||
     typeof repo !== 'string' ||
     !isAbsolute(repo) ||
     typeof target !== 'string' ||
@@ -218,7 +235,7 @@ export async function rehearseMerge(
   ) {
     return { kind: 'refused', message: 'Choose a repository and a branch or commit to rehearse.' }
   }
-  return report(tool, repo, ['--keep', 'merge', target])
+  return report(tool, repo, ['--keep', action, target])
 }
 
 export async function rehearsalShow(

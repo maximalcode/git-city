@@ -2,7 +2,7 @@ import { beforeEach, expect, it, vi } from 'vitest'
 import { EventEmitter } from 'events'
 import { PassThrough } from 'stream'
 import { spawn } from 'child_process'
-import { rehearseMerge, rehearsalAvailability } from './rehearsal'
+import { rehearse, rehearseMerge, rehearsalAvailability } from './rehearsal'
 
 vi.mock('child_process', () => ({ spawn: vi.fn() }))
 const replies: { code: number; stdout: string }[] = []
@@ -51,3 +51,13 @@ it.each([
     'topic with spaces'
   ])
 })
+
+it.each(['topic', 'a..b', '--continue', 'a'.repeat(40) + '^!'])(
+  'refuses non-single-commit cherry-pick input %s before execution',
+  async (target) => {
+    expect((await rehearse('/configured/tool', process.cwd(), 'cherry-pick', target)).kind).toBe(
+      'refused'
+    )
+    expect(spawn).not.toHaveBeenCalled()
+  }
+)

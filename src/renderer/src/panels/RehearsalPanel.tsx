@@ -4,6 +4,9 @@ import { bridge } from '../lib/bridge'
 import type { RehearsalReport } from '../../../shared/types'
 
 function Report({ report }: { report: RehearsalReport }): React.JSX.Element {
+  const action =
+    { merge: 'Merge', rebase: 'Rebase', 'cherry-pick': 'Cherry-pick' }[report.command[0]] ??
+    'Git action'
   const noOp =
     report.outcome === 'clean' &&
     report.refs.length === 0 &&
@@ -14,10 +17,10 @@ function Report({ report }: { report: RehearsalReport }): React.JSX.Element {
     : noOp
       ? 'No-op — no branch changes'
       : {
-          clean: 'Merge preview completed',
-          stopped: 'Merge stopped',
-          failed: 'Git could not complete the merge',
-          incomplete: 'Merge execution is incomplete'
+          clean: `${action} preview completed`,
+          stopped: `${action} stopped`,
+          failed: `Git could not complete the ${action.toLowerCase()}`,
+          incomplete: `${action} execution is incomplete`
         }[report.outcome]
   return (
     <>
@@ -122,6 +125,9 @@ export default function RehearsalPanel(): React.JSX.Element | null {
   const wasConfirming = useRef(false)
   const cancelApply = useRef<HTMLButtonElement>(null)
   const [target, setTarget] = useState('')
+  const returnFocus = useRef<HTMLElement | null>(null)
+  const wasOpen = useRef(false)
+  const submit = useRef<HTMLButtonElement>(null)
   const dialog = useRef<HTMLDialogElement>(null)
   const input = useRef<HTMLInputElement>(null)
   const status = useRef<HTMLDivElement>(null)
@@ -130,6 +136,10 @@ export default function RehearsalPanel(): React.JSX.Element | null {
   const trigger = useRef<HTMLButtonElement>(null)
   const repo = useStore((s) => s.repoPath)
   const open = useStore((s) => s.rehearsalOpen)
+  const request = useStore((s) => s.rehearsalRequest)
+  const selected = request?.repo === repo ? request : null
+  const action = selected?.action ?? 'merge'
+  const chosenTarget = selected?.target ?? target
   const busy = useStore((s) => s.rehearsalBusy)
   const result = useStore((s) => (repo ? s.rehearsalResults[repo] : undefined))
   const confirming = result?.kind === 'report' && confirmApply === result.report
@@ -145,7 +155,7 @@ export default function RehearsalPanel(): React.JSX.Element | null {
   const blocked = recovery && recovery.state !== 'none'
   const openPanel = useStore((s) => s.openRehearsal)
   const close = useStore((s) => s.closeRehearsal)
-  const rehearse = useStore((s) => s.rehearseMerge)
+  const rehearse = useStore((s) => s.rehearse)
 
   useEffect(() => {
     if (blocked) recoveryHeading.current?.focus()
@@ -168,7 +178,10 @@ export default function RehearsalPanel(): React.JSX.Element | null {
     if (!import.meta.env.DEV) return
     void bridge()
       ?.rehearsalAvailability()
-      .then(setAvailability)
+      .then((value) => {
+        setAvailability(value)
+        useStore.setState({ rehearsalConfigured: value.configured })
+      })
       .catch(() =>
         setAvailability({
           configured: false,
@@ -179,13 +192,20 @@ export default function RehearsalPanel(): React.JSX.Element | null {
   }, [])
   useEffect(() => {
     if (open && configured && repo) {
+      if (!wasOpen.current) returnFocus.current = document.activeElement as HTMLElement | null
       dialog.current?.showModal()
-      input.current?.focus()
+      if (selected) submit.current?.focus()
+      else input.current?.focus()
+      wasOpen.current = true
     } else {
       dialog.current?.close()
-      if (configured) trigger.current?.focus()
+      if (wasOpen.current) {
+        if (returnFocus.current?.isConnected) returnFocus.current.focus()
+        else trigger.current?.focus()
+      }
+      wasOpen.current = false
     }
-  }, [open, configured, repo])
+  }, [open, configured, repo, selected])
   useEffect(() => {
     if (result && open && !busy) status.current?.focus()
   }, [result, open, busy])
@@ -243,32 +263,38 @@ export default function RehearsalPanel(): React.JSX.Element | null {
           else close()
         }}
       >
-        <h2 id="rehearsal-title">Rehearse merge</h2>
+        <h2 id="rehearsal-title">Rehearse {action}</h2>
         <p>
           Internal development preview. Closing keeps the rehearsal; it does not stop a running
-          merge.
+          operation.
         </p>
         {!available && <p role="alert">⚠ {availability.message}</p>}
         <form
           onSubmit={(event) => {
             event.preventDefault()
-            if (available && !busy && !blocked) void rehearse(target)
+            if (available && !busy && !blocked) void rehearse(action, chosenTarget)
           }}
         >
           <label htmlFor="rehearsal-target">
-            Branch or commit to merge into the current checkout
+            {action === 'rebase'
+              ? 'Rebase current checkout onto selected branch'
+              : action === 'cherry-pick'
+                ? 'Selected commit to cherry-pick'
+                : 'Branch or commit to merge into the current checkout'}
           </label>
           <input
             id="rehearsal-target"
             ref={input}
-            value={target}
+            value={chosenTarget}
+            readOnly={!!selected}
             onChange={(event) => setTarget(event.target.value)}
             disabled={busy || !!blocked || confirming || !available}
             required
           />
           <button
+            ref={submit}
             type="submit"
-            disabled={busy || !!blocked || confirming || !available || !target.trim()}
+            disabled={busy || !!blocked || confirming || !available || !chosenTarget.trim()}
           >
             {busy ? 'Working…' : 'Rehearse'}
           </button>
@@ -334,6 +360,8 @@ export default function RehearsalPanel(): React.JSX.Element | null {
               !!application ||
               result?.kind !== 'report' ||
               result.report.can_apply !== true ||
+              result.report.outcome !== 'clean' ||
+              result.report.conflicted ||
               result.report.refs.length === 0
             }
             onClick={() => setConfirmApply(result?.kind === 'report' ? result.report : null)}
@@ -341,7 +369,7 @@ export default function RehearsalPanel(): React.JSX.Element | null {
             Apply
           </button>
         )}{' '}
-        <button onClick={close}>Keep and close</button>
+        <button onClick={() => close()}>Keep and close</button>
       </dialog>
     </>
   )

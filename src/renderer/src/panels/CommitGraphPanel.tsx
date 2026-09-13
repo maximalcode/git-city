@@ -1,3 +1,4 @@
+import { RehearseButton } from './RehearseButton'
 import { useMemo, useState } from 'react'
 import type { GraphCommit } from '../../../shared/types'
 import { useRepoQuery } from '../lib/repoQuery'
@@ -162,6 +163,7 @@ export default function CommitGraphPanel(): React.JSX.Element | null {
                     >
                       Cherry-pick
                     </button>
+                    <RehearseButton action="cherry-pick" target={c.hash} />
                   </span>
                 )}
               </div>

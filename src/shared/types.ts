@@ -525,6 +525,7 @@ export interface RehearsalIdentity {
 /** Validated subset of the public git-rehearse schema, never private metadata. */
 export interface RehearsalReport extends RehearsalIdentity {
   schema: 1
+  sandbox?: string
   can_apply?: boolean
   command: string[]
   checkout: { kind: 'branch' | 'detached'; target: string }
@@ -545,6 +546,11 @@ export interface RehearsalReport extends RehearsalIdentity {
   }[]
   drift_unexpected: boolean
   carried?: { paths: string[]; status: string; conflicts: string[]; reason?: string }
+}
+
+export interface RehearsalConflict {
+  file: ConflictFile
+  revision: string
 }
 
 export type RehearsalResult =
@@ -587,6 +593,15 @@ export interface GitCityApi {
     id: string,
     action: 'complete' | 'rollback'
   ): Promise<RehearsalRecovery>
+  rehearsalConflictRead(identity: RehearsalIdentity, path: string): Promise<RehearsalConflict>
+  rehearsalConflictSave(
+    identity: RehearsalIdentity,
+    path: string,
+    revision: string,
+    text: string
+  ): Promise<void>
+  rehearsalConflictOpen(identity: RehearsalIdentity, path: string): Promise<void>
+  rehearsalContinue(identity: RehearsalIdentity): Promise<RehearsalResult>
   rehearsalShow(identity: RehearsalIdentity): Promise<RehearsalResult>
 
   /** The installed git, or null if there isn't one on PATH. */

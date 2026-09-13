@@ -1,6 +1,6 @@
 # Internal rehearsal
 
-Merge, normal rebase and single-commit cherry-pick rehearsal are an internal development preview for #143–#145, not a public
+Merge, normal rebase and single-commit cherry-pick rehearsal are an internal development preview for #143–#146, not a public
 feature. Packaged applications have no entry point and reject these operations.
 Checked Apply and mandatory recovery are available only in development. Public
 activation remains gated on the complete cross-platform safety workflow.
@@ -42,8 +42,33 @@ represented as carried work.
 The CLI receives `--json --keep <merge|rebase|cherry-pick> <target>` with separate arguments and no
 interactive stdin. Closing never issues discard. The bridge's show operation uses
 the exact ID and checks repository/worktree identity on the returned report.
-Persistent in-app listing and conflict editing belong to later tickets. For now, after restarting the app, use the configured CLI's `--json list`
+Persistent in-app listing belongs to a later ticket. For now, after restarting the app, use the configured CLI's `--json list`
 and `--json show <exact-id>` from the original worktree to inspect retained work.
+
+## Sandbox text conflicts
+
+A stopped merge, rebase or cherry-pick offers **Resolve <file>** in the retained
+sandbox. The existing hunk controls offer Ours, Theirs, Both and Edit; **Edit whole
+file** allows free text, including files already edited externally. **Save and
+stage in sandbox** checks the exact bytes read by the editor before writing and
+stages only that sandbox path. A changed file is refused with a text warning;
+**Refresh sandbox** reloads it for review. Returning from another app also rereads
+the file and preserves choices only when its bytes are unchanged.
+
+**Open sandbox file in external editor** opens the checked sandbox path. Deleted,
+renamed and binary conflicts currently require external resolution and staging in
+the displayed sandbox, followed by Refresh sandbox. Path traversal, symlink paths,
+and hard-linked text files are refused. Editor requests carry the exact rehearsal
+ID and originating worktree; the ordinary repository editor stays separate.
+
+Tab reaches file selection, every hunk choice, editable text, save, refresh and
+Continue; Enter activates buttons. Focus moves to the editor heading on file load
+and to the report after refresh/Continue. **Continue rehearsal** is available once
+no unmerged paths remain. It can stop again at another conflict; resolve each stop
+and continue until the final report is complete. Failed, incomplete and stopped
+results cannot be applied. Continue keeps the sandbox and never reruns the action
+in the original worktree. Closing the panel keeps saved sandbox work; save text
+before closing to retain in-app edits.
 
 ## Apply and recovery
 
@@ -105,3 +130,9 @@ identity and origin, exact adopted commit IDs, carried work, and refusal to appl
 conflicted results. Electron tests select branches and commits through the real
 branch, graph and detail views and verify keyboard submission, focus restoration
 and confirmed adoption.
+
+Text-conflict integration tests cover real merge, cherry-pick and repeated rebase
+stops, stale editor buffers, wrong identities, traversal/symlink/hard-link refusal,
+unchanged original HEAD/index/files before Apply and exact adopted commits/content.
+The Electron conflict test exercises hunk choices, free text, stale-buffer warning,
+refresh, staging, Continue and confirmed Apply through keyboard actions.

@@ -1,3 +1,4 @@
+import RehearsalConflicts from './RehearsalConflicts'
 import { useEffect, useRef, useState } from 'react'
 import { useStore } from '../store'
 import { bridge } from '../lib/bridge'
@@ -318,6 +319,13 @@ export default function RehearsalPanel(): React.JSX.Element | null {
             )
           )}
         </div>
+        {result?.kind === 'report' && result.report.outcome === 'stopped' && (
+          <RehearsalConflicts
+            key={`${repo}:${result.report.id}`}
+            report={result.report}
+            blocked={!!blocked}
+          />
+        )}
         {confirming && result?.kind === 'report' ? (
           <section aria-label="Confirm Apply">
             <h3>Apply rehearsal</h3>

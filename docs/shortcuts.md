@@ -50,3 +50,8 @@ Space on a focused commit selects it without starting timeline playback.
 
 The command palette is the one to remember: it lists every command with its key,
 so it doubles as this page without leaving the app.
+
+In the internal rehearsal conflict editor, Tab navigates file buttons, Ours/Theirs/
+Both/Edit, text fields, Save and stage, Refresh sandbox and Continue rehearsal.
+Enter activates buttons; Escape keeps and closes the rehearsal panel. See
+[internal rehearsal](rehearsal-development.md#sandbox-text-conflicts).

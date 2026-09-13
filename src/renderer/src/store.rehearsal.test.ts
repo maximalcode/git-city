@@ -163,3 +163,47 @@ it.each(['rebase', 'cherry-pick'] as const)(
     expect(useStore.getState().rehearsalResults['/original']).toEqual(result)
   }
 )
+
+it('keeps Continue bound to its origin after a worktree switch and retains reports on refusal', async () => {
+  const report: RehearsalReport = {
+    schema: 1,
+    command: ['rebase', 'topic'],
+    checkout: { kind: 'branch', target: 'main' },
+    pre_state: {},
+    lifecycle: 'kept',
+    outcome: 'stopped',
+    conflicted: true,
+    refs: [],
+    conflicts: [{ path: 'file.txt', hunks: 1 }],
+    drift: [],
+    drift_unexpected: false,
+    id: 'exact-id',
+    repository: '/first',
+    origin_worktree: '/first',
+    repository_id: '/common'
+  }
+  let finish!: (result: RehearsalResult) => void
+  const rehearsalContinue = vi.fn().mockImplementation(
+    () =>
+      new Promise<RehearsalResult>((resolve) => {
+        finish = resolve
+      })
+  )
+  setBridge({ rehearsalContinue } as unknown as GitCityApi)
+  useStore.setState({
+    repoPath: '/first',
+    rehearsalResults: { '/first': { kind: 'report', report } }
+  })
+  const pending = useStore.getState().refreshRehearsal(report, true)
+  await useStore.getState().refreshRehearsal(report, true)
+  useStore.setState({ repoPath: '/second' })
+  const next = { ...report, conflicted: false, conflicts: [], outcome: 'clean' as const }
+  finish({ kind: 'report', report: next })
+  await pending
+  expect(rehearsalContinue).toHaveBeenCalledExactlyOnceWith(report)
+  expect(useStore.getState().rehearsalResults['/second']).toBeUndefined()
+  expect(useStore.getState().rehearsalResults['/first']).toEqual({ kind: 'report', report: next })
+  rehearsalContinue.mockResolvedValue({ kind: 'refused', message: 'Stopped state required' })
+  await useStore.getState().refreshRehearsal(next, true)
+  expect(useStore.getState().rehearsalResults['/first']).toEqual({ kind: 'report', report: next })
+})

@@ -166,4 +166,7 @@ blocks repository writes across worktrees and offers backend-approved recovery.
 Public entry points remain unavailable pending the complete safety workflow.
 Rebase starts from the selected branch; cherry-pick starts from one commit in
 the graph or commit detail view. Both reuse the shared preview and confirmation.
+Stopped rehearsals offer the existing text hunk choices and free-text editing in
+the sandbox, checked save-and-stage, external-editor refresh and repeated Continue.
+The final reviewed sandbox commits are adopted only through confirmed Apply.
 See [development setup and limitations](rehearsal-development.md).

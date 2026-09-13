@@ -1,10 +1,16 @@
 import {
+  readRehearsalConflict,
+  saveRehearsalConflict,
+  openRehearsalConflict,
+  continueRehearsal
+} from './rehearsalConflicts'
+import {
   applyRehearsal,
   inspectRecovery,
   recoverRehearsal,
   withRepositoryWrite
 } from './rehearsalRecovery'
-import { app, BrowserWindow, dialog, ipcMain } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import { basename } from 'path'
 import { rehearsalAvailability, rehearse, rehearseMerge, rehearsalShow } from './rehearsal'
 import type { RehearsalAction, RehearsalIdentity, RehearsalReport } from '../shared/types'
@@ -33,6 +39,19 @@ export function registerIpc(): void {
   )
   ipcMain.handle('git-city:rehearsal-show', (_event, identity: RehearsalIdentity) =>
     rehearsalShow(rehearsalTool(), identity)
+  )
+
+  ipcMain.handle('git-city:rehearsal-conflict-read', (_event, identity, path) =>
+    readRehearsalConflict(rehearsalTool(), identity, path)
+  )
+  ipcMain.handle('git-city:rehearsal-conflict-save', (_event, identity, path, revision, text) =>
+    saveRehearsalConflict(rehearsalTool(), identity, path, revision, text)
+  )
+  ipcMain.handle('git-city:rehearsal-conflict-open', (_event, identity, path) =>
+    openRehearsalConflict(rehearsalTool(), identity, path, shell.openPath)
+  )
+  ipcMain.handle('git-city:rehearsal-continue', (_event, identity) =>
+    continueRehearsal(rehearsalTool(), identity)
   )
 
   ipcMain.handle('git-city:rehearsal-apply', (_event, identity: RehearsalReport) =>

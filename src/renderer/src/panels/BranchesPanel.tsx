@@ -1,3 +1,4 @@
+import { RehearseButton } from './RehearseButton'
 import { useState } from 'react'
 import type { BranchInfo } from '../../../shared/types'
 import { AheadBehind } from '../lib/format'
@@ -162,6 +163,7 @@ export default function BranchesPanel(): React.JSX.Element | null {
                 >
                   Rebase
                 </button>
+                <RehearseButton action="rebase" target={b.name} />
                 <button className="danger" disabled={busy} onClick={() => tryDelete(b)}>
                   Delete
                 </button>

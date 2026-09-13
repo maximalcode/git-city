@@ -4,7 +4,7 @@ import { chmod, mkdtemp, readFile, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { runGit } from './git/exec'
-import { rehearseMerge } from './rehearsal'
+import { rehearse, rehearseMerge, rehearsalShow } from './rehearsal'
 import {
   applyRehearsal,
   commonRepository,
@@ -68,6 +68,75 @@ it('fails closed without a tool when an interrupted operation exists', async () 
 })
 
 describe.skipIf(!tool)('real Apply and Recovery CLI', () => {
+  it.each(['rebase', 'cherry-pick'] as const)(
+    'previews and applies exact %s results with local work',
+    async (action) => {
+      const root = await fixture()
+      await writeFile(join(root, 'independent.txt'), 'main work\n')
+      await runGit(root, ['add', '.'])
+      await runGit(root, ['commit', '-m', 'independent main'])
+      const target =
+        action === 'rebase' ? 'topic' : (await runGit(root, ['rev-parse', 'topic'])).trim()
+      await writeFile(join(root, 'local.txt'), 'carried work\n')
+      await runGit(root, ['add', 'local.txt'])
+      // Prime Git's cache-tree extension before comparing the raw index bytes.
+      await runGit(root, ['write-tree'])
+      const before = await snapshot(root)
+      const preview = await rehearse(tool, root, action, target)
+      if (preview.kind !== 'report') throw new Error(JSON.stringify(preview))
+      expect(preview.report.command).toEqual([action, target])
+      expect(preview.report.outcome).toBe('clean')
+      expect(preview.report.can_apply).toBe(true)
+      expect(preview.report.carried?.paths).toContain('local.txt')
+      expect(await snapshot(root)).toEqual(before)
+      const shown = await rehearsalShow(tool, preview.report)
+      if (shown.kind !== 'report') throw new Error(JSON.stringify(shown))
+      expect(shown.report.id).toBe(preview.report.id)
+      expect(shown.report.origin_worktree).toBe(preview.report.origin_worktree)
+      expect(shown.report.repository_id).toBe(preview.report.repository_id)
+      const expected = shown.report.refs.find((ref) => ref.name === 'refs/heads/main')?.after
+      expect(expected).toBeTruthy()
+      expect((await applyRehearsal(tool, shown.report)).kind).toBe('applied')
+      expect((await runGit(root, ['rev-parse', 'HEAD'])).trim()).toBe(expected)
+      expect(await readFile(join(root, 'file.txt'), 'utf8')).toBe('topic\n')
+      expect(await readFile(join(root, 'independent.txt'), 'utf8')).toBe('main work\n')
+      expect(await readFile(join(root, 'local.txt'), 'utf8')).toBe('carried work\n')
+      expect(await runGit(root, ['show', ':local.txt'])).toBe('local base\n')
+      if (action === 'rebase') {
+        expect((await runGit(root, ['rev-parse', 'HEAD^'])).trim()).toBe(
+          (await runGit(root, ['rev-parse', 'topic'])).trim()
+        )
+      } else {
+        expect((await runGit(root, ['rev-parse', 'HEAD^'])).trim()).toBe(before.head.trim())
+      }
+    },
+    120_000
+  )
+
+  it.each(['rebase', 'cherry-pick'] as const)(
+    'blocks Apply for a conflicting %s and preserves the original',
+    async (action) => {
+      const root = await fixture()
+      await writeFile(join(root, 'file.txt'), 'conflicting main\n')
+      await runGit(root, ['commit', '-am', 'conflict'])
+      const target =
+        action === 'rebase' ? 'topic' : (await runGit(root, ['rev-parse', 'topic'])).trim()
+      // Prime Git's cache-tree extension before comparing the raw index bytes.
+      await runGit(root, ['write-tree'])
+      const before = await snapshot(root)
+      const preview = await rehearse(tool, root, action, target)
+      if (preview.kind !== 'report') throw new Error(JSON.stringify(preview))
+      expect(preview.report.outcome).toBe('stopped')
+      expect(preview.report.conflicted).toBe(true)
+      expect(preview.report.can_apply).toBe(false)
+      expect(preview.report.conflicts.map((entry) => entry.path)).toContain('file.txt')
+      expect((await applyRehearsal(tool, preview.report)).kind).toBe('refused')
+      expect(await snapshot(root)).toEqual(before)
+      expect((await rehearsalShow(tool, preview.report)).kind).toBe('report')
+    },
+    120_000
+  )
+
   it('applies the checked commit and the sandbox carry result as unstaged edits', async () => {
     const root = await fixture()
     await writeFile(join(root, 'local.txt'), 'staged\n')

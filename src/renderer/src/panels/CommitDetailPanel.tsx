@@ -1,3 +1,4 @@
+import { RehearseButton } from './RehearseButton'
 import { useMemo } from 'react'
 import type { CommitDetail } from '../../../shared/types'
 import { useStore } from '../store'
@@ -102,6 +103,7 @@ export default function CommitDetailPanel(): React.JSX.Element | null {
                   ⤷ Cherry-pick
                 </button>
               )}
+              {branch && <RehearseButton action="cherry-pick" target={detail.hash} />}
             </div>
 
             <div className="cd-files-head">

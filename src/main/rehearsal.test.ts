@@ -4,7 +4,7 @@ import { chmod, mkdtemp, readFile, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { runGit } from './git/exec'
-import { rehearsalAvailability, rehearseMerge, rehearsalShow } from './rehearsal'
+import { rehearsalAvailability, rehearse, rehearseMerge, rehearsalShow } from './rehearsal'
 
 const dirs: string[] = []
 const retained: { repo: string; id: string }[] = []
@@ -79,6 +79,25 @@ describe.skipIf(!tool)('public JSON CLI integration (GIT_CITY_REHEARSE_BIN)', ()
     expect(shown.kind, JSON.stringify(shown)).toBe('report')
     const wrong = await rehearsalShow(tool, { ...result.report, repository_id: 'another-repo' })
     expect(wrong.kind).toBe('error')
+    const rebaseNoop = await rehearse(tool, repo, 'rebase', 'main')
+    if (rebaseNoop.kind !== 'report') throw new Error(JSON.stringify(rebaseNoop))
+    retained.push({ repo, id: rebaseNoop.report.id })
+    expect(rebaseNoop.report.outcome).toBe('clean')
+    expect(rebaseNoop.report.refs).toEqual([])
+    expect(rebaseNoop.report.can_apply).toBe(false)
+    for (const action of ['rebase', 'cherry-pick'] as const) {
+      const failed = await rehearse(
+        tool,
+        repo,
+        action,
+        action === 'rebase' ? 'missing-target' : '0'.repeat(40)
+      )
+      if (failed.kind !== 'report') throw new Error(JSON.stringify(failed))
+      retained.push({ repo, id: failed.report.id })
+      expect(failed.report.outcome).toBe('failed')
+      expect(failed.report.can_apply).toBe(false)
+      expect(failed.report.diagnostics).toBeTruthy()
+    }
     const noop = await rehearseMerge(tool, repo, 'main')
     expect(noop.kind, JSON.stringify(noop)).toBe('report')
     if (noop.kind === 'report') {

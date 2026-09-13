@@ -1,3 +1,4 @@
+import { RehearseButton } from './RehearseButton'
 import { useMemo, useState } from 'react'
 import type { GraphCommit } from '../../../shared/types'
 import { useRepoQuery } from '../lib/repoQuery'
@@ -123,20 +124,29 @@ export default function CommitGraphPanel(): React.JSX.Element | null {
                 key={c.hash}
                 className={`graph-row ${active === c.hash ? 'active' : ''}`}
                 style={{ top: c.row * ROW_H, height: ROW_H, left: graphW }}
-                onClick={() => setActive(active === c.hash ? null : c.hash)}
               >
-                {c.refs.map((r) => (
-                  <span key={r.name} className={`ref-chip ref-${r.kind}`}>
-                    {r.kind === 'tag' ? '🏷 ' : ''}
-                    {r.name}
+                <button
+                  className="graph-select"
+                  aria-label={`Commit ${c.shortHash}: ${c.subject}`}
+                  aria-expanded={active === c.hash}
+                  onKeyDown={(event) => {
+                    if (event.key === ' ' || event.key === 'Enter') event.stopPropagation()
+                  }}
+                  onClick={() => setActive(active === c.hash ? null : c.hash)}
+                >
+                  {c.refs.map((r) => (
+                    <span key={r.name} className={`ref-chip ref-${r.kind}`}>
+                      {r.kind === 'tag' ? '🏷 ' : ''}
+                      {r.name}
+                    </span>
+                  ))}
+                  <span className="graph-subject">{c.subject}</span>
+                  <span className="graph-meta">
+                    {c.shortHash} · {c.author}
                   </span>
-                ))}
-                <span className="graph-subject">{c.subject}</span>
-                <span className="graph-meta">
-                  {c.shortHash} · {c.author}
-                </span>
+                </button>
                 {active === c.hash && (
-                  <span className="graph-actions" onClick={(e) => e.stopPropagation()}>
+                  <span className="graph-actions">
                     {c.refs
                       .filter((r) => r.kind === 'branch')
                       .map((r) => (
@@ -162,6 +172,7 @@ export default function CommitGraphPanel(): React.JSX.Element | null {
                     >
                       Cherry-pick
                     </button>
+                    <RehearseButton action="cherry-pick" target={c.hash} />
                   </span>
                 )}
               </div>

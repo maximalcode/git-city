@@ -39,6 +39,9 @@ it('keeps a late result on its original worktree and prevents duplicate starts',
   setBridge({ rehearseMerge } as unknown as GitCityApi)
   useStore.setState({ repoPath: '/first' })
   const pending = useStore.getState().rehearseMerge('topic')
+  useStore.getState().closeRehearsal()
+  useStore.getState().openRehearsal()
+  expect(useStore.getState().rehearsalOpen).toBe(true)
   await useStore.getState().rehearseMerge('topic')
   useStore.setState({ repoPath: '/second' })
   finish({ kind: 'error', message: 'Execution interrupted' })
@@ -93,14 +96,12 @@ it('queries recovery after an IPC response loss and never repeats Apply', async 
     expect(resync).toHaveBeenCalledOnce()
     // CLI IDs are scoped to their origin, not globally unique across repositories.
     useStore.setState({ repoPath: '/second' })
-    await useStore
-      .getState()
-      .applyRehearsal({
-        ...identity,
-        repository: '/second',
-        origin_worktree: '/second',
-        repository_id: '/second/.git'
-      })
+    await useStore.getState().applyRehearsal({
+      ...identity,
+      repository: '/second',
+      origin_worktree: '/second',
+      repository_id: '/second/.git'
+    })
     expect(rehearsalApply).toHaveBeenCalledTimes(2)
     expect(useStore.getState().rehearsalApplications['/second']['exact-id'].kind).toBe('uncertain')
     expect(useStore.getState().rehearsalApplications['/original']['exact-id'].kind).toBe(
@@ -142,3 +143,23 @@ it('queries the original recovery worktree after a lost reply during a repositor
   expect(useStore.getState().rehearsalRecovery['/first']).toEqual(recovery)
   expect(useStore.getState().rehearsalRecovery['/second']).toBeUndefined()
 })
+
+it.each(['rebase', 'cherry-pick'] as const)(
+  'passes the selected %s through the shared bridge without a direct fallback',
+  async (action) => {
+    const target = action === 'rebase' ? 'topic' : 'a'.repeat(40)
+    const result: RehearsalResult = { kind: 'refused', message: 'Unsupported repository' }
+    const rehearse = vi.fn().mockResolvedValue(result)
+    const rebase = vi.fn()
+    const cherryPick = vi.fn()
+    setBridge({ rehearse, rebase, cherryPick } as unknown as GitCityApi)
+    useStore.setState({ repoPath: '/original', rehearsalRequest: null })
+    useStore.getState().openRehearsal({ action, target })
+    expect(useStore.getState().rehearsalRequest).toEqual({ repo: '/original', action, target })
+    await useStore.getState().rehearse(action, target)
+    expect(rehearse).toHaveBeenCalledExactlyOnceWith('/original', action, target)
+    expect(rebase).not.toHaveBeenCalled()
+    expect(cherryPick).not.toHaveBeenCalled()
+    expect(useStore.getState().rehearsalResults['/original']).toEqual(result)
+  }
+)

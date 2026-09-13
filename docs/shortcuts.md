@@ -23,6 +23,12 @@ encoding (also under Settings → Data → _Show the first-run guide_).
 history to show yet, so their buttons go inert rather than opening an empty
 panel.
 
+## Commit graph
+
+Tab focuses a commit; Enter or Space shows or hides its actions. Tab then reaches
+Checkout, Cherry-pick and, in configured development builds, Rehearse cherry-pick.
+Space on a focused commit selects it without starting timeline playback.
+
 ## The scene
 
 | Key              | Does                                                        |

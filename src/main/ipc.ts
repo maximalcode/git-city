@@ -6,8 +6,8 @@ import {
 } from './rehearsalRecovery'
 import { app, BrowserWindow, dialog, ipcMain } from 'electron'
 import { basename } from 'path'
-import { rehearsalAvailability, rehearseMerge, rehearsalShow } from './rehearsal'
-import type { RehearsalIdentity, RehearsalReport } from '../shared/types'
+import { rehearsalAvailability, rehearse, rehearseMerge, rehearsalShow } from './rehearsal'
+import type { RehearsalAction, RehearsalIdentity, RehearsalReport } from '../shared/types'
 import type { ProgressInfo } from '../shared/types'
 import { analyze, checkGitInstalled } from './git/analyze'
 import { cloneRepo } from './git/clone'
@@ -23,6 +23,11 @@ export function registerIpc(): void {
   const rehearsalTool = (): string | undefined =>
     app.isPackaged ? undefined : process.env.GIT_CITY_REHEARSE_BIN
   ipcMain.handle('git-city:rehearsal-availability', () => rehearsalAvailability(rehearsalTool()))
+  ipcMain.handle(
+    'git-city:rehearse',
+    (_event, repo: string, action: RehearsalAction, target: string) =>
+      rehearse(rehearsalTool(), repo, action, target)
+  )
   ipcMain.handle('git-city:rehearse-merge', (_event, repo: string, target: string) =>
     rehearseMerge(rehearsalTool(), repo, target)
   )

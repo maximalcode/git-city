@@ -512,6 +512,8 @@ export interface GitVersion {
   supported: boolean
 }
 
+export type RehearsalAction = 'merge' | 'rebase' | 'cherry-pick'
+
 /** Exact CLI identity; never substitute the implicitly latest rehearsal. */
 export interface RehearsalIdentity {
   id: string
@@ -576,6 +578,7 @@ export interface RehearsalApplyResult {
 /** API exposed to the renderer via the preload bridge. */
 export interface GitCityApi {
   rehearsalAvailability(): Promise<{ available: boolean; configured: boolean; message: string }>
+  rehearse(repoPath: string, action: RehearsalAction, target: string): Promise<RehearsalResult>
   rehearseMerge(repoPath: string, target: string): Promise<RehearsalResult>
   rehearsalApply(identity: RehearsalReport): Promise<RehearsalApplyResult>
   rehearsalRecovery(repo: string): Promise<RehearsalRecovery>

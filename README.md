@@ -72,7 +72,7 @@ branches, stashes. Type `@` to search commits, `:` to grep code.
 ![The command palette](docs/media/app-palette.png)
 
 The commit graph draws real branch topology, with ref chips and checkout or
-cherry-pick from any row.
+cherry-pick from any row. Tab to a commit and press Enter or Space to reveal its actions.
 
 ![The commit graph](docs/media/app-graph.png)
 
@@ -111,15 +111,16 @@ Anything else that goes wrong on first run is in
 
 ## Shortcuts
 
-| Key              | Does                         |
-| ---------------- | ---------------------------- |
-| `Ctrl`/`Cmd`+`K` | Command palette              |
-| `V`              | Switch between city and farm |
-| `Space`          | Play or pause the timeline   |
-| `/`              | Find a file and fly to it    |
-| `,`              | Settings                     |
+| Key                                 | Does                         |
+| ----------------------------------- | ---------------------------- |
+| `Ctrl`/`Cmd`+`K`                    | Command palette              |
+| `V`                                 | Switch between city and farm |
+| `Space`                             | Play or pause the timeline   |
+| `Enter` / `Space` on a graph commit | Show or hide commit actions  |
+| `/`                                 | Find a file and fly to it    |
+| `,`                                 | Settings                     |
 
-The other nine are on [the shortcuts page](docs/shortcuts.md), and the command
+More shortcuts are on [the shortcuts page](docs/shortcuts.md), and the command
 palette lists every one of them without leaving the app.
 
 ## How it works

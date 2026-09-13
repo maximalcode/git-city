@@ -1081,6 +1081,23 @@
   cursor: pointer;
   border-radius: 7px;
 }
+.graph-select {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+.graph-select:focus-visible {
+  outline: 2px solid var(--accent-2);
+  outline-offset: 2px;
+}
 .graph-row:hover {
   background: rgba(255, 255, 255, 0.05);
 }

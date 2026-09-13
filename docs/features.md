@@ -107,7 +107,8 @@ new picture side by side with a byte-size delta. File history follows renames,
 and blame is one click away.
 
 **Commit graph** with branch topology, ref chips, and checkout or cherry-pick
-from any row.
+from any row. Commit rows are keyboard-selectable: Tab to a commit, then Enter
+or Space reveals its actions.
 
 **Pull requests**, GitHub through the `gh` CLI, GitLab through `glab`, and Azure
 DevOps through `az`. Git City never handles credentials itself. List open PRs

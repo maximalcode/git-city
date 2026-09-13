@@ -14,7 +14,13 @@ export function RehearseButton({
   const open = useStore((s) => s.openRehearsal)
   if (!import.meta.env.DEV || !configured) return null
   return (
-    <button disabled={busy} onClick={() => open({ action, target })}>
+    <button
+      disabled={busy}
+      onKeyDown={(event) => {
+        if (event.key === ' ' || event.key === 'Enter') event.stopPropagation()
+      }}
+      onClick={() => open({ action, target })}
+    >
       Rehearse {action}
     </button>
   )

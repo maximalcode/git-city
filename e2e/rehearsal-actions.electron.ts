@@ -62,10 +62,13 @@ for (const [entryKind, conflict] of [
           await page.keyboard.press('b')
         } else if (entryKind === 'graph') {
           await page.keyboard.press('g')
-          await page
-            .locator('.graph-subject')
-            .filter({ hasText: /^topic$/ })
-            .click()
+          const commit = page.getByRole('button', { name: /^Commit .*: topic$/ })
+          await commit.focus()
+          await page.keyboard.press('Space')
+          await expect(commit).toHaveAttribute('aria-expanded', 'true')
+          await page.keyboard.press('Enter')
+          await expect(commit).toHaveAttribute('aria-expanded', 'false')
+          await page.keyboard.press('Enter')
         } else {
           await page.keyboard.press(process.platform === 'darwin' ? 'Meta+k' : 'Control+k')
           await page.getByPlaceholder('Type a command  ·  @ commits  ·  : code').fill('@' + source)

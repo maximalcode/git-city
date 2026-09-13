@@ -311,6 +311,12 @@ interface GitCityState {
   rehearsalRecovery: Record<string, RehearsalRecovery>
   rehearsalApplications: Record<string, Record<string, RehearsalApplyResult>>
   checkRehearsalRecovery(): Promise<void>
+  saveRehearsalConflict(
+    identity: RehearsalReport,
+    path: string,
+    revision: string,
+    text: string
+  ): Promise<OpResult>
   refreshRehearsal(
     identity: RehearsalReport,
     resume?: boolean
@@ -532,6 +538,27 @@ export const useStore = create<GitCityState>((set, get) => ({
     if (!api?.rehearsalRecovery || !repo) return
     const recovery = await readRehearsalRecovery(api, repo)
     set((state) => ({ rehearsalRecovery: { ...state.rehearsalRecovery, [repo]: recovery } }))
+  },
+  saveRehearsalConflict: async (identity, path, revision, text) => {
+    const api = bridge()
+    if (!api || get().rehearsalBusy)
+      return { ok: false, message: 'Rehearsal is busy or unavailable.' }
+    set({ rehearsalBusy: true })
+    try {
+      await api.rehearsalConflictSave(identity, path, revision, text)
+    } catch (error) {
+      return { ok: false, message: cleanError(error) }
+    } finally {
+      set({ rehearsalBusy: false })
+    }
+    const refreshed = await get().refreshRehearsal(identity)
+    return {
+      ok: true,
+      message:
+        refreshed && refreshed.kind !== 'report'
+          ? `Saved and staged in the sandbox. Refresh the report: ${refreshed.message}`
+          : 'Saved and staged in the sandbox. Continue to finish the rehearsal.'
+    }
   },
   refreshRehearsal: async (identity, resume = false) => {
     const api = bridge()

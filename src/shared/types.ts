@@ -600,7 +600,6 @@ export interface GitCityApi {
     revision: string,
     text: string
   ): Promise<void>
-  rehearsalConflictOpen(identity: RehearsalIdentity, path: string): Promise<void>
   rehearsalContinue(identity: RehearsalIdentity): Promise<RehearsalResult>
   rehearsalShow(identity: RehearsalIdentity): Promise<RehearsalResult>
 

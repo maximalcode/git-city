@@ -55,9 +55,10 @@ stages only that sandbox path. A changed file is refused with a text warning;
 **Refresh sandbox** reloads it for review. Returning from another app also rereads
 the file and preserves choices only when its bytes are unchanged.
 
-**Open sandbox file in external editor** opens the checked sandbox path. Deleted,
+Open the displayed sandbox path from an external editor when needed. Deleted,
 renamed and binary conflicts currently require external resolution and staging in
-the displayed sandbox, followed by Refresh sandbox. Path traversal, symlink paths,
+that sandbox, followed by Refresh sandbox. An in-app external-editor launcher is
+deferred to the external-resolution workflow. Path traversal, symlink paths,
 and hard-linked text files are refused. Editor requests carry the exact rehearsal
 ID and originating worktree; the ordinary repository editor stays separate.
 

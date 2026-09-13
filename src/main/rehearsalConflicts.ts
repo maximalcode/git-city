@@ -1,5 +1,5 @@
 import { createHash } from 'crypto'
-import { constants } from 'fs'
+import { constants, type Stats } from 'fs'
 import { lstat, open, realpath } from 'fs/promises'
 import { isAbsolute, join, relative, sep } from 'path'
 import type { RehearsalConflict, RehearsalIdentity } from '../shared/types'
@@ -20,7 +20,7 @@ async function sandboxFile(
   tool: string | undefined,
   identity: RehearsalIdentity,
   path: string
-): Promise<{ root: string; absolute: string }> {
+): Promise<{ root: string; absolute: string; fileStat: Stats }> {
   const current = await rehearsalShow(tool, identity)
   if (current.kind !== 'report') throw new Error(current.message)
   if (current.report.outcome !== 'stopped' || !current.report.sandbox)
@@ -55,15 +55,15 @@ async function sandboxFile(
     const stat = await lstat(absolute)
     if (stat.isSymbolicLink()) throw new Error('Symlink paths cannot be edited in the sandbox.')
   }
+  const fileStat = await lstat(absolute)
   if ((await realpath(absolute)) !== absolute)
     throw new Error('Sandbox path changed; reopen the conflict.')
-  const fileStat = await lstat(absolute)
   if (!fileStat.isFile() || fileStat.nlink !== 1)
     throw new Error('Only regular sandbox files without hard links can be edited.')
   const unmerged = await runGit(root, ['diff', '--name-only', '--diff-filter=U', '-z'])
   if (!unmerged.split('\0').includes(path))
     throw new Error('This file is no longer an unresolved sandbox conflict. Refresh the report.')
-  return { root, absolute }
+  return { root, absolute, fileStat }
 }
 
 const revision = (bytes: Buffer): string => createHash('sha256').update(bytes).digest('hex')
@@ -74,10 +74,12 @@ export async function readRehearsalConflict(
   path: string
 ): Promise<RehearsalConflict> {
   return withRehearsal(identity, async () => {
-    const { absolute } = await sandboxFile(tool, identity, path)
+    const { absolute, fileStat } = await sandboxFile(tool, identity, path)
     const file = await open(absolute, constants.O_RDONLY | constants.O_NOFOLLOW)
     try {
       const stat = await file.stat()
+      if (stat.dev !== fileStat.dev || stat.ino !== fileStat.ino)
+        throw new Error('Sandbox file was replaced during access. Reload it.')
       if (!stat.isFile() || stat.nlink !== 1)
         throw new Error('Only regular sandbox files without hard links can be edited.')
       const bytes = await file.readFile()
@@ -106,11 +108,13 @@ export async function saveRehearsalConflict(
   return withRehearsal(identity, async () => {
     if (typeof text !== 'string' || typeof expected !== 'string')
       throw new Error('A reviewed text buffer is required.')
-    const { root, absolute } = await sandboxFile(tool, identity, path)
+    const { root, absolute, fileStat } = await sandboxFile(tool, identity, path)
     // Open without truncation and compare the exact bytes in the main process.
     const file = await open(absolute, constants.O_RDWR | constants.O_NOFOLLOW)
     try {
       const stat = await file.stat()
+      if (stat.dev !== fileStat.dev || stat.ino !== fileStat.ino)
+        throw new Error('Sandbox file was replaced during access. Reload it.')
       if (!stat.isFile() || stat.nlink !== 1)
         throw new Error('Only regular sandbox files without hard links can be edited.')
       await sandboxFile(tool, identity, path)
@@ -131,19 +135,6 @@ export async function saveRehearsalConflict(
     }
     await sandboxFile(tool, identity, path)
     await runGit(root, ['--literal-pathspecs', 'add', '--', path])
-  })
-}
-
-export async function openRehearsalConflict(
-  tool: string | undefined,
-  identity: RehearsalIdentity,
-  path: string,
-  launch: (path: string) => Promise<string>
-): Promise<void> {
-  return withRehearsal(identity, async () => {
-    const { absolute } = await sandboxFile(tool, identity, path)
-    const error = await launch(absolute)
-    if (error) throw new Error(error)
   })
 }
 

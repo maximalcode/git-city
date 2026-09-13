@@ -206,4 +206,23 @@ it('keeps Continue bound to its origin after a worktree switch and retains repor
   rehearsalContinue.mockResolvedValue({ kind: 'refused', message: 'Stopped state required' })
   await useStore.getState().refreshRehearsal(next, true)
   expect(useStore.getState().rehearsalResults['/first']).toEqual({ kind: 'report', report: next })
+  const rehearsalConflictSave = vi.fn().mockResolvedValue(undefined)
+  const rehearsalShow = vi.fn().mockResolvedValue({ kind: 'report', report: next })
+  setBridge({ rehearsalConflictSave, rehearsalShow } as unknown as GitCityApi)
+  expect(
+    await useStore.getState().saveRehearsalConflict(report, 'file.txt', 'revision', 'reviewed')
+  ).toMatchObject({ ok: true })
+  expect(rehearsalConflictSave).toHaveBeenCalledExactlyOnceWith(
+    report,
+    'file.txt',
+    'revision',
+    'reviewed'
+  )
+  expect(rehearsalShow).toHaveBeenCalledExactlyOnceWith(report)
+  expect(useStore.getState().rehearsalResults['/second']).toBeUndefined()
+  rehearsalConflictSave.mockRejectedValue(new Error('File changed on disk'))
+  expect(
+    await useStore.getState().saveRehearsalConflict(report, 'file.txt', 'revision', 'stale')
+  ).toEqual({ ok: false, message: 'File changed on disk' })
+  expect(rehearsalShow).toHaveBeenCalledTimes(1)
 })

@@ -13,8 +13,6 @@ const api: GitCityApi = {
     ipcRenderer.invoke('git-city:rehearsal-conflict-read', identity, path),
   rehearsalConflictSave: (identity, path, revision, text) =>
     ipcRenderer.invoke('git-city:rehearsal-conflict-save', identity, path, revision, text),
-  rehearsalConflictOpen: (identity, path) =>
-    ipcRenderer.invoke('git-city:rehearsal-conflict-open', identity, path),
   rehearsalContinue: (identity) => ipcRenderer.invoke('git-city:rehearsal-continue', identity),
   rehearsalShow: (identity) => ipcRenderer.invoke('git-city:rehearsal-show', identity),
   checkGit: () => ipcRenderer.invoke('git-city:check-git'),

@@ -1,4 +1,5 @@
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
+import * as filesystem from 'fs/promises'
 import { execFileSync } from 'child_process'
 import { mkdtemp, readFile, rm, writeFile, symlink, mkdir, link, rename } from 'fs/promises'
 import { tmpdir } from 'os'
@@ -77,6 +78,21 @@ it.skipIf(!tool).each(['merge', 'rebase', 'cherry-pick'] as const)(
     } finally {
       await rm(join(sandbox, '.git'))
       await rename(join(sandbox, 'saved-git'), join(sandbox, '.git'))
+    }
+    // Swap a validated ancestor exactly at the open boundary; Git and the
+    // filesystem stay real, including the outside file descriptor returned.
+    const actualOpen = filesystem.open
+    const opening = vi.spyOn(filesystem, 'open').mockImplementationOnce(async (...args) => {
+      await rename(sandbox, sandbox + '-saved')
+      await symlink(repo, sandbox, 'junction')
+      return actualOpen(...args)
+    })
+    try {
+      await expect(readRehearsalConflict(tool, report, 'file.txt')).rejects.toThrow('replaced')
+    } finally {
+      opening.mockRestore()
+      await rm(sandbox)
+      await rename(sandbox + '-saved', sandbox)
     }
     const buffer = await readRehearsalConflict(tool, report, 'file.txt')
     await writeFile(join(sandbox, 'file.txt'), 'external resolution\n')

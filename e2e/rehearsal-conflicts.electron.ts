@@ -94,26 +94,24 @@ test('keyboard sandbox conflict resolution preserves the original until checked 
     await expect(editor.getByRole('alert')).toContainText('Nothing was overwritten')
     await press('Refresh sandbox')
     await expect(editor.getByText('external resolution', { exact: true })).toBeVisible()
-    // Substitute the external app launch, retaining the real IPC path validation.
-    await app.evaluate(
-      ({ shell }, expected) => {
-        shell.openPath = async (actual) => (actual === expected ? '' : 'Wrong sandbox path')
-      },
-      join(retained.sandbox, 'file.txt')
-    )
-    await press('Open sandbox file in external editor')
-    const focusWindows = await app.evaluate(({ BrowserWindow }) => {
+    const focusWindows = await app.evaluate(({ BrowserWindow, app: electronApp }) => {
+      electronApp.focus({ steal: true })
       const main = BrowserWindow.getAllWindows()[0]
       const other = new BrowserWindow({ width: 200, height: 100 })
       void other.loadURL('about:blank')
+      main.blur()
       other.focus()
+      other.webContents.focus()
       return { main: main.id, other: other.id }
     })
+    await expect.poll(() => page.evaluate(() => document.hasFocus())).toBe(false)
     await writeFile(join(retained.sandbox, 'file.txt'), 'changed while outside the app\n')
     await app.evaluate(({ BrowserWindow }, ids) => {
       BrowserWindow.fromId(ids.other)!.close()
       BrowserWindow.fromId(ids.main)!.focus()
+      BrowserWindow.fromId(ids.main)!.webContents.focus()
     }, focusWindows)
+    await expect.poll(() => page.evaluate(() => document.hasFocus())).toBe(true)
     await expect(editor.getByText('changed while outside the app', { exact: true })).toBeVisible()
     await expect(editor.getByRole('alert')).toContainText('File reloaded after external changes')
     await press('Edit whole file')

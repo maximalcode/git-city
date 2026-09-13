@@ -135,7 +135,9 @@ export default function RehearsalPanel(): React.JSX.Element | null {
   const confirming = result?.kind === 'report' && confirmApply === result.report
   const recovery = useStore((s) => (repo ? s.rehearsalRecovery[repo] : undefined))
   const application = useStore((s) =>
-    result?.kind === 'report' ? s.rehearsalApplications[result.report.id] : undefined
+    repo && result?.kind === 'report'
+      ? s.rehearsalApplications[repo]?.[result.report.id]
+      : undefined
   )
   const checkRecovery = useStore((s) => s.checkRehearsalRecovery)
   const apply = useStore((s) => s.applyRehearsal)

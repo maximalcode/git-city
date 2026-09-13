@@ -308,7 +308,7 @@ interface GitCityState {
   searchOpen: boolean
 
   rehearsalRecovery: Record<string, RehearsalRecovery>
-  rehearsalApplications: Record<string, RehearsalApplyResult>
+  rehearsalApplications: Record<string, Record<string, RehearsalApplyResult>>
   checkRehearsalRecovery(): Promise<void>
   applyRehearsal(identity: RehearsalReport): Promise<void>
   recoverRehearsal(id: string, action: 'complete' | 'rollback'): Promise<void>
@@ -528,7 +528,8 @@ export const useStore = create<GitCityState>((set, get) => ({
   applyRehearsal: async (identity) => {
     const api = bridge()
     const repo = get().repoPath
-    if (!api || !repo || get().rehearsalBusy || get().rehearsalApplications[identity.id]) return
+    if (!api || !repo || get().rehearsalBusy || get().rehearsalApplications[repo]?.[identity.id])
+      return
     set({ rehearsalBusy: true })
     let result: RehearsalApplyResult
     try {
@@ -543,7 +544,10 @@ export const useStore = create<GitCityState>((set, get) => ({
     }
     set((state) => ({
       rehearsalBusy: false,
-      rehearsalApplications: { ...state.rehearsalApplications, [identity.id]: result },
+      rehearsalApplications: {
+        ...state.rehearsalApplications,
+        [repo]: { ...state.rehearsalApplications[repo], [identity.id]: result }
+      },
       rehearsalRecovery: { ...state.rehearsalRecovery, [repo]: result.recovery }
     }))
     if (get().repoPath === repo) {
@@ -662,7 +666,6 @@ export const useStore = create<GitCityState>((set, get) => ({
     if (!api) return
     api.onProgress((p) => set({ progress: p }))
     api.onRepoChanged(async (reasons) => {
-      void get().checkRehearsalRecovery()
       // awaited, not fired and forgotten, because the reload pill below is
       // decided by comparing the HEAD this brings back against the analysis
       await get().refreshStatus()

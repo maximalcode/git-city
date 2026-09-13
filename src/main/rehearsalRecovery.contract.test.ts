@@ -44,3 +44,20 @@ it.each([
     )
   }
 )
+
+it('tolerates optional additions to a valid recovery status', async () => {
+  vi.mocked(runRehearsalTool).mockResolvedValue({
+    code: 0,
+    stderr: '',
+    stdout: JSON.stringify({
+      schema: 1,
+      repository: process.cwd(),
+      action: 'inspect',
+      state: 'none',
+      can_complete: false,
+      can_rollback: false,
+      message: 'An optional explanation'
+    })
+  })
+  expect((await inspectRecovery('/configured/tool', process.cwd())).state).toBe('none')
+})

@@ -96,6 +96,11 @@ test('real Electron merge preview preserves the original and supports keyboard k
     )
     await expect(page.getByRole('button', { name: 'Rehearse', exact: true })).toBeDisabled()
     await expect(target).toBeDisabled()
+    const direct = await page.evaluate(
+      async (repo) => window.gitCity.stage(repo, ['file.txt']),
+      root
+    )
+    expect(direct.ok).toBe(true)
   } finally {
     await app.close()
     try {

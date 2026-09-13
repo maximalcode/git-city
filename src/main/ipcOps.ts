@@ -96,6 +96,14 @@ function gitDetail(err: unknown, repoPath: string): string | null {
   return short.length > 200 ? `${short.slice(0, 199)}…` : short
 }
 
+async function recoveryRefusal(repoPath: string): Promise<OpResult | null> {
+  const recovery = await inspectRecovery(
+    app.isPackaged ? undefined : process.env.GIT_CITY_REHEARSE_BIN,
+    repoPath
+  )
+  return recovery.state === 'none' ? null : { ok: false, message: recovery.message }
+}
+
 /**
  * Every mutating op: serialized per repo, watcher muted while it runs (one
  * synthetic change event on unmute), thrown errors turned into OpResults,
@@ -109,19 +117,13 @@ function mutating(
     withRepositoryWrite(repoPath, async () => {
       watcher.mute()
       try {
-        const recovery = await inspectRecovery(
-          app.isPackaged ? undefined : process.env.GIT_CITY_REHEARSE_BIN,
-          repoPath
-        )
-        if (recovery.state !== 'none') return { ok: false, message: recovery.message }
+        const refusal = await recoveryRefusal(repoPath)
+        if (refusal) return refusal
         let result = await fn(repoPath, ...(args as never[]))
         if (!result.ok && result.gitOutput?.includes('index.lock')) {
           await sleep(300)
-          const retryRecovery = await inspectRecovery(
-            app.isPackaged ? undefined : process.env.GIT_CITY_REHEARSE_BIN,
-            repoPath
-          )
-          if (retryRecovery.state !== 'none') return { ok: false, message: retryRecovery.message }
+          const retryRefusal = await recoveryRefusal(repoPath)
+          if (retryRefusal) return retryRefusal
           result = await fn(repoPath, ...(args as never[]))
         }
         return result
@@ -272,11 +274,8 @@ export function registerOpsIpc(): void {
       withRepositoryWrite(repoPath, async () => {
         watcher.mute()
         try {
-          const recovery = await inspectRecovery(
-            app.isPackaged ? undefined : process.env.GIT_CITY_REHEARSE_BIN,
-            repoPath
-          )
-          if (recovery.state !== 'none') return { ok: false, message: recovery.message }
+          const refusal = await recoveryRefusal(repoPath)
+          if (refusal) return refusal
           return await fn(repoPath, progressTo(event.sender), ...(args as never[]))
         } catch (err) {
           return failFromError(err)

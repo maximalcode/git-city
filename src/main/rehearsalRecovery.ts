@@ -55,10 +55,16 @@ export async function inspectRecovery(
           )
         : clear(repo)
     const availability = await rehearsalAvailability(tool)
-    if (!availability.available) return unknown(repo, availability.message)
+    if (!availability.available)
+      return (await hasRecoveryFiles(repo)) ? unknown(repo, availability.message) : clear(repo)
     const result = await runRehearsalTool(tool, ['--json', 'recover'], repo)
     const value: unknown = JSON.parse(result.stdout)
-    if (object(value) && typeof value.message === 'string') return unknown(repo, value.message)
+    if (
+      object(value) &&
+      ['refused', 'internal'].includes(String(value.kind)) &&
+      typeof value.message === 'string'
+    )
+      return unknown(repo, value.message)
     if (
       !object(value) ||
       result.code !== 0 ||

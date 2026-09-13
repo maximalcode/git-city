@@ -87,8 +87,25 @@ it('queries recovery after an IPC response loss and never repeats Apply', async 
     await useStore.getState().applyRehearsal(identity)
     expect(rehearsalApply).toHaveBeenCalledExactlyOnceWith(identity)
     expect(rehearsalRecovery).toHaveBeenCalledExactlyOnceWith('/original')
-    expect(useStore.getState().rehearsalApplications['exact-id'].kind).toBe('uncertain')
+    expect(useStore.getState().rehearsalApplications['/original']['exact-id'].kind).toBe(
+      'uncertain'
+    )
     expect(resync).toHaveBeenCalledOnce()
+    // CLI IDs are scoped to their origin, not globally unique across repositories.
+    useStore.setState({ repoPath: '/second' })
+    await useStore
+      .getState()
+      .applyRehearsal({
+        ...identity,
+        repository: '/second',
+        origin_worktree: '/second',
+        repository_id: '/second/.git'
+      })
+    expect(rehearsalApply).toHaveBeenCalledTimes(2)
+    expect(useStore.getState().rehearsalApplications['/second']['exact-id'].kind).toBe('uncertain')
+    expect(useStore.getState().rehearsalApplications['/original']['exact-id'].kind).toBe(
+      'uncertain'
+    )
   } finally {
     useStore.setState({
       resync: originalResync,

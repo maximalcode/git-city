@@ -57,11 +57,14 @@ async function snapshot(root: string) {
 it('fails closed without a tool when an interrupted operation exists', async () => {
   const root = await fixture()
   expect((await inspectRecovery(undefined, root)).state).toBe('none')
+  expect((await inspectRecovery(join(root, 'missing-tool'), root)).state).toBe('none')
   await writeFile(join(root, '.git/rehearse-apply'), 'unknown journal')
   expect((await inspectRecovery(undefined, root)).state).toBe('unknown')
+  expect((await inspectRecovery(join(root, 'missing-tool'), root)).state).toBe('unknown')
   await rm(join(root, '.git/rehearse-apply'))
   await writeFile(join(root, '.git/rehearse-apply.lock'), '')
   expect((await inspectRecovery(undefined, root)).state).toBe('none')
+  expect((await inspectRecovery(join(root, 'missing-tool'), root)).state).toBe('none')
 })
 
 describe.skipIf(!tool)('real Apply and Recovery CLI', () => {

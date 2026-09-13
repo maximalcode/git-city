@@ -68,8 +68,8 @@ is independent of the future Automatic/Ask/Off preference.
 Without a configured tool, the app checks for the pinned development CLI's
 `rehearse-apply` journal in the common Git directory and blocks if it exists.
 The persistent lock file alone does not indicate an interrupted operation. It does not parse or repair those files. A configured
-but unavailable or incompatible tool blocks writes until its status can be
-checked. Restore the compatible tool; do not delete recovery data to clear a
+but unavailable or incompatible tool blocks writes when a recovery journal is
+present; ordinary direct Git actions remain available without a journal. Restore the compatible tool; do not delete recovery data to clear a
 warning. Packaged applications retain this presence guard without exposing Apply.
 
 ## Validation

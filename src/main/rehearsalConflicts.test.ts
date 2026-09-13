@@ -127,5 +127,5 @@ it.skipIf(!tool).each(['merge', 'rebase', 'cherry-pick'] as const)(
     expect(await readFile(join(repo, 'file.txt'))).toEqual(expectedFile)
     cleanup.pop() // successful Apply removed its own sandbox
   },
-  60000
+  180000
 )

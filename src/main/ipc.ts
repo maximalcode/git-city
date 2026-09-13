@@ -1,7 +1,13 @@
+import {
+  applyRehearsal,
+  inspectRecovery,
+  recoverRehearsal,
+  withRepositoryWrite
+} from './rehearsalRecovery'
 import { app, BrowserWindow, dialog, ipcMain } from 'electron'
 import { basename } from 'path'
 import { rehearsalAvailability, rehearseMerge, rehearsalShow } from './rehearsal'
-import type { RehearsalIdentity } from '../shared/types'
+import type { RehearsalIdentity, RehearsalReport } from '../shared/types'
 import type { ProgressInfo } from '../shared/types'
 import { analyze, checkGitInstalled } from './git/analyze'
 import { cloneRepo } from './git/clone'
@@ -22,6 +28,18 @@ export function registerIpc(): void {
   )
   ipcMain.handle('git-city:rehearsal-show', (_event, identity: RehearsalIdentity) =>
     rehearsalShow(rehearsalTool(), identity)
+  )
+
+  ipcMain.handle('git-city:rehearsal-apply', (_event, identity: RehearsalReport) =>
+    applyRehearsal(rehearsalTool(), identity)
+  )
+  ipcMain.handle('git-city:rehearsal-recovery', (_event, repo: string) =>
+    withRepositoryWrite(repo, () => inspectRecovery(rehearsalTool(), repo))
+  )
+  ipcMain.handle(
+    'git-city:rehearsal-recover',
+    (_event, repo: string, id: string, action: 'complete' | 'rollback') =>
+      recoverRehearsal(rehearsalTool(), repo, id, action)
   )
 
   ipcMain.handle('git-city:check-git', () => checkGitInstalled())

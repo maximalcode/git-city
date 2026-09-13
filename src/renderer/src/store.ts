@@ -1,6 +1,9 @@
 import { create } from 'zustand'
 import type {
   RehearsalResult,
+  RehearsalRecovery,
+  RehearsalApplyResult,
+  RehearsalReport,
   BranchInfo,
   GitCityApi,
   GitVersion,
@@ -304,6 +307,11 @@ interface GitCityState {
   recentRepos: string[]
   searchOpen: boolean
 
+  rehearsalRecovery: Record<string, RehearsalRecovery>
+  rehearsalApplications: Record<string, Record<string, RehearsalApplyResult>>
+  checkRehearsalRecovery(): Promise<void>
+  applyRehearsal(identity: RehearsalReport): Promise<void>
+  recoverRehearsal(id: string, action: 'complete' | 'rollback'): Promise<void>
   rehearsalOpen: boolean
   rehearsalBusy: boolean
   rehearsalResults: Record<string, RehearsalResult>
@@ -491,9 +499,82 @@ interface GitCityState {
   continueOp(): Promise<OpResult>
 }
 
+async function readRehearsalRecovery(api: GitCityApi, repo: string): Promise<RehearsalRecovery> {
+  try {
+    return await api.rehearsalRecovery(repo)
+  } catch (error) {
+    return {
+      state: 'unknown',
+      repository: repo,
+      can_complete: false,
+      can_rollback: false,
+      message: `Repository writes are blocked. ${cleanError(error)}`
+    }
+  }
+}
+
 let lastFingerprint = ''
 
 export const useStore = create<GitCityState>((set, get) => ({
+  rehearsalRecovery: {},
+  rehearsalApplications: {},
+  checkRehearsalRecovery: async () => {
+    const api = bridge()
+    const repo = get().repoPath
+    if (!api?.rehearsalRecovery || !repo) return
+    const recovery = await readRehearsalRecovery(api, repo)
+    set((state) => ({ rehearsalRecovery: { ...state.rehearsalRecovery, [repo]: recovery } }))
+  },
+  applyRehearsal: async (identity) => {
+    const api = bridge()
+    const repo = get().repoPath
+    if (!api || !repo || get().rehearsalBusy || get().rehearsalApplications[repo]?.[identity.id])
+      return
+    set({ rehearsalBusy: true })
+    let result: RehearsalApplyResult
+    try {
+      result = await api.rehearsalApply(identity)
+    } catch (error) {
+      const recovery = await readRehearsalRecovery(api, repo)
+      result = {
+        kind: 'uncertain',
+        message: `Apply response lost; status queried without retry. ${cleanError(error)}`,
+        recovery
+      }
+    }
+    set((state) => ({
+      rehearsalBusy: false,
+      rehearsalApplications: {
+        ...state.rehearsalApplications,
+        [repo]: { ...state.rehearsalApplications[repo], [identity.id]: result }
+      },
+      rehearsalRecovery: { ...state.rehearsalRecovery, [repo]: result.recovery }
+    }))
+    if (get().repoPath === repo) {
+      await get().resync()
+      if (get().repoPath === repo && result.recovery.state === 'none') await get().refreshAnalysis()
+    }
+  },
+  recoverRehearsal: async (id, action) => {
+    const api = bridge()
+    const repo = get().repoPath
+    if (!api || !repo || get().rehearsalBusy) return
+    set({ rehearsalBusy: true })
+    try {
+      const recovery = await api.rehearsalRecover(repo, id, action)
+      set((state) => ({ rehearsalRecovery: { ...state.rehearsalRecovery, [repo]: recovery } }))
+    } catch {
+      const recovery = await readRehearsalRecovery(api, repo)
+      set((state) => ({ rehearsalRecovery: { ...state.rehearsalRecovery, [repo]: recovery } }))
+    } finally {
+      set({ rehearsalBusy: false })
+    }
+    if (get().repoPath === repo) {
+      await get().resync()
+      if (get().repoPath === repo && get().rehearsalRecovery[repo]?.state === 'none')
+        await get().refreshAnalysis()
+    }
+  },
   rehearsalOpen: false,
   rehearsalBusy: false,
   rehearsalResults: {},
@@ -1279,6 +1360,7 @@ async function runOp(
   }
   set({ opInProgress: null })
 
+  await get().checkRehearsalRecovery()
   await resync(set, get)
 
   if (!result.ok) {
@@ -1290,7 +1372,9 @@ async function runOp(
       // opMessage, not result.message: for the codes we recognise, git's own
       // first line is written for someone mid-task in a terminal and reads
       // badly in a toast with no context (#26).
-      set({ opError: { message: opMessage(result), code: result.code, gitOutput: result.gitOutput } })
+      set({
+        opError: { message: opMessage(result), code: result.code, gitOutput: result.gitOutput }
+      })
     }
     return result
   }

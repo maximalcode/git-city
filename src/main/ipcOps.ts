@@ -39,7 +39,7 @@ import { addWorktree, listWorktrees, removeWorktree } from './git/worktrees'
 import { checkForUpdate } from './updates'
 import { readConflictFile, resolveConflictFile, resolveWholeFile } from './git/conflicts'
 import { mergeAbort, mergeBranch, mergeContinue } from './git/merge'
-import { withRepoLock } from './git/queue'
+import { inspectRecovery, withRepositoryWrite } from './rehearsalRecovery'
 import { FriendlyError, failFromError, stripNoise } from './git/result'
 import { discardFiles, stageFiles, unstageFiles } from './git/stage'
 import { stashApply, stashDrop, stashList, stashPop, stashPush } from './git/stash'
@@ -96,6 +96,14 @@ function gitDetail(err: unknown, repoPath: string): string | null {
   return short.length > 200 ? `${short.slice(0, 199)}…` : short
 }
 
+async function recoveryRefusal(repoPath: string): Promise<OpResult | null> {
+  const recovery = await inspectRecovery(
+    app.isPackaged ? undefined : process.env.GIT_CITY_REHEARSE_BIN,
+    repoPath
+  )
+  return recovery.state === 'none' ? null : { ok: false, message: recovery.message }
+}
+
 /**
  * Every mutating op: serialized per repo, watcher muted while it runs (one
  * synthetic change event on unmute), thrown errors turned into OpResults,
@@ -106,12 +114,16 @@ function mutating(
   fn: (repoPath: string, ...args: never[]) => Promise<OpResult>
 ): void {
   ipcMain.handle(`git-city:${channel}`, (_event, repoPath: string, ...args: unknown[]) =>
-    withRepoLock(repoPath, async () => {
+    withRepositoryWrite(repoPath, async () => {
       watcher.mute()
       try {
+        const refusal = await recoveryRefusal(repoPath)
+        if (refusal) return refusal
         let result = await fn(repoPath, ...(args as never[]))
         if (!result.ok && result.gitOutput?.includes('index.lock')) {
           await sleep(300)
+          const retryRefusal = await recoveryRefusal(repoPath)
+          if (retryRefusal) return retryRefusal
           result = await fn(repoPath, ...(args as never[]))
         }
         return result
@@ -259,9 +271,11 @@ export function registerOpsIpc(): void {
     ) => Promise<OpResult>
   ): void => {
     ipcMain.handle(`git-city:${channel}`, (event, repoPath: string, ...args: unknown[]) =>
-      withRepoLock(repoPath, async () => {
+      withRepositoryWrite(repoPath, async () => {
         watcher.mute()
         try {
+          const refusal = await recoveryRefusal(repoPath)
+          if (refusal) return refusal
           return await fn(repoPath, progressTo(event.sender), ...(args as never[]))
         } catch (err) {
           return failFromError(err)

@@ -9,6 +9,11 @@ const api: GitCityApi = {
   rehearsalRecovery: (repo) => ipcRenderer.invoke('git-city:rehearsal-recovery', repo),
   rehearsalRecover: (repo, id, action) =>
     ipcRenderer.invoke('git-city:rehearsal-recover', repo, id, action),
+  rehearsalConflictRead: (identity, path) =>
+    ipcRenderer.invoke('git-city:rehearsal-conflict-read', identity, path),
+  rehearsalConflictSave: (identity, path, revision, text) =>
+    ipcRenderer.invoke('git-city:rehearsal-conflict-save', identity, path, revision, text),
+  rehearsalContinue: (identity) => ipcRenderer.invoke('git-city:rehearsal-continue', identity),
   rehearsalShow: (identity) => ipcRenderer.invoke('git-city:rehearsal-show', identity),
   checkGit: () => ipcRenderer.invoke('git-city:check-git'),
   selectFolder: () => ipcRenderer.invoke('git-city:select-folder'),

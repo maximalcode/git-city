@@ -1,4 +1,9 @@
 import {
+  readRehearsalConflict,
+  saveRehearsalConflict,
+  continueRehearsal
+} from './rehearsalConflicts'
+import {
   applyRehearsal,
   inspectRecovery,
   recoverRehearsal,
@@ -33,6 +38,16 @@ export function registerIpc(): void {
   )
   ipcMain.handle('git-city:rehearsal-show', (_event, identity: RehearsalIdentity) =>
     rehearsalShow(rehearsalTool(), identity)
+  )
+
+  ipcMain.handle('git-city:rehearsal-conflict-read', (_event, identity, path) =>
+    readRehearsalConflict(rehearsalTool(), identity, path)
+  )
+  ipcMain.handle('git-city:rehearsal-conflict-save', (_event, identity, path, revision, text) =>
+    saveRehearsalConflict(rehearsalTool(), identity, path, revision, text)
+  )
+  ipcMain.handle('git-city:rehearsal-continue', (_event, identity) =>
+    continueRehearsal(rehearsalTool(), identity)
   )
 
   ipcMain.handle('git-city:rehearsal-apply', (_event, identity: RehearsalReport) =>

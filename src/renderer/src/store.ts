@@ -311,6 +311,16 @@ interface GitCityState {
   rehearsalRecovery: Record<string, RehearsalRecovery>
   rehearsalApplications: Record<string, Record<string, RehearsalApplyResult>>
   checkRehearsalRecovery(): Promise<void>
+  saveRehearsalConflict(
+    identity: RehearsalReport,
+    path: string,
+    revision: string,
+    text: string
+  ): Promise<OpResult>
+  refreshRehearsal(
+    identity: RehearsalReport,
+    resume?: boolean
+  ): Promise<RehearsalResult | undefined>
   applyRehearsal(identity: RehearsalReport): Promise<void>
   recoverRehearsal(id: string, action: 'complete' | 'rollback'): Promise<void>
   rehearsalOpen: boolean
@@ -528,6 +538,55 @@ export const useStore = create<GitCityState>((set, get) => ({
     if (!api?.rehearsalRecovery || !repo) return
     const recovery = await readRehearsalRecovery(api, repo)
     set((state) => ({ rehearsalRecovery: { ...state.rehearsalRecovery, [repo]: recovery } }))
+  },
+  saveRehearsalConflict: async (identity, path, revision, text) => {
+    const api = bridge()
+    if (!api || get().rehearsalBusy)
+      return { ok: false, message: 'Rehearsal is busy or unavailable.' }
+    set({ rehearsalBusy: true })
+    try {
+      await api.rehearsalConflictSave(identity, path, revision, text)
+    } catch (error) {
+      return { ok: false, message: cleanError(error) }
+    } finally {
+      set({ rehearsalBusy: false })
+    }
+    const refreshed = await get().refreshRehearsal(identity)
+    return {
+      ok: true,
+      message:
+        refreshed && refreshed.kind !== 'report'
+          ? `Saved and staged in the sandbox. Refresh the report: ${refreshed.message}`
+          : 'Saved and staged in the sandbox. Continue to finish the rehearsal.'
+    }
+  },
+  refreshRehearsal: async (identity, resume = false) => {
+    const api = bridge()
+    if (!api || get().rehearsalBusy) return
+    set({ rehearsalBusy: true })
+    try {
+      const result = await (resume ? api.rehearsalContinue(identity) : api.rehearsalShow(identity))
+      if (result.kind === 'report')
+        set((state) => {
+          const repo = identity.origin_worktree
+          // A late response cannot replace a newer selected rehearsal.
+          const entry = Object.entries(state.rehearsalResults).find(
+            ([key, value]) =>
+              (key === repo ||
+                (value?.kind === 'report' && value.report.origin_worktree === repo)) &&
+              value?.kind === 'report' &&
+              value.report.id === identity.id
+          )
+          return entry
+            ? { rehearsalResults: { ...state.rehearsalResults, [entry[0]]: result } }
+            : {}
+        })
+      return result
+    } catch (error) {
+      return { kind: 'error', message: cleanError(error) }
+    } finally {
+      set({ rehearsalBusy: false })
+    }
   },
   applyRehearsal: async (identity) => {
     const api = bridge()

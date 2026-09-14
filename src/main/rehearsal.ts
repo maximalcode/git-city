@@ -95,6 +95,7 @@ function isReport(v: Record<string, unknown>): v is Record<string, unknown> & Re
   return (
     v.schema === 1 &&
     (v.can_apply === undefined || typeof v.can_apply === 'boolean') &&
+    optionalString(v.sandbox) &&
     string(v.id) &&
     v.id.length > 0 &&
     string(v.repository) &&
@@ -254,4 +255,19 @@ export async function rehearsalShow(
     return { kind: 'refused', message: 'Select an exact rehearsal ID and its original worktree.' }
   }
   return report(tool, identity.origin_worktree, ['show', identity.id], identity)
+}
+
+/** Caller serializes this with editing for the same retained rehearsal. */
+export async function rehearsalContinue(
+  tool: string | undefined,
+  identity: RehearsalIdentity
+): Promise<RehearsalResult> {
+  const current = await rehearsalShow(tool, identity)
+  if (current.kind !== 'report') return current
+  if (current.report.outcome !== 'stopped')
+    return {
+      kind: 'refused',
+      message: 'Only a stopped rehearsal can continue. Keep this result and start a new rehearsal.'
+    }
+  return report(tool, identity.origin_worktree, ['--keep', 'continue', identity.id], identity)
 }

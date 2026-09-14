@@ -274,7 +274,7 @@ export default function MergeView(): React.JSX.Element | null {
   )
 }
 
-function ConflictHunk({
+export function ConflictHunk({
   seg,
   choice,
   edit,
@@ -304,7 +304,12 @@ function ConflictHunk({
         </button>
       </div>
       {choice === 'edit' ? (
-        <textarea className="hunk-edit" value={edit} onChange={(e) => onEdit(e.target.value)} />
+        <textarea
+          aria-label="Edit conflict hunk"
+          className="hunk-edit"
+          value={edit}
+          onChange={(e) => onEdit(e.target.value)}
+        />
       ) : (
         <div className="hunk-preview">
           {(choice === 'ours' || choice === 'both') && <pre className="seg-ours">{seg.ours}</pre>}

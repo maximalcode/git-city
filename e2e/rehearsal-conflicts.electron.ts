@@ -165,8 +165,10 @@ for (const scenario of ['binary', 'delete', 'rename'] as const) {
     const app = await launchNativeFocusApp(root, userData, tool)
     try {
       const page = app.page
-      await page.getByRole('button', { name: 'Open a local repository…' }).click()
-      await page.getByRole('button', { name: 'Rehearse (internal)' }).click()
+      await page.getByRole('button', { name: 'Open a local repository…' }).focus()
+      await page.keyboard.press('Enter')
+      await page.getByRole('button', { name: 'Rehearse (internal)' }).focus()
+      await page.keyboard.press('Enter')
       await page.getByLabel('Branch or commit to merge into the current checkout').fill('topic')
       await page.keyboard.press('Enter')
       const editor = page.getByRole('region', { name: 'Sandbox conflict editor' })

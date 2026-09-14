@@ -174,6 +174,7 @@ for (const scenario of ['binary', 'delete', 'rename'] as const) {
       const editor = page.getByRole('region', { name: 'Sandbox conflict editor' })
       await expect(editor).toBeVisible()
       const button = editor.getByRole('button', { name: /^Resolve / }).first()
+      await expect(button).toBeEnabled()
       await button.focus()
       await page.keyboard.press('Enter')
       await expect(editor.getByRole('heading')).toBeFocused()

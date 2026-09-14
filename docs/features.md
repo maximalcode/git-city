@@ -170,3 +170,5 @@ Stopped rehearsals offer the existing text hunk choices and free-text editing in
 the sandbox, checked save-and-stage, external-editor refresh and repeated Continue.
 The final reviewed sandbox commits are adopted only through confirmed Apply.
 See [development setup and limitations](rehearsal-development.md).
+
+Internal rehearsal conflict handling also offers byte-preserving whole-file binary choices and sandbox-specific external deletion/rename resolution instructions, with content and conflict status refreshed on return. This remains hidden in packaged applications (see [development guide](rehearsal-development.md)).

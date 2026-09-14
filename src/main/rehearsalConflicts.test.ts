@@ -151,3 +151,89 @@ it.skipIf(!tool).each(['merge', 'rebase', 'cherry-pick'] as const)(
   },
   180000
 )
+
+it.skipIf(!tool).each(['ours', 'theirs', 'delete', 'rename'] as const)(
+  'finishes %s conflicts without touching the origin',
+  async (choice) => {
+    const repo = await mkdtemp(join(tmpdir(), 'city-external-'))
+    cleanup.push(() => rm(repo, { recursive: true, force: true }))
+    const git = (...args: string[]): string =>
+      execFileSync('git', args, { cwd: repo, encoding: 'utf8' }).trim()
+    git('init', '-b', 'main')
+    git('config', 'user.name', 'Test')
+    git('config', 'user.email', 'test@example.invalid')
+    git('config', 'commit.gpgSign', 'false')
+    const binary = choice === 'ours' || choice === 'theirs'
+    await writeFile(join(repo, 'file'), binary ? Buffer.from([0, 255, 1]) : 'base\n')
+    git('add', '.')
+    git('commit', '-m', 'base')
+    git('checkout', '-b', 'topic')
+    if (choice === 'rename') git('mv', 'file', 'topic-name')
+    else await writeFile(join(repo, 'file'), binary ? Buffer.from([0, 254, 2]) : 'topic\n')
+    git('add', '.')
+    git('commit', '-m', 'topic')
+    git('checkout', 'main')
+    if (choice === 'delete') git('rm', 'file')
+    else if (choice === 'rename') git('mv', 'file', 'main-name')
+    else await writeFile(join(repo, 'file'), Buffer.from([0, 253, 3]))
+    git('add', '.')
+    git('commit', '-m', 'main')
+    const head = git('rev-parse', 'HEAD')
+    const index = await readFile(join(repo, '.git/index'))
+    const original = git('status', '--porcelain')
+    const result = await rehearse(tool, repo, 'merge', 'topic')
+    if (result.kind !== 'report') throw new Error(JSON.stringify(result))
+    const report = result.report
+    cleanup.push(async () => {
+      execFileSync(tool!, ['--json', 'discard', report.id], { cwd: repo })
+    })
+    expect(report.outcome).toBe('stopped')
+    const sandbox = report.sandbox!
+    const path = binary ? 'file' : report.conflicts[0].path
+    const buffer = await readRehearsalConflict(tool, report, path)
+    await expect(
+      saveRehearsalConflict(tool, { ...report, origin_worktree: sandbox }, path, buffer.revision, {
+        side: 'ours'
+      })
+    ).rejects.toThrow()
+    if (binary) {
+      expect(buffer.file.binary).toBe(true)
+      const expected = execFileSync('git', ['show', `:${choice === 'ours' ? 2 : 3}:file`], {
+        cwd: sandbox
+      })
+      await writeFile(join(sandbox, 'file'), Buffer.from([0, 128]))
+      await expect(
+        saveRehearsalConflict(tool, report, path, buffer.revision, { side: choice })
+      ).rejects.toThrow('changed on disk')
+      const fresh = await readRehearsalConflict(tool, report, path)
+      await rename(join(sandbox, path), join(sandbox, 'moved'))
+      await expect(
+        saveRehearsalConflict(tool, report, path, fresh.revision, { side: choice })
+      ).rejects.toThrow('missing or renamed')
+      await rename(join(sandbox, 'moved'), join(sandbox, path))
+      await saveRehearsalConflict(tool, report, path, fresh.revision, { side: choice })
+      expect(await readFile(join(sandbox, path))).toEqual(expected)
+    } else {
+      expect(buffer.external).toBe(true)
+      await expect(
+        saveRehearsalConflict(tool, report, path, buffer.revision, 'stale')
+      ).rejects.toThrow('Deletion or rename')
+      execFileSync('git', ['rm', '-f', '--', ...report.conflicts.map((c) => c.path)], {
+        cwd: sandbox
+      })
+      await writeFile(join(sandbox, 'resolved'), 'external final\n')
+      execFileSync('git', ['add', 'resolved'], { cwd: sandbox })
+      await expect(
+        saveRehearsalConflict(tool, report, path, buffer.revision, 'stale')
+      ).rejects.toThrow()
+    }
+    const refreshed = await rehearsalShow(tool, report)
+    expect(refreshed.kind === 'report' && refreshed.report.conflicts).toEqual([])
+    const final = await continueRehearsal(tool, report)
+    expect(final.kind === 'report' && final.report.outcome).toBe('clean')
+    expect(git('rev-parse', 'HEAD')).toBe(head)
+    expect(await readFile(join(repo, '.git/index'))).toEqual(index)
+    expect(git('status', '--porcelain')).toBe(original)
+  },
+  180000
+)

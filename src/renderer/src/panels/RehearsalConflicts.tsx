@@ -12,6 +12,7 @@ export default function RehearsalConflicts({
   blocked: boolean
 }): React.JSX.Element {
   const busy = useStore((s) => s.rehearsalBusy)
+  const save = useStore((s) => s.saveRehearsalConflict)
   const refresh = useStore((s) => s.refreshRehearsal)
   const [active, setActive] = useState<string | null>(null)
   const [notice, setNotice] = useState('')
@@ -24,9 +25,13 @@ export default function RehearsalConflicts({
   const shown = data?.file.path === active ? data : null
   const disabled = busy || blocked || loading
   useEffect(() => {
-    window.addEventListener('focus', reload)
-    return () => window.removeEventListener('focus', reload)
-  }, [reload])
+    const onFocus = (): void => {
+      reload()
+      void refresh(report)
+    }
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
+  }, [reload, refresh, report])
   useEffect(() => {
     if (shown && previous.current?.revision !== shown.revision) {
       if (previous.current?.file.path === shown.file.path)
@@ -56,8 +61,10 @@ export default function RehearsalConflicts({
         Sandbox: <code>{report.sandbox}</code>
       </p>
       <p>
-        For deleted, renamed or binary files, resolve and stage externally in this sandbox, then
-        refresh. Apply stays unavailable until Continue produces a completed report.
+        For deletion or rename conflicts, open the sandbox folder shown above in your editor or
+        terminal. Choose the final paths and contents, then stage each resolved path with git add
+        (or git rm for a deletion) in that sandbox. Refresh to check the remaining conflicts. Apply
+        stays unavailable until Continue produces a completed report.
       </p>
       {(error || notice) && <p role="alert">{error ? `⚠ ${error}` : notice}</p>}
       <div>
@@ -68,10 +75,39 @@ export default function RehearsalConflicts({
         ))}
       </div>
       {active && <p>Editing {active}</p>}
-      {shown?.file.binary && (
-        <p>⚠ This is a binary conflict. Use external whole-file resolution.</p>
+      {shown?.external && (
+        <p role="status">
+          ⚠ Deletion or rename conflict. One or both versions have no file at this path. Follow the
+          external resolution and staging instructions above; no text buffer will be saved here.
+        </p>
       )}
-      {shown && !shown.file.binary && (
+      {shown?.file.binary && (
+        <fieldset disabled={disabled}>
+          <legend>Binary conflict: choose a complete version</legend>
+          <p>
+            Ours is Git stage 2; Theirs is Git stage 3. During rebase, Ours is the destination and
+            Theirs is the commit being replayed. Choosing a version replaces and stages this sandbox
+            file.
+          </p>
+          {(['ours', 'theirs'] as const).map((side) => (
+            <button
+              key={side}
+              onClick={() => {
+                void save(report, shown.file.path, shown.revision, { side }).then((result) => {
+                  setNotice(result.message ?? 'Saved in sandbox.')
+                  if (result.ok) {
+                    setActive(null)
+                    heading.current?.focus()
+                  }
+                })
+              }}
+            >
+              Use {side} in sandbox
+            </button>
+          ))}
+        </fieldset>
+      )}
+      {shown && !shown.external && !shown.file.binary && (
         <ConflictBuffer
           key={`${active}:${shown.revision}`}
           report={report}

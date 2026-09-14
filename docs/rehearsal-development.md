@@ -1,6 +1,6 @@
 # Internal rehearsal
 
-Merge, normal rebase and single-commit cherry-pick rehearsal are an internal development preview for #143–#146, not a public
+Merge, normal rebase and single-commit cherry-pick rehearsal are an internal development preview for #143–#147, not a public
 feature. Packaged applications have no entry point and reject these operations.
 Checked Apply and mandatory recovery are available only in development. Public
 activation remains gated on the complete cross-platform safety workflow.
@@ -45,7 +45,7 @@ the exact ID and checks repository/worktree identity on the returned report.
 Persistent in-app listing belongs to a later ticket. For now, after restarting the app, use the configured CLI's `--json list`
 and `--json show <exact-id>` from the original worktree to inspect retained work.
 
-## Sandbox text conflicts
+## Sandbox conflicts
 
 A stopped merge, rebase or cherry-pick offers **Resolve <file>** in the retained
 sandbox. The existing hunk controls offer Ours, Theirs, Both and Edit; **Edit whole
@@ -55,12 +55,18 @@ stages only that sandbox path. A changed file is refused with a text warning;
 **Refresh sandbox** reloads it for review. Returning from another app also rereads
 the file and preserves choices only when its bytes are unchanged.
 
-Open the displayed sandbox path from an external editor when needed. Deleted,
-renamed and binary conflicts currently require external resolution and staging in
-that sandbox, followed by Refresh sandbox. An in-app external-editor launcher is
-deferred to the external-resolution workflow. Path traversal, symlink paths,
-and hard-linked text files are refused. Editor requests carry the exact rehearsal
-ID and originating worktree; the ordinary repository editor stays separate.
+Binary conflicts offer **Use ours in sandbox** and **Use theirs in sandbox** to
+save and stage a complete version without decoding its bytes. Ours/Theirs refer
+to Git stages 2/3; during rebase these mean the destination/replayed commit.
+Changed content or conflict stages require a fresh review before saving.
+
+Deletion/rename conflicts with missing stages show external guidance instead of
+a text editor. Open the displayed sandbox folder in your editor or terminal,
+choose the final paths and contents, and stage each resolution with `git add`
+or `git rm` for deletions. **Refresh sandbox**, or returning to the app, rereads
+content and conflict status. Missing, renamed or already staged paths cannot be
+blindly recreated by an older buffer. Path traversal, symlink paths and hard-linked
+files are refused. Requests carry the exact rehearsal ID and originating worktree.
 
 Tab reaches file selection, every hunk choice, editable text, save, refresh and
 Continue; Enter activates buttons. Focus moves to the editor heading on file load

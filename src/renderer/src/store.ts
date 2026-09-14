@@ -315,7 +315,7 @@ interface GitCityState {
     identity: RehearsalReport,
     path: string,
     revision: string,
-    text: string
+    text: string | { side: 'ours' | 'theirs' }
   ): Promise<OpResult>
   refreshRehearsal(
     identity: RehearsalReport,

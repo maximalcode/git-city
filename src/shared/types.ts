@@ -550,6 +550,7 @@ export interface RehearsalReport extends RehearsalIdentity {
 
 export interface RehearsalConflict {
   file: ConflictFile
+  external?: boolean
   revision: string
 }
 
@@ -598,7 +599,7 @@ export interface GitCityApi {
     identity: RehearsalIdentity,
     path: string,
     revision: string,
-    text: string
+    text: string | { side: 'ours' | 'theirs' }
   ): Promise<void>
   rehearsalContinue(identity: RehearsalIdentity): Promise<RehearsalResult>
   rehearsalShow(identity: RehearsalIdentity): Promise<RehearsalResult>

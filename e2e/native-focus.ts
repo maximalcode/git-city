@@ -33,8 +33,11 @@ process.on('message', async direction => {
       other.focus()
       other.webContents.focus()
     } else {
-      other.close()
+      other?.close()
       other = undefined
+      main ??= BrowserWindow.getAllWindows()[0]
+      app.focus({ steal: true })
+      main.show()
       main.focus()
       main.webContents.focus()
     }
@@ -82,16 +85,14 @@ require(${JSON.stringify(resolve('out/main/index.js'))})
     browser = await chromium.connectOverCDP(endpoint, { noDefaults: true })
     const context = browser.contexts()[0]
     const page = context.pages()[0] ?? (await context.waitForEvent('page'))
-    return {
-      page,
-      focus: async (direction) => {
-        const response = once(child, 'message')
-        child.send(direction)
-        const [result] = await response
-        if (!result.ok) throw new Error(result.message)
-      },
-      close
+    const focus = async (direction: 'away' | 'back'): Promise<void> => {
+      const response = once(child, 'message')
+      child.send(direction)
+      const [result] = await response
+      if (!result.ok) throw new Error(result.message)
     }
+    await focus('back')
+    return { page, focus, close }
   } catch (error) {
     await close()
     throw error

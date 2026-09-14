@@ -12,6 +12,12 @@ import {
 } from './rehearsalConflicts'
 import { applyRehearsal } from './rehearsalRecovery'
 
+// Wrap only the open boundary; all filesystem operations still execute for real.
+vi.mock('fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('fs/promises')>()
+  return { ...actual, open: vi.fn(actual.open) }
+})
+
 const tool = process.env.GIT_CITY_REHEARSE_BIN
 const cleanup: (() => Promise<void>)[] = []
 afterEach(async () => {
@@ -81,8 +87,8 @@ it.skipIf(!tool).each(['merge', 'rebase', 'cherry-pick'] as const)(
     }
     // Swap a validated ancestor exactly at the open boundary; Git and the
     // filesystem stay real, including the outside file descriptor returned.
-    const actualOpen = filesystem.open
-    const opening = vi.spyOn(filesystem, 'open').mockImplementationOnce(async (...args) => {
+    const actualOpen = (await vi.importActual<typeof import('fs/promises')>('fs/promises')).open
+    const opening = vi.mocked(filesystem.open).mockImplementationOnce(async (...args) => {
       await rename(sandbox, sandbox + '-saved')
       await symlink(repo, sandbox, 'junction')
       return actualOpen(...args)
@@ -90,7 +96,7 @@ it.skipIf(!tool).each(['merge', 'rebase', 'cherry-pick'] as const)(
     try {
       await expect(readRehearsalConflict(tool, report, 'file.txt')).rejects.toThrow('replaced')
     } finally {
-      opening.mockRestore()
+      opening.mockImplementation(actualOpen)
       await rm(sandbox)
       await rename(sandbox + '-saved', sandbox)
     }

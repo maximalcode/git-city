@@ -1,8 +1,9 @@
-import { test, expect, _electron as electron } from '@playwright/test'
+import { test, expect } from '@playwright/test'
+import { launchNativeFocusApp } from './native-focus'
 import { execFileSync } from 'child_process'
 import { mkdtemp, readFile, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
-import { join, resolve } from 'path'
+import { join } from 'path'
 
 test('keyboard sandbox conflict resolution preserves the original until checked Apply', async () => {
   const tool = process.env.GIT_CITY_REHEARSE_BIN
@@ -29,19 +30,9 @@ test('keyboard sandbox conflict resolution preserves the original until checked 
     index: await readFile(join(root, '.git/index')),
     file: await readFile(join(root, 'file.txt'))
   }
-  const app = await electron.launch({
-    args: [resolve('out/main/index.js'), `--user-data-dir=${userData}`],
-    env: {
-      ...process.env,
-      ELECTRON_RENDERER_URL: 'http://localhost:5199',
-      GIT_CITY_REHEARSE_BIN: tool!
-    }
-  })
+  const app = await launchNativeFocusApp(root, userData, tool!)
   try {
-    await app.evaluate(({ dialog }, path) => {
-      dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] })
-    }, root)
-    const page = await app.firstWindow()
+    const page = app.page
     await page.getByRole('button', { name: 'Open a local repository…' }).click()
     const entry = page.getByRole('button', { name: 'Rehearse (internal)' })
     await entry.focus()
@@ -94,23 +85,10 @@ test('keyboard sandbox conflict resolution preserves the original until checked 
     await expect(editor.getByRole('alert')).toContainText('Nothing was overwritten')
     await press('Refresh sandbox')
     await expect(editor.getByText('external resolution', { exact: true })).toBeVisible()
-    const focusWindows = await app.evaluate(({ BrowserWindow, app: electronApp }) => {
-      electronApp.focus({ steal: true })
-      const main = BrowserWindow.getAllWindows()[0]
-      const other = new BrowserWindow({ width: 200, height: 100 })
-      void other.loadURL('about:blank')
-      main.blur()
-      other.focus()
-      other.webContents.focus()
-      return { main: main.id, other: other.id }
-    })
+    await app.focus('away')
     await expect.poll(() => page.evaluate(() => document.hasFocus())).toBe(false)
     await writeFile(join(retained.sandbox, 'file.txt'), 'changed while outside the app\n')
-    await app.evaluate(({ BrowserWindow }, ids) => {
-      BrowserWindow.fromId(ids.other)!.close()
-      BrowserWindow.fromId(ids.main)!.focus()
-      BrowserWindow.fromId(ids.main)!.webContents.focus()
-    }, focusWindows)
+    await app.focus('back')
     await expect.poll(() => page.evaluate(() => document.hasFocus())).toBe(true)
     await expect(editor.getByText('changed while outside the app', { exact: true })).toBeVisible()
     await expect(editor.getByRole('alert')).toContainText('File reloaded after external changes')

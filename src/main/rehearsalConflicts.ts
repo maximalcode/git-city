@@ -51,7 +51,10 @@ async function sandboxFile(
   if (!inside(root, gitDirectory) || !inside(root, commonDirectory))
     throw new Error('Sandbox Git metadata must remain inside the sandbox.')
   const stages = await runGit(root, ['--literal-pathspecs', 'ls-files', '-u', '-z', '--', path])
-  const external = stages.length > 0 && (!stages.includes(' 2\t') || !stages.includes(' 3\t'))
+  const stageHeaders = stages.split('\0').map((entry) => entry.split('\t', 1)[0])
+  const external =
+    stages.length > 0 &&
+    ![2, 3].every((stage) => stageHeaders.some((header) => header.endsWith(` ${stage}`)))
   if (external) {
     if (inspect) return { root, absolute: join(root, path), fileStat: null, stages }
     throw new Error(
@@ -106,16 +109,24 @@ export async function readRehearsalConflict(
         throw new Error('Only regular sandbox files without hard links can be edited.')
       const bytes = await file.readFile()
       const versions = await Promise.all(
-        [2, 3].map((stage) => runGitBuffer(root, ['show', `:${stage}:${path}`]))
+        [2, 3].map((stage) =>
+          runGitBuffer(root, ['cat-file', '--filters', `--path=${path}`, `:${stage}:${path}`])
+        )
       )
       if (versions.some((version) => version === null))
         throw new Error(
           'Cannot read complete conflict versions. Resolve externally in the sandbox.'
         )
-      const binary = [bytes, ...versions].some(
-        (version) =>
-          version!.includes(0) || !Buffer.from(version!.toString('utf8')).equals(version!)
-      )
+      const attributes = await runGit(root, ['check-attr', '-z', 'diff', 'merge', '--', path])
+      const declaredBinary = attributes
+        .split('\0')
+        .some((value, i) => i % 3 === 2 && value === 'unset')
+      const binary =
+        declaredBinary ||
+        [bytes, ...versions].some(
+          (version) =>
+            version!.includes(0) || !Buffer.from(version!.toString('utf8')).equals(version!)
+        )
       return {
         revision: revision(bytes, stages),
         file: {
@@ -148,7 +159,12 @@ export async function saveRehearsalConflict(
     const resolved =
       typeof text === 'string'
         ? Buffer.from(text)
-        : await runGitBuffer(root, ['show', `:${text.side === 'ours' ? 2 : 3}:${path}`])
+        : await runGitBuffer(root, [
+            'cat-file',
+            '--filters',
+            `--path=${path}`,
+            `:${text.side === 'ours' ? 2 : 3}:${path}`
+          ])
     if (!resolved)
       throw new Error('Cannot read the complete version. Resolve externally in the sandbox.')
     // Open without truncation and compare the exact bytes in the main process.

@@ -56,7 +56,9 @@ stages only that sandbox path. A changed file is refused with a text warning;
 the file and preserves choices only when its bytes are unchanged.
 
 Binary conflicts offer **Use ours in sandbox** and **Use theirs in sandbox** to
-save and stage a complete version without decoding its bytes. Ours/Theirs refer
+save and stage a complete version without JavaScript decoding its bytes. Git applies
+its checkout encoding/filter conversion; Git-declared binary attributes also
+receive whole-file choices. Ours/Theirs refer
 to Git stages 2/3; during rebase these mean the destination/replayed commit.
 Changed content or conflict stages require a fresh review before saving.
 

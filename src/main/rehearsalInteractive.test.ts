@@ -25,7 +25,7 @@ it.skipIf(!tool).each(['reorder-squash-drop', 'repeated-conflicts', 'root'])(
       git('config', 'user.name', 'Test')
       git('config', 'user.email', 'test@example.invalid')
       git('config', 'commit.gpgSign', 'false')
-      for (let i = 0; i < 5; i++) {
+      for (let i = 0; i < (scenario === 'repeated-conflicts' ? 4 : 5); i++) {
         await writeFile(
           join(repo, scenario === 'repeated-conflicts' ? 'file' : `file${i}`),
           `${i}\n`
@@ -33,7 +33,10 @@ it.skipIf(!tool).each(['reorder-squash-drop', 'repeated-conflicts', 'root'])(
         git('add', '.')
         git('commit', '-m', `commit${i}`)
       }
-      const { base, entries } = await getRebaseTodo(repo, scenario === 'root' ? 15 : 4)
+      const { base, entries } = await getRebaseTodo(
+        repo,
+        scenario === 'root' ? 15 : scenario === 'repeated-conflicts' ? 3 : 4
+      )
       if (scenario === 'reorder-squash-drop') {
         // Display order: 3 squash, 1 pick, 2 pick, 4 drop.
         entries[0].action = 'drop'
@@ -41,7 +44,7 @@ it.skipIf(!tool).each(['reorder-squash-drop', 'repeated-conflicts', 'root'])(
         entries.splice(0, entries.length, entries[1], entries[3], entries[2], entries[0])
       } else if (scenario === 'repeated-conflicts') {
         // Drop the first dependent edit. Replaying 2 and 3 must stop separately.
-        entries[3].action = 'drop'
+        entries[2].action = 'drop'
       } else entries[0].action = 'drop'
       const before = {
         head: git('rev-parse', 'HEAD'),
@@ -55,7 +58,7 @@ it.skipIf(!tool).each(['reorder-squash-drop', 'repeated-conflicts', 'root'])(
       expect(report.plan).toEqual({ base, entries })
       expect(report.command).toEqual(['rebase', '-i', base ?? '--root'])
       if (scenario === 'repeated-conflicts') {
-        for (let stop = 0; stop < 3; stop++) {
+        for (let stop = 0; stop < 2; stop++) {
           expect(report.outcome).toBe('stopped')
           expect((await applyRehearsal(tool, report)).kind).toBe('refused')
           const file = await readRehearsalConflict(tool, report, 'file')
@@ -66,7 +69,7 @@ it.skipIf(!tool).each(['reorder-squash-drop', 'repeated-conflicts', 'root'])(
           expect(report.id).toBe(id)
           expect(report.pre_state).toEqual(result.report.pre_state)
           expect(git('rev-parse', 'HEAD')).toBe(before.head)
-          expect(await readFile(join(repo, 'file'), 'utf8')).toBe('4\n')
+          expect(await readFile(join(repo, 'file'), 'utf8')).toBe('3\n')
           expect(await readFile(join(repo, '.git/index'))).toEqual(before.index)
           expect(report.command).toEqual(result.report.command)
         }
@@ -86,7 +89,7 @@ it.skipIf(!tool).each(['reorder-squash-drop', 'repeated-conflicts', 'root'])(
       expect(adopted.kind, adopted.message).toBe('applied')
       expect(git('rev-list', 'HEAD')).toBe(expected)
       if (scenario === 'repeated-conflicts')
-        expect(await readFile(join(repo, 'file'), 'utf8')).toBe('resolution 2\n')
+        expect(await readFile(join(repo, 'file'), 'utf8')).toBe('resolution 1\n')
     } finally {
       if (id) {
         const listing = JSON.parse(

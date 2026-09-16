@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type {
+  RehearsalPlan,
   RehearsalAction,
   RehearsalResult,
   RehearsalRecovery,
@@ -327,9 +328,14 @@ interface GitCityState {
   rehearsalBusy: boolean
   rehearsalResults: Record<string, RehearsalResult>
   rehearsalConfigured: boolean
-  rehearsalRequest: { repo: string; action: RehearsalAction; target: string } | null
-  openRehearsal(request?: { action: RehearsalAction; target: string }): void
-  rehearse(action: RehearsalAction, target: string): Promise<void>
+  rehearsalRequest: {
+    repo: string
+    action: RehearsalAction
+    target: string
+    plan?: RehearsalPlan
+  } | null
+  openRehearsal(request?: { action: RehearsalAction; target: string; plan?: RehearsalPlan }): void
+  rehearse(action: RehearsalAction, target: string, plan?: RehearsalPlan): Promise<void>
   closeRehearsal(): void
   rehearseMerge(target: string): Promise<void>
 
@@ -578,7 +584,18 @@ export const useStore = create<GitCityState>((set, get) => ({
               value.report.id === identity.id
           )
           return entry
-            ? { rehearsalResults: { ...state.rehearsalResults, [entry[0]]: result } }
+            ? {
+                rehearsalResults: {
+                  ...state.rehearsalResults,
+                  [entry[0]]: {
+                    ...result,
+                    report: {
+                      ...result.report,
+                      plan: entry[1].kind === 'report' ? entry[1].report.plan : undefined
+                    }
+                  }
+                }
+              }
             : {}
         })
       return result
@@ -656,7 +673,7 @@ export const useStore = create<GitCityState>((set, get) => ({
   },
   closeRehearsal: () => set({ rehearsalOpen: false }),
   rehearseMerge: (target) => get().rehearse('merge', target),
-  rehearse: async (action, target) => {
+  rehearse: async (action, target, plan) => {
     const api = bridge()
     const repo = get().repoPath
     if (!api || !repo || get().rehearsalBusy) return
@@ -666,7 +683,9 @@ export const useStore = create<GitCityState>((set, get) => ({
       result =
         action === 'merge'
           ? await api.rehearseMerge(repo, target)
-          : await api.rehearse(repo, action, target)
+          : plan
+            ? await api.rehearse(repo, action, target, plan)
+            : await api.rehearse(repo, action, target)
     } catch (error) {
       result = { kind: 'error', message: cleanError(error) }
     }

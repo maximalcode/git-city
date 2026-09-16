@@ -172,3 +172,7 @@ The final reviewed sandbox commits are adopted only through confirmed Apply.
 See [development setup and limitations](rehearsal-development.md).
 
 Internal rehearsal conflict handling also offers byte-preserving whole-file binary choices and sandbox-specific external deletion/rename resolution instructions, with content and conflict status refreshed on return. This remains hidden in packaged applications (see [development guide](rehearsal-development.md)).
+
+The internal interactive-rebase entry rehearses the existing Pick/Squash/Drop and
+reorder plan, including repeated sandbox conflict resolution and explicit adoption
+of the final reviewed commits. It remains hidden in packaged applications.

@@ -1,7 +1,9 @@
 import { spawn } from 'child_process'
-import { realpath } from 'fs/promises'
-import { isAbsolute } from 'path'
+import { mkdtemp, writeFile, rm, realpath } from 'fs/promises'
+import { isAbsolute, join } from 'path'
+import { tmpdir } from 'os'
 import type {
+  RehearsalPlan,
   RehearsalAction,
   RehearsalIdentity,
   RehearsalReport,
@@ -145,7 +147,8 @@ async function report(
   tool: string | undefined,
   cwd: string,
   args: string[],
-  expected?: RehearsalIdentity
+  expected?: RehearsalIdentity,
+  command = args.slice(1)
 ): Promise<RehearsalResult> {
   const availability = await rehearsalAvailability(tool)
   if (!availability.available || !tool)
@@ -182,18 +185,15 @@ async function report(
     ) {
       throw new Error('Rehearsal ID or origin does not match the selected result.')
     }
-    if (
-      !expected &&
-      (value.command.length !== 2 ||
-        value.command[0] !== args.at(-2) ||
-        value.command[1] !== args.at(-1))
-    ) {
+    if (!expected && JSON.stringify(value.command) !== JSON.stringify(command)) {
       throw new Error('Rehearse returned a different action from the requested action.')
     }
     return {
       kind: 'report',
       report: {
         ...value,
+        // Plan annotations belong to this app session, not unvalidated CLI extensions.
+        plan: undefined,
         diagnostics:
           value.outcome === 'failed'
             ? result.stderr.trim() || 'Git failed without a diagnostic message.'
@@ -221,7 +221,8 @@ export async function rehearse(
   tool: string | undefined,
   repo: string,
   action: RehearsalAction,
-  target: string
+  target: string,
+  plan?: RehearsalPlan
 ): Promise<RehearsalResult> {
   if (
     !['merge', 'rebase', 'cherry-pick'].includes(action) ||
@@ -235,6 +236,57 @@ export async function rehearse(
     /[\0\r\n]/.test(target)
   ) {
     return { kind: 'refused', message: 'Choose a repository and a branch or commit to rehearse.' }
+  }
+  if (plan !== undefined) {
+    const hash = (value: unknown): boolean =>
+      typeof value === 'string' && /^(?:[a-fA-F0-9]{40}|[a-fA-F0-9]{64})$/.test(value)
+    if (
+      !plan ||
+      action !== 'rebase' ||
+      (plan.base !== null && !hash(plan.base)) ||
+      target !== (plan.base ?? 'root') ||
+      !Array.isArray(plan.entries) ||
+      !plan.entries.length ||
+      !plan.entries.every(
+        (entry) =>
+          entry &&
+          hash(entry.hash) &&
+          typeof entry.subject === 'string' &&
+          typeof entry.shortHash === 'string' &&
+          ['pick', 'squash', 'drop'].includes(entry.action)
+      ) ||
+      new Set(plan.entries.map((entry) => entry.hash)).size !== plan.entries.length ||
+      plan.entries.every((entry) => entry.action === 'drop')
+    ) {
+      return {
+        kind: 'refused',
+        message: 'Choose a valid Pick/Squash/Drop plan and its original base.'
+      }
+    }
+    const ordered = [...plan.entries].reverse().map((entry) => ({ ...entry }))
+    // Match the existing editor: the oldest instruction cannot squash backwards.
+    if (ordered[0].action === 'squash') ordered[0].action = 'pick'
+    const directory = await mkdtemp(join(tmpdir(), 'gitcity-rehearsal-'))
+    try {
+      const todo = join(directory, 'todo')
+      await writeFile(
+        todo,
+        ordered.map((entry) => `${entry.action} ${entry.hash}`).join('\n') + '\n',
+        { mode: 0o600 }
+      )
+      const command = ['rebase', '-i', plan.base ?? '--root']
+      const result = await report(
+        tool,
+        repo,
+        ['--keep', '--todo', todo, ...command],
+        undefined,
+        command
+      )
+      if (result.kind === 'report') result.report.plan = plan
+      return result
+    } finally {
+      await rm(directory, { recursive: true, force: true })
+    }
   }
   return report(tool, repo, ['--keep', action, target])
 }

@@ -16,6 +16,9 @@ export default function RebasePanel(): React.JSX.Element | null {
   const busy = useStore((s) => s.opInProgress !== null)
   const setRebaseOpen = useStore((s) => s.setRebaseOpen)
   const askConfirm = useStore((s) => s.askConfirm)
+  const configured = useStore((s) => s.rehearsalConfigured)
+  const rehearsalBusy = useStore((s) => s.rehearsalBusy)
+  const openRehearsal = useStore((s) => s.openRehearsal)
   const runRebase = useStore((s) => s.runInteractiveRebase)
 
   const {
@@ -64,7 +67,13 @@ export default function RebasePanel(): React.JSX.Element | null {
     })
 
   return (
-    <div className="rebase-panel">
+    <div
+      className="rebase-panel"
+      onKeyDown={(event) => {
+        event.stopPropagation()
+        if (event.key === 'Escape') setRebaseOpen(false)
+      }}
+    >
       <div className="panel-head">
         <span>Interactive rebase · last {entries.length} commits</span>
         <button className="close" aria-label="Close" onClick={() => setRebaseOpen(false)}>
@@ -113,6 +122,7 @@ export default function RebasePanel(): React.JSX.Element | null {
                   <button
                     key={a}
                     className={e.action === a ? 'active' : ''}
+                    aria-pressed={e.action === a}
                     onClick={() => setAction(i, a)}
                   >
                     {a}
@@ -125,6 +135,20 @@ export default function RebasePanel(): React.JSX.Element | null {
 
       <div className="rebase-foot">
         <button onClick={() => setRebaseOpen(false)}>Cancel</button>
+        {import.meta.env.DEV && configured && (
+          <button
+            disabled={busy || rehearsalBusy || loading || !!error || entries.length === 0}
+            onClick={() =>
+              openRehearsal({
+                action: 'rebase',
+                target: base ?? 'root',
+                plan: { base, entries: entries.map((entry) => ({ ...entry })) }
+              })
+            }
+          >
+            Rehearse interactive rebase
+          </button>
+        )}
         <button
           className="danger"
           disabled={busy || loading || entries.length === 0}

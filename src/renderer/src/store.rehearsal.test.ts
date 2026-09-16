@@ -167,7 +167,11 @@ it.each(['rebase', 'cherry-pick'] as const)(
 it('keeps Continue bound to its origin after a worktree switch and retains reports on refusal', async () => {
   const report: RehearsalReport = {
     schema: 1,
-    command: ['rebase', 'topic'],
+    command: ['rebase', '-i', '--root'],
+    plan: {
+      base: null,
+      entries: [{ hash: 'a'.repeat(40), shortHash: 'aaaaaaa', subject: 'first', action: 'pick' }]
+    },
     checkout: { kind: 'branch', target: 'main' },
     pre_state: {},
     lifecycle: 'kept',
@@ -198,7 +202,7 @@ it('keeps Continue bound to its origin after a worktree switch and retains repor
   await useStore.getState().refreshRehearsal(report, true)
   useStore.setState({ repoPath: '/second' })
   const next = { ...report, conflicted: false, conflicts: [], outcome: 'clean' as const }
-  finish({ kind: 'report', report: next })
+  finish({ kind: 'report', report: { ...next, plan: undefined } })
   await pending
   expect(rehearsalContinue).toHaveBeenCalledExactlyOnceWith(report)
   expect(useStore.getState().rehearsalResults['/second']).toBeUndefined()

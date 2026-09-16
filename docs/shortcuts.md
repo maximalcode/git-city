@@ -55,3 +55,7 @@ In the internal rehearsal conflict editor, Tab navigates file buttons, Ours/Thei
 Both/Edit, text fields, Save and stage, Refresh sandbox and Continue rehearsal.
 Enter activates buttons; Escape keeps and closes the rehearsal panel. See
 [internal rehearsal](rehearsal-development.md#sandbox-text-conflicts).
+
+In the internal interactive-rebase flow, Tab reaches Move up/down and Pick/Squash/Drop;
+Enter activates them. Rehearse opens the shared dialog with focus on submission,
+and Escape returns to the plan entry.

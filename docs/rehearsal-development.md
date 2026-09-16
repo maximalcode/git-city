@@ -1,6 +1,6 @@
 # Internal rehearsal
 
-Merge, normal rebase and single-commit cherry-pick rehearsal are an internal development preview for #143–#147, not a public
+Merge, normal and interactive rebase, and single-commit cherry-pick rehearsal are an internal development preview for #143–#148, not a public
 feature. Packaged applications have no entry point and reject these operations.
 Checked Apply and mandatory recovery are available only in development. Public
 activation remains gated on the complete cross-platform safety workflow.
@@ -28,7 +28,19 @@ The shared panel displays the selected branch or full commit ID as read-only;
 focus starts on **Rehearse**. Enter runs the preview, and closing returns focus
 to the entry that opened it. These explicit development entries do not change
 the existing direct actions. Automatic/Ask/Off routing belongs to a later ticket.
-There is no range selector, interactive rebase or pull-rebase entry here.
+There is no cherry-pick range selector or pull-rebase entry here.
+
+For interactive rebase, open **Branches → Rebase…**, prepare the existing newest-first
+Pick/Squash/Drop plan with the up/down buttons, and activate **Rehearse interactive
+rebase**. Tab and Enter operate the plan controls; the selected action is announced
+as pressed. The rehearsal uses a snapshot of that plan and its base (Root includes
+the root commit), with no terminal editor. The oldest instruction is promoted from
+Squash to Pick just as in the direct editor; dropping every commit is refused.
+The retained report shows the submitted plan, and sandbox Continue preserves the
+remaining Git instructions across repeated conflict stops. Review the final report
+and confirm Apply to adopt exactly those commit objects. Escape returns focus to
+the plan entry. The plan summary is kept in the current app session; restart
+inspection through the CLI retains the actual sandbox Git state.
 
 The panel distinguishes conflicts, stopped/failed execution, no-op, refusal and
 technical errors. Failed Git commands include their bounded diagnostic output.
@@ -39,7 +51,8 @@ changes. Warnings are textual. Repository hooks are disabled by git-rehearse;
 a conflict-free result still requires content review. Untracked files are not
 represented as carried work.
 
-The CLI receives `--json --keep <merge|rebase|cherry-pick> <target>` with separate arguments and no
+The CLI receives `--json --keep <merge|rebase|cherry-pick> <target>` (interactive rebase adds
+`--todo <prepared-file>` before `rebase -i <base|--root>`) with separate arguments and no
 interactive stdin. Closing never issues discard. The bridge's show operation uses
 the exact ID and checks repository/worktree identity on the returned report.
 Persistent in-app listing belongs to a later ticket. For now, after restarting the app, use the configured CLI's `--json list`

@@ -132,3 +132,100 @@ test('keyboard sandbox conflict resolution preserves the original until checked 
     await rm(userData, { recursive: true, force: true })
   }
 })
+
+for (const scenario of ['binary', 'delete', 'rename'] as const) {
+  test(`keyboard ${scenario} resolution and external return refresh`, async () => {
+    const tool = process.env.GIT_CITY_REHEARSE_BIN!
+    expect(tool).toBeTruthy()
+    const userData = await mkdtemp(join(tmpdir(), 'city-user-'))
+    const root = await mkdtemp(join(tmpdir(), 'city-special-'))
+    const git = (...args: string[]): string =>
+      execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim()
+    git('init', '-b', 'main')
+    git('config', 'user.name', 'Test')
+    git('config', 'user.email', 'test@example.invalid')
+    git('config', 'commit.gpgSign', 'false')
+    await writeFile(join(root, 'file'), scenario === 'binary' ? Buffer.from([0, 255]) : 'base\n')
+    git('add', '.')
+    git('commit', '-m', 'base')
+    git('checkout', '-b', 'topic')
+    if (scenario === 'rename') git('mv', 'file', 'topic-name')
+    else
+      await writeFile(join(root, 'file'), scenario === 'binary' ? Buffer.from([0, 254]) : 'topic\n')
+    git('add', '.')
+    git('commit', '-m', 'topic')
+    git('checkout', 'main')
+    if (scenario === 'delete') git('rm', 'file')
+    else if (scenario === 'rename') git('mv', 'file', 'main-name')
+    else await writeFile(join(root, 'file'), Buffer.from([0, 253]))
+    git('add', '.')
+    git('commit', '-m', 'main')
+    const head = git('rev-parse', 'HEAD')
+    const index = await readFile(join(root, '.git/index'))
+    const app = await launchNativeFocusApp(root, userData, tool)
+    try {
+      const page = app.page
+      await page.getByRole('button', { name: 'Open a local repository…' }).focus()
+      await page.keyboard.press('Enter')
+      await page.getByRole('button', { name: 'Rehearse (internal)' }).focus()
+      await page.keyboard.press('Enter')
+      await page.getByLabel('Branch or commit to merge into the current checkout').fill('topic')
+      await page.keyboard.press('Enter')
+      const editor = page.getByRole('region', { name: 'Sandbox conflict editor' })
+      await expect(editor).toBeVisible()
+      const button = editor.getByRole('button', { name: /^Resolve / }).first()
+      await expect(button).toBeEnabled()
+      await button.focus()
+      await page.keyboard.press('Enter')
+      await expect(editor.getByRole('heading')).toBeFocused()
+      const listing = JSON.parse(
+        execFileSync(tool, ['--json', 'list'], { cwd: root, encoding: 'utf8' })
+      )
+      const report = JSON.parse(
+        execFileSync(tool, ['--json', 'show', listing.rehearsals[0].id], {
+          cwd: root,
+          encoding: 'utf8'
+        })
+      )
+      if (scenario === 'binary') {
+        await expect(
+          editor.getByRole('group', { name: 'Binary conflict: choose a complete version' })
+        ).toBeVisible()
+        await page.keyboard.press('Tab')
+        await page.keyboard.press('Tab')
+        await expect(editor.getByRole('button', { name: 'Use ours in sandbox' })).toBeFocused()
+        await page.keyboard.press('Tab')
+        await expect(editor.getByRole('button', { name: 'Use theirs in sandbox' })).toBeFocused()
+        await page.keyboard.press('Enter')
+        await expect(editor.getByRole('heading')).toBeFocused()
+        expect(await readFile(join(report.sandbox, 'file'))).toEqual(Buffer.from([0, 254]))
+      } else {
+        await expect(editor.getByRole('status')).toContainText('Deletion or rename conflict')
+        await expect(editor.getByText(/stage each resolved path/)).toBeVisible()
+        await app.focus('away')
+        execFileSync(
+          'git',
+          ['rm', '-f', '--', ...report.conflicts.map((c: { path: string }) => c.path)],
+          { cwd: report.sandbox }
+        )
+        await app.focus('back')
+      }
+      await expect(editor.getByRole('button', { name: 'Continue rehearsal' })).toBeEnabled()
+      expect(git('rev-parse', 'HEAD')).toBe(head)
+      expect(await readFile(join(root, '.git/index'))).toEqual(index)
+      await editor.getByRole('button', { name: 'Continue rehearsal' }).focus()
+      await page.keyboard.press('Enter')
+      await expect(page.getByRole('heading', { name: 'Merge preview completed' })).toBeVisible()
+      await page.screenshot({ path: `test-results/rehearsal-${scenario}.png` })
+    } finally {
+      await app.close()
+      const listing = JSON.parse(
+        execFileSync(tool, ['--json', 'list'], { cwd: root, encoding: 'utf8' })
+      )
+      for (const rehearsal of listing.rehearsals)
+        execFileSync(tool, ['--json', 'discard', rehearsal.id], { cwd: root })
+      await rm(root, { recursive: true, force: true })
+      await rm(userData, { recursive: true, force: true })
+    }
+  })
+}

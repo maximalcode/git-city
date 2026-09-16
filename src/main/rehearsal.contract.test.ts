@@ -61,3 +61,30 @@ it.each(['topic', 'a..b', '--continue', 'a'.repeat(40) + '^!'])(
     expect(spawn).not.toHaveBeenCalled()
   }
 )
+
+it.each([
+  { base: null, entries: [] },
+  {
+    base: null,
+    entries: [
+      { hash: 'a'.repeat(40), shortHash: 'aaaaaaa', subject: 'drop', action: 'drop' as const }
+    ]
+  },
+  {
+    base: 'main',
+    entries: [
+      { hash: 'a'.repeat(40), shortHash: 'aaaaaaa', subject: 'pick', action: 'pick' as const }
+    ]
+  },
+  {
+    base: null,
+    entries: [
+      { hash: 'HEAD\nexec unsafe', shortHash: 'HEAD', subject: 'pick', action: 'pick' as const }
+    ]
+  }
+])('refuses an invalid interactive plan before starting the tool (%j)', async (plan) => {
+  expect((await rehearse('/configured/tool', process.cwd(), 'rebase', 'root', plan)).kind).toBe(
+    'refused'
+  )
+  expect(spawn).not.toHaveBeenCalled()
+})

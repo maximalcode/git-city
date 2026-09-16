@@ -1,12 +1,15 @@
 import { spawn } from 'child_process'
-import { realpath } from 'fs/promises'
-import { isAbsolute } from 'path'
+import { mkdtemp, writeFile, rm, realpath } from 'fs/promises'
+import { isAbsolute, join } from 'path'
+import { tmpdir } from 'os'
 import type {
+  RehearsalPlan,
   RehearsalAction,
   RehearsalIdentity,
   RehearsalReport,
   RehearsalResult
 } from '../shared/types'
+import { prepareRebasePlan } from '../shared/rebasePlan'
 import { searchPath } from './git/exec'
 
 const repair =
@@ -145,7 +148,8 @@ async function report(
   tool: string | undefined,
   cwd: string,
   args: string[],
-  expected?: RehearsalIdentity
+  expected?: RehearsalIdentity,
+  command = args.slice(1)
 ): Promise<RehearsalResult> {
   const availability = await rehearsalAvailability(tool)
   if (!availability.available || !tool)
@@ -182,18 +186,15 @@ async function report(
     ) {
       throw new Error('Rehearsal ID or origin does not match the selected result.')
     }
-    if (
-      !expected &&
-      (value.command.length !== 2 ||
-        value.command[0] !== args.at(-2) ||
-        value.command[1] !== args.at(-1))
-    ) {
+    if (!expected && JSON.stringify(value.command) !== JSON.stringify(command)) {
       throw new Error('Rehearse returned a different action from the requested action.')
     }
     return {
       kind: 'report',
       report: {
         ...value,
+        // Plan annotations belong to this app session, not unvalidated CLI extensions.
+        plan: undefined,
         diagnostics:
           value.outcome === 'failed'
             ? result.stderr.trim() || 'Git failed without a diagnostic message.'
@@ -221,7 +222,8 @@ export async function rehearse(
   tool: string | undefined,
   repo: string,
   action: RehearsalAction,
-  target: string
+  target: string,
+  plan?: RehearsalPlan
 ): Promise<RehearsalResult> {
   if (
     !['merge', 'rebase', 'cherry-pick'].includes(action) ||
@@ -235,6 +237,29 @@ export async function rehearse(
     /[\0\r\n]/.test(target)
   ) {
     return { kind: 'refused', message: 'Choose a repository and a branch or commit to rehearse.' }
+  }
+  if (plan !== undefined) {
+    if (!plan || action !== 'rebase' || target !== (plan.base ?? 'root'))
+      return { kind: 'refused', message: 'Choose the interactive plan and its original base.' }
+    const prepared = prepareRebasePlan(plan)
+    if (!prepared.ok) return { kind: 'refused', message: prepared.message }
+    const directory = await mkdtemp(join(tmpdir(), 'gitcity-rehearsal-'))
+    try {
+      const todo = join(directory, 'todo')
+      await writeFile(todo, prepared.todo, { mode: 0o600 })
+      const command = prepared.command
+      const result = await report(
+        tool,
+        repo,
+        ['--keep', '--todo', todo, ...command],
+        undefined,
+        command
+      )
+      if (result.kind === 'report') result.report.plan = plan
+      return result
+    } finally {
+      await rm(directory, { recursive: true, force: true })
+    }
   }
   return report(tool, repo, ['--keep', action, target])
 }

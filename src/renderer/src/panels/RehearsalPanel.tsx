@@ -41,6 +41,19 @@ function Report({ report }: { report: RehearsalReport }): React.JSX.Element {
       {report.drift_unexpected && (
         <p role="alert">⚠ Unexpected content changes — review the affected files carefully.</p>
       )}
+      {report.plan && (
+        <section aria-label="Rehearsed plan">
+          <h4>Interactive plan · newest → oldest</h4>
+          <p>Base: {report.plan.base ?? 'Root'}</p>
+          <ol>
+            {report.plan.entries.map((entry) => (
+              <li key={entry.hash}>
+                {entry.action} {entry.hash} {entry.subject}
+              </li>
+            ))}
+          </ol>
+        </section>
+      )}
       <h4>Branches and commits</h4>
       {report.refs.length === 0 ? (
         <p>No branch or commit movements reported.</p>
@@ -273,15 +286,17 @@ export default function RehearsalPanel(): React.JSX.Element | null {
         <form
           onSubmit={(event) => {
             event.preventDefault()
-            if (available && !busy && !blocked) void rehearse(action, chosenTarget)
+            if (available && !busy && !blocked) void rehearse(action, chosenTarget, selected?.plan)
           }}
         >
           <label htmlFor="rehearsal-target">
-            {action === 'rebase'
-              ? 'Rebase current checkout onto selected branch'
-              : action === 'cherry-pick'
-                ? 'Selected commit to cherry-pick'
-                : 'Branch or commit to merge into the current checkout'}
+            {selected?.plan
+              ? 'Interactive plan base (Root includes the root commit)'
+              : action === 'rebase'
+                ? 'Rebase current checkout onto selected branch'
+                : action === 'cherry-pick'
+                  ? 'Selected commit to cherry-pick'
+                  : 'Branch or commit to merge into the current checkout'}
           </label>
           <input
             id="rehearsal-target"

@@ -512,6 +512,11 @@ export interface GitVersion {
   supported: boolean
 }
 
+export interface RehearsalPlan {
+  base: string | null
+  entries: RebaseEntry[]
+}
+
 export type RehearsalAction = 'merge' | 'rebase' | 'cherry-pick'
 
 /** Exact CLI identity; never substitute the implicitly latest rehearsal. */
@@ -525,6 +530,8 @@ export interface RehearsalIdentity {
 /** Validated subset of the public git-rehearse schema, never private metadata. */
 export interface RehearsalReport extends RehearsalIdentity {
   schema: 1
+  /** App-session snapshot of the submitted interactive plan, bound to this report ID. */
+  plan?: RehearsalPlan
   sandbox?: string
   can_apply?: boolean
   command: string[]
@@ -585,7 +592,12 @@ export interface RehearsalApplyResult {
 /** API exposed to the renderer via the preload bridge. */
 export interface GitCityApi {
   rehearsalAvailability(): Promise<{ available: boolean; configured: boolean; message: string }>
-  rehearse(repoPath: string, action: RehearsalAction, target: string): Promise<RehearsalResult>
+  rehearse(
+    repoPath: string,
+    action: RehearsalAction,
+    target: string,
+    plan?: RehearsalPlan
+  ): Promise<RehearsalResult>
   rehearseMerge(repoPath: string, target: string): Promise<RehearsalResult>
   rehearsalApply(identity: RehearsalReport): Promise<RehearsalApplyResult>
   rehearsalRecovery(repo: string): Promise<RehearsalRecovery>

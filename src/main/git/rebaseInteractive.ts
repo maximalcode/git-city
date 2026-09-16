@@ -4,6 +4,7 @@ import { join } from 'path'
 import type { OpResult, RebaseEntry } from '../../shared/types'
 import { runGit, runGitResult } from './exec'
 import { nothingToDo } from './result'
+import { prepareRebasePlan } from '../../shared/rebasePlan'
 import { gitOp } from './gitOp'
 
 /**
@@ -59,28 +60,17 @@ export async function runInteractiveRebase(
   base: string | null,
   entries: RebaseEntry[]
 ): Promise<OpResult> {
-  const ordered = [...entries].reverse() // oldest-first for the todo
-  if (ordered.length === 0) return nothingToDo('Nothing to rebase.')
-  // a squash can't be the first line — promote it to pick
-  if (ordered[0].action === 'squash') ordered[0] = { ...ordered[0], action: 'pick' }
-  if (ordered.every((e) => e.action === 'drop')) {
-    return nothingToDo('Cannot drop every commit.')
-  }
-
-  const todo = ordered.map((e) => `${e.action} ${e.hash}`).join('\n') + '\n'
+  const prepared = prepareRebasePlan({ base, entries })
+  if (!prepared.ok) return nothingToDo(prepared.message)
   const todoFile = join(tmpdir(), `gitcity-rebase-${process.pid}-${todoCounter++}.txt`)
-  await writeFile(todoFile, todo, 'utf8')
+  await writeFile(todoFile, prepared.todo, 'utf8')
 
   // forward slashes so git's bundled sh doesn't treat Windows backslashes as escapes
   const editor = `cp "${todoFile.replace(/\\/g, '/')}"`
   const env = { GIT_SEQUENCE_EDITOR: editor, GIT_EDITOR: 'true' }
 
-  const args = ['rebase', '-i']
-  if (base) args.push(base)
-  else args.push('--root')
-
   try {
-    return await gitOp(repoPath, args, { conflicts: true, env })
+    return await gitOp(repoPath, prepared.command, { conflicts: true, env })
   } finally {
     // the todo file lives in the shared temp dir — don't leave it behind
     await unlink(todoFile).catch(() => {})

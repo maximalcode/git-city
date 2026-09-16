@@ -3,7 +3,8 @@ import type { GitCityApi, ProgressInfo, RepoChangeReason } from '../shared/types
 
 const api: GitCityApi = {
   rehearsalAvailability: () => ipcRenderer.invoke('git-city:rehearsal-availability'),
-  rehearse: (repo, action, target) => ipcRenderer.invoke('git-city:rehearse', repo, action, target),
+  rehearse: (repo, action, target, plan) =>
+    ipcRenderer.invoke('git-city:rehearse', repo, action, target, plan),
   rehearseMerge: (repo, target) => ipcRenderer.invoke('git-city:rehearse-merge', repo, target),
   rehearsalApply: (identity) => ipcRenderer.invoke('git-city:rehearsal-apply', identity),
   rehearsalRecovery: (repo) => ipcRenderer.invoke('git-city:rehearsal-recovery', repo),

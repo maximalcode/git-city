@@ -9,6 +9,7 @@ import type {
   RehearsalReport,
   RehearsalResult
 } from '../shared/types'
+import { prepareRebasePlan } from '../shared/rebasePlan'
 import { searchPath } from './git/exec'
 
 const repair =
@@ -238,43 +239,15 @@ export async function rehearse(
     return { kind: 'refused', message: 'Choose a repository and a branch or commit to rehearse.' }
   }
   if (plan !== undefined) {
-    const hash = (value: unknown): boolean =>
-      typeof value === 'string' && /^(?:[a-fA-F0-9]{40}|[a-fA-F0-9]{64})$/.test(value)
-    if (
-      !plan ||
-      action !== 'rebase' ||
-      (plan.base !== null && !hash(plan.base)) ||
-      target !== (plan.base ?? 'root') ||
-      !Array.isArray(plan.entries) ||
-      !plan.entries.length ||
-      !plan.entries.every(
-        (entry) =>
-          entry &&
-          hash(entry.hash) &&
-          typeof entry.subject === 'string' &&
-          typeof entry.shortHash === 'string' &&
-          ['pick', 'squash', 'drop'].includes(entry.action)
-      ) ||
-      new Set(plan.entries.map((entry) => entry.hash)).size !== plan.entries.length ||
-      plan.entries.every((entry) => entry.action === 'drop')
-    ) {
-      return {
-        kind: 'refused',
-        message: 'Choose a valid Pick/Squash/Drop plan and its original base.'
-      }
-    }
-    const ordered = [...plan.entries].reverse().map((entry) => ({ ...entry }))
-    // Match the existing editor: the oldest instruction cannot squash backwards.
-    if (ordered[0].action === 'squash') ordered[0].action = 'pick'
+    if (!plan || action !== 'rebase' || target !== (plan.base ?? 'root'))
+      return { kind: 'refused', message: 'Choose the interactive plan and its original base.' }
+    const prepared = prepareRebasePlan(plan)
+    if (!prepared.ok) return { kind: 'refused', message: prepared.message }
     const directory = await mkdtemp(join(tmpdir(), 'gitcity-rehearsal-'))
     try {
       const todo = join(directory, 'todo')
-      await writeFile(
-        todo,
-        ordered.map((entry) => `${entry.action} ${entry.hash}`).join('\n') + '\n',
-        { mode: 0o600 }
-      )
-      const command = ['rebase', '-i', plan.base ?? '--root']
+      await writeFile(todo, prepared.todo, { mode: 0o600 })
+      const command = prepared.command
       const result = await report(
         tool,
         repo,

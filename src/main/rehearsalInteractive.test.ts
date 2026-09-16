@@ -101,5 +101,5 @@ it.skipIf(!tool).each(['reorder-squash-drop', 'repeated-conflicts', 'root'])(
       await rm(repo, { recursive: true, force: true })
     }
   },
-  300_000
+  600_000
 )

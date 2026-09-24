@@ -74,7 +74,30 @@ export async function stopRehearsal(repo: string): Promise<OpResult> {
   }
 }
 
+// The CLI reserves a rehearsal even during `show`. Serialize this app's public
+// inventory/report reads so a read reservation cannot masquerade as execution.
+const inspections = new Map<string, Promise<unknown>>()
 export function runRehearsalTool(
+  tool: string,
+  args: string[],
+  cwd?: string,
+  stoppable = false
+): Promise<{ code: number; stdout: string; stderr: string }> {
+  if (!cwd || args[0] !== '--json' || !['show', 'list'].includes(args[1]))
+    return spawnRehearsalTool(tool, args, cwd, stoppable)
+  const result = (inspections.get(cwd) ?? Promise.resolve())
+    .catch(() => undefined)
+    .then(() => spawnRehearsalTool(tool, args, cwd, stoppable))
+  inspections.set(cwd, result)
+  void result
+    .finally(() => {
+      if (inspections.get(cwd) === result) inspections.delete(cwd)
+    })
+    .catch(() => undefined)
+  return result
+}
+
+function spawnRehearsalTool(
   tool: string,
   args: string[],
   cwd?: string,

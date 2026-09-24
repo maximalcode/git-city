@@ -57,6 +57,18 @@ describe.skipIf(!tool)('real CLI rehearsal management', () => {
     ).toBe(true)
     expect(inventory.bytes).toBeGreaterThan(0)
     expect(inventory.freeBytes).toBeGreaterThan(0)
+    // `show` reserves the CLI execution lock too: our overlapping reads must
+    // not mistake one another for an external execution or return metadata-only reports.
+    const simultaneous = await Promise.all([
+      rehearsalShow(tool, inventory.entries[0]),
+      listRehearsals(tool, repo),
+      rehearsalShow(tool, inventory.entries[0]),
+      rehearsalShow(tool, inventory.entries[1])
+    ])
+    expect(simultaneous[0].kind).toBe('report')
+    expect(simultaneous[1].entries.every((entry) => !entry.active)).toBe(true)
+    expect(simultaneous[2].kind).toBe('report')
+    expect(simultaneous[3].kind).toBe('report')
     // Each inspection starts a new CLI process; list's prune keeps retained entries.
     await runRehearsalTool(tool!, ['--json', 'list'], repo)
     expect((await listRehearsals(tool, repo)).entries.map((entry) => entry.id)).toEqual(

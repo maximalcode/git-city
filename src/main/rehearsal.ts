@@ -140,6 +140,11 @@ async function report(
     if ((value.kind === 'refused' || value.kind === 'internal') && string(value.message)) {
       return { kind: value.kind === 'refused' ? 'refused' : 'error', message: value.message }
     }
+    if (expected && value.active === true)
+      return {
+        kind: 'refused',
+        message: 'Rehearsal is in use by another process. Refresh after it finishes.'
+      }
     if (
       expected &&
       value.active === false &&

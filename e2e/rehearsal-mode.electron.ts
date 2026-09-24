@@ -205,3 +205,61 @@ test('known repository choice, linked-worktree restart, missing tool and explici
     await rm(userData, { recursive: true, force: true })
   }
 })
+
+test('unpackaged production renderer ignores internal preferences without hiding required choices', async () => {
+  const userData = await mkdtemp(join(tmpdir(), 'city-mode-production-'))
+  const root = await mkdtemp(join(tmpdir(), 'city-mode-production-repo-'))
+  const git = (...args: string[]): string =>
+    execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim()
+  git('init', '-b', 'main')
+  git('config', 'user.name', 'Test')
+  git('config', 'user.email', 'test@example.invalid')
+  git('config', 'commit.gpgSign', 'false')
+  await writeFile(join(root, 'file'), 'base\n')
+  git('add', '.')
+  git('commit', '-m', 'base')
+  git('checkout', '-b', 'topic')
+  await writeFile(join(root, 'file'), 'topic\n')
+  git('commit', '-am', 'topic')
+  git('checkout', 'main')
+  // Simulate an internal installation awaiting the existing-user choice.
+  await writeFile(
+    join(userData, 'rehearsal-modes.json'),
+    JSON.stringify({
+      schema: 1,
+      legacy: [root],
+      repositories: {}
+    })
+  )
+  const app = await electron.launch({
+    args: [resolve('out/main/index.js'), `--user-data-dir=${userData}`],
+    env: {
+      ...process.env,
+      ELECTRON_RENDERER_URL: '',
+      GIT_CITY_REHEARSE_BIN: process.env.GIT_CITY_REHEARSE_BIN!
+    }
+  })
+  try {
+    await app.evaluate(({ dialog }, path) => {
+      dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] })
+    }, root)
+    const page = await app.firstWindow()
+    await page.getByRole('button', { name: 'Open a local repository…' }).click()
+    await expect(page.getByRole('button', { name: 'Branches', exact: true })).toBeVisible()
+    expect(await page.evaluate((path) => window.gitCity.rehearsalMode(path, []), root)).toBeNull()
+    await expect(page.getByLabel('Rehearse mode (internal)')).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Rehearse (internal)' })).toHaveCount(0)
+    await page.keyboard.press('Escape')
+    await page.keyboard.press('b')
+    await page.getByRole('button', { name: 'Merge', exact: true }).click()
+    await expect.poll(() => git('rev-parse', 'HEAD')).toBe(git('rev-parse', 'topic'))
+    // The hidden development preference was not converted or overwritten.
+    expect(
+      JSON.parse(await readFile(join(userData, 'rehearsal-modes.json'), 'utf8')).legacy
+    ).toEqual([root])
+  } finally {
+    await app.close()
+    await rm(root, { recursive: true, force: true })
+    await rm(userData, { recursive: true, force: true })
+  }
+})

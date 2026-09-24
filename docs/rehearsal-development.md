@@ -55,9 +55,10 @@ each supported action and on window focus. Missing, broken or incompatible tool
 responses explain repair without falling back. Once initialized, a missing tool
 does not turn Automatic off; choose Off consciously to use direct actions.
 Off never removes a mandatory recovery lock. Corrupt or incompatible preference
-files block supported actions and are preserved for repair. Packaged releases
+files block supported actions and are preserved for repair. Packaged releases and the production renderer loaded by `npm start`
 continue to hide all mode controls and retain current direct behavior until the
-complete public acceptance ticket.
+complete public acceptance ticket. Internal modes require the development renderer
+started by `npm run dev`.
 
 
 For interactive rebase, open **Branches → Rebase…**, prepare the existing newest-first

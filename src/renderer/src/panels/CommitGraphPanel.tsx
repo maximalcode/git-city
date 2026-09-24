@@ -27,6 +27,7 @@ export default function CommitGraphPanel(): React.JSX.Element | null {
   const graphOpen = useStore((s) => s.graphOpen)
   const repoPath = useStore((s) => s.repoPath)
   const headHash = useStore((s) => s.workingStatus?.headHash)
+  const statusReady = useStore((s) => s.workingStatus !== null)
   const busy = useStore((s) => s.opInProgress !== null)
   const setGraphOpen = useStore((s) => s.setGraphOpen)
   const askConfirm = useStore((s) => s.askConfirm)
@@ -46,7 +47,9 @@ export default function CommitGraphPanel(): React.JSX.Element | null {
     error,
     reload
   } = useRepoQuery(
-    graphOpen && repoPath ? ([repoPath, headHash ?? null] as const) : null,
+    // Wait for the first status before mounting keyboard targets. Otherwise the
+    // initial HEAD query replaces the graph while the user is choosing an action.
+    graphOpen && repoPath && statusReady ? ([repoPath, headHash ?? null] as const) : null,
     (api, [repo]) => api.commitGraph(repo, 500)
   )
 
@@ -71,7 +74,7 @@ export default function CommitGraphPanel(): React.JSX.Element | null {
       </div>
 
       <div className="graph-scroll">
-        {loading && <div className="empty">Building graph…</div>}
+        {(!statusReady || loading) && <div className="empty">Building graph…</div>}
         {!loading && error && (
           <div className="panel-error">
             <span>{error}</span>

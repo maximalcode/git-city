@@ -16,7 +16,8 @@ export default function RebasePanel(): React.JSX.Element | null {
   const busy = useStore((s) => s.opInProgress !== null)
   const setRebaseOpen = useStore((s) => s.setRebaseOpen)
   const askConfirm = useStore((s) => s.askConfirm)
-  const configured = useStore((s) => s.rehearsalConfigured)
+  const configured = useStore((s) => s.rehearsalConfigured || !!s.rehearsalModeSetting)
+  const mode = useStore((s) => s.rehearsalModeSetting?.mode)
   const rehearsalBusy = useStore((s) => s.rehearsalBusy)
   const openRehearsal = useStore((s) => s.openRehearsal)
   const runRebase = useStore((s) => s.runInteractiveRebase)
@@ -135,7 +136,7 @@ export default function RebasePanel(): React.JSX.Element | null {
 
       <div className="rebase-foot">
         <button onClick={() => setRebaseOpen(false)}>Cancel</button>
-        {import.meta.env.DEV && configured && (
+        {import.meta.env.DEV && configured && mode !== 'off' && mode !== null && (
           <button
             disabled={busy || rehearsalBusy || loading || !!error || entries.length === 0}
             onClick={() =>

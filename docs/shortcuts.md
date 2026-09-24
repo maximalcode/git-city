@@ -64,3 +64,9 @@ In internal rehearsal history, Tab reaches Open, Stop, checkboxes and Discard;
 Space toggles a checkbox and Enter activates a button. Discard confirmation starts
 on Cancel Discard; Escape cancels it and returns focus to Discard selected.
 Completion focuses the history heading. These controls remain development-only.
+
+For the internal shared Rehearse mode, Tab reaches the mode selector and arrow
+keys change Automatic / Ask / Off. The one-time choice for known repositories
+starts on Automatic; Tab and Enter select a mode, while Escape defers the choice.
+Supported actions remain blocked until a choice is saved. Automatic opens the
+rehearsal result from the existing action; Apply still needs confirmation.

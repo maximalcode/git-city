@@ -1,4 +1,5 @@
 import { app, ipcMain, shell } from 'electron'
+import { getRehearsalMode } from './rehearsalModeIpc'
 import type { WebContents } from 'electron'
 import { basename, resolve, sep } from 'path'
 import type {
@@ -119,6 +120,17 @@ function mutating(
       try {
         const refusal = await recoveryRefusal(repoPath)
         if (refusal) return refusal
+        if (['merge', 'rebase', 'cherry-pick', 'rebase-interactive'].includes(channel)) {
+          const setting = await getRehearsalMode(repoPath)
+          if (setting && (setting.mode === null || setting.mode === 'automatic'))
+            return {
+              ok: false,
+              message:
+                setting.mode === null
+                  ? 'Choose a Rehearse mode for this repository before continuing.'
+                  : 'Automatic mode requires a rehearsal. Retry from the action in Git City.'
+            }
+        }
         let result = await fn(repoPath, ...(args as never[]))
         if (!result.ok && result.gitOutput?.includes('index.lock')) {
           await sleep(300)

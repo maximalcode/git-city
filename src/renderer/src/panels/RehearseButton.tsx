@@ -9,10 +9,11 @@ export function RehearseButton({
   action: RehearsalAction
   target: string
 }): React.JSX.Element | null {
-  const configured = useStore((s) => s.rehearsalConfigured)
+  const configured = useStore((s) => s.rehearsalConfigured || !!s.rehearsalModeSetting)
+  const mode = useStore((s) => s.rehearsalModeSetting?.mode)
   const busy = useStore((s) => s.rehearsalBusy || s.opInProgress !== null)
   const open = useStore((s) => s.openRehearsal)
-  if (!import.meta.env.DEV || !configured) return null
+  if (!import.meta.env.DEV || !configured || mode === 'off' || mode === null) return null
   return (
     <button
       disabled={busy}

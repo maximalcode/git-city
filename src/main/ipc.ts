@@ -13,6 +13,7 @@ import {
 } from './rehearsalRecovery'
 import { app, BrowserWindow, dialog, ipcMain } from 'electron'
 import { basename } from 'path'
+import { getRehearsalMode } from './rehearsalModeIpc'
 import { rehearsalAvailability, rehearse, rehearseMerge, rehearsalShow } from './rehearsal'
 import type {
   RehearsalPlan,
@@ -30,6 +31,9 @@ import { registerOpsIpc } from './ipcOps'
 
 export function registerIpc(): void {
   registerOpsIpc()
+  ipcMain.handle('git-city:rehearsal-mode', (_event, repo, known, choice) =>
+    getRehearsalMode(repo, known, choice)
+  )
 
   // Deliberately outside the retrying mutation helper; never fall back to git merge.
   const rehearsalTool = (): string | undefined =>

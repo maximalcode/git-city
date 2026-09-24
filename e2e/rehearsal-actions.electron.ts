@@ -72,7 +72,7 @@ for (const [entryKind, conflict] of [
         } else {
           await page.keyboard.press(process.platform === 'darwin' ? 'Meta+k' : 'Control+k')
           await page.getByPlaceholder('Type a command  ·  @ commits  ·  : code').fill('@' + source)
-          await page.getByRole('option').first().click()
+          await page.getByRole('listbox').getByRole('option').first().click()
         }
         const action = entryKind === 'branches' ? 'rebase' : 'cherry-pick'
         const entry = page.getByRole('button', { name: 'Rehearse ' + action, exact: true })

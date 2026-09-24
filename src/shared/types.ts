@@ -620,7 +620,19 @@ export interface RehearsalApplyResult {
 }
 
 /** API exposed to the renderer via the preload bridge. */
+export type RehearsalMode = 'automatic' | 'ask' | 'off'
+export interface RehearsalModeSetting {
+  repository: string
+  /** Existing repositories require an explicit one-time choice. */
+  mode: RehearsalMode | null
+}
+
 export interface GitCityApi {
+  rehearsalMode(
+    repo: string,
+    known: string[],
+    choice?: RehearsalMode
+  ): Promise<RehearsalModeSetting | null>
   rehearsalAvailability(): Promise<{ available: boolean; configured: boolean; message: string }>
   rehearse(
     repoPath: string,

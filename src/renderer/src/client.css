@@ -2779,3 +2779,24 @@
   margin-right: 8px;
   vertical-align: middle;
 }
+
+.rehearsal-mode {
+  position: fixed;
+  right: 16px;
+  bottom: 52px;
+  z-index: 100;
+  max-width: 330px;
+  padding: 8px 12px;
+  color: var(--text, #eee);
+  background: var(--panel-bg, #20242c);
+  border: 1px solid #727986;
+  border-radius: 8px;
+  font-size: 12px;
+}
+.rehearsal-mode select {
+  margin-left: 8px;
+}
+.rehearsal-mode :focus-visible {
+  outline: 2px solid var(--accent, #88baff);
+  outline-offset: 2px;
+}

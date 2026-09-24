@@ -1,4 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest'
+import { join } from 'path'
 import { getRehearsalMode } from './rehearsalModeIpc'
 import { rehearsalMode } from './rehearsalMode'
 const app = vi.hoisted(() => ({ isPackaged: false, getPath: () => '/user-data' }))
@@ -30,7 +31,7 @@ it('keeps saved preferences active in development even when the tool disappears'
   vi.mocked(rehearsalMode).mockResolvedValue(setting)
   expect(await getRehearsalMode('/repo')).toEqual(setting)
   expect(rehearsalMode).toHaveBeenCalledWith(
-    '/user-data/rehearsal-modes.json',
+    join('/user-data', 'rehearsal-modes.json'),
     false,
     '/repo',
     [],

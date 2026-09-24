@@ -214,25 +214,12 @@ export function rehearseMerge(
   return rehearse(tool, repo, 'merge', target)
 }
 
-export function rehearse(
+export async function rehearse(
   tool: string | undefined,
   repo: string,
   action: RehearsalAction,
   target: string,
   plan?: RehearsalPlan
-): Promise<RehearsalResult> {
-  return withRehearsalExecution(repo, (execution) =>
-    executeRehearsal(tool, repo, action, target, plan, execution)
-  )
-}
-
-async function executeRehearsal(
-  tool: string | undefined,
-  repo: string,
-  action: RehearsalAction,
-  target: string,
-  plan: RehearsalPlan | undefined,
-  execution: RehearsalExecution
 ): Promise<RehearsalResult> {
   if (
     !['merge', 'rebase', 'cherry-pick'].includes(action) ||
@@ -247,6 +234,19 @@ async function executeRehearsal(
   ) {
     return { kind: 'refused', message: 'Choose a repository and a branch or commit to rehearse.' }
   }
+  return withRehearsalExecution(repo, (execution) =>
+    executeRehearsal(tool, repo, action, target, plan, execution)
+  )
+}
+
+async function executeRehearsal(
+  tool: string | undefined,
+  repo: string,
+  action: RehearsalAction,
+  target: string,
+  plan: RehearsalPlan | undefined,
+  execution: RehearsalExecution
+): Promise<RehearsalResult> {
   if (plan !== undefined) {
     if (!plan || action !== 'rebase' || target !== (plan.base ?? 'root'))
       return { kind: 'refused', message: 'Choose the interactive plan and its original base.' }

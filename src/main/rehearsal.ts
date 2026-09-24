@@ -9,7 +9,11 @@ import type {
   RehearsalResult
 } from '../shared/types'
 import { prepareRebasePlan } from '../shared/rebasePlan'
-import { runRehearsalTool } from './rehearsalProcess'
+import {
+  runRehearsalTool,
+  withRehearsalExecution,
+  type RehearsalExecution
+} from './rehearsalProcess'
 export { runRehearsalTool } from './rehearsalProcess'
 
 const repair =
@@ -109,13 +113,15 @@ async function report(
   cwd: string,
   args: string[],
   expected?: RehearsalIdentity,
-  command = args.slice(1)
+  command = args.slice(1),
+  execution?: RehearsalExecution
 ): Promise<RehearsalResult> {
   const availability = await rehearsalAvailability(tool)
   if (!availability.available || !tool)
     return { kind: 'unavailable', message: availability.message }
   try {
     const origin = await realpath(cwd)
+    execution?.check()
     const result = await runRehearsalTool(
       tool,
       ['--json', ...args],
@@ -208,12 +214,25 @@ export function rehearseMerge(
   return rehearse(tool, repo, 'merge', target)
 }
 
-export async function rehearse(
+export function rehearse(
   tool: string | undefined,
   repo: string,
   action: RehearsalAction,
   target: string,
   plan?: RehearsalPlan
+): Promise<RehearsalResult> {
+  return withRehearsalExecution(repo, (execution) =>
+    executeRehearsal(tool, repo, action, target, plan, execution)
+  )
+}
+
+async function executeRehearsal(
+  tool: string | undefined,
+  repo: string,
+  action: RehearsalAction,
+  target: string,
+  plan: RehearsalPlan | undefined,
+  execution: RehearsalExecution
 ): Promise<RehearsalResult> {
   if (
     !['merge', 'rebase', 'cherry-pick'].includes(action) ||
@@ -243,7 +262,8 @@ export async function rehearse(
         repo,
         ['--keep', '--todo', todo, ...command],
         undefined,
-        command
+        command,
+        execution
       )
       if (result.kind === 'report') result.report.plan = plan
       return result
@@ -251,7 +271,7 @@ export async function rehearse(
       await rm(directory, { recursive: true, force: true })
     }
   }
-  return report(tool, repo, ['--keep', action, target])
+  return report(tool, repo, ['--keep', action, target], undefined, undefined, execution)
 }
 
 export async function rehearsalShow(
@@ -275,8 +295,10 @@ export async function rehearsalShow(
 /** Caller serializes this with editing for the same retained rehearsal. */
 export async function rehearsalContinue(
   tool: string | undefined,
-  identity: RehearsalIdentity
+  identity: RehearsalIdentity,
+  execution: RehearsalExecution
 ): Promise<RehearsalResult> {
+  execution.check()
   const current = await rehearsalShow(tool, identity)
   if (current.kind !== 'report') return current
   if (current.report.outcome !== 'stopped')
@@ -284,5 +306,12 @@ export async function rehearsalContinue(
       kind: 'refused',
       message: 'Only a stopped rehearsal can continue. Keep this result and start a new rehearsal.'
     }
-  return report(tool, identity.origin_worktree, ['--keep', 'continue', identity.id], identity)
+  return report(
+    tool,
+    identity.origin_worktree,
+    ['--keep', 'continue', identity.id],
+    identity,
+    undefined,
+    execution
+  )
 }

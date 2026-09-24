@@ -142,3 +142,37 @@ it('Stop never calls Apply or recovery and cannot target a non-execution busy op
   expect(rehearsalApply).not.toHaveBeenCalled()
   expect(rehearsalRecover).not.toHaveBeenCalled()
 })
+
+it('drops superseded inventory responses and errors without changing selection', async () => {
+  let finish!: (value: RehearsalInventory) => void
+  let fail!: (reason: Error) => void
+  const rehearsalList = vi
+    .fn()
+    .mockImplementationOnce(
+      () =>
+        new Promise<RehearsalInventory>((resolve) => {
+          finish = resolve
+        })
+    )
+    .mockImplementationOnce(
+      () =>
+        new Promise<RehearsalInventory>((_resolve, reject) => {
+          fail = reject
+        })
+    )
+    .mockResolvedValue(inventory([second]))
+  const rehearsalShow = vi.fn(async (entry: RehearsalEntry) => shown(entry))
+  setBridge({ rehearsalList, rehearsalShow } as unknown as GitCityApi)
+  const oldest = useStore.getState().loadRehearsals('/repo')
+  const older = useStore.getState().loadRehearsals('/repo')
+  await useStore.getState().loadRehearsals('/repo')
+  finish(inventory([first]))
+  fail(new Error('obsolete failure'))
+  await Promise.all([oldest, older])
+  expect(useStore.getState().rehearsalInventories['/repo'].entries).toEqual([second])
+  expect(useStore.getState().rehearsalCurrent['/repo']).toBe(second.id)
+  expect(useStore.getState().rehearsalManagementMessages['/repo']).toBeUndefined()
+  expect(rehearsalShow).toHaveBeenCalledExactlyOnceWith(second)
+  await useStore.getState().loadRehearsals('/repo')
+  expect(rehearsalShow).toHaveBeenCalledTimes(1)
+})

@@ -1,6 +1,7 @@
 import {
   createRehearsalManagement,
   rememberRehearsal,
+  reconcileRehearsal,
   type RehearsalManagementState
 } from './rehearsalManagement'
 import { create } from 'zustand'
@@ -593,13 +594,7 @@ export const useStore = create<GitCityState>((set, get, api) => ({
             ? {
                 rehearsalResults: {
                   ...state.rehearsalResults,
-                  [entry[0]]: {
-                    ...result,
-                    report: {
-                      ...result.report,
-                      plan: entry[1].kind === 'report' ? entry[1].report.plan : undefined
-                    }
-                  }
+                  [entry[0]]: reconcileRehearsal(result, entry[1])
                 }
               }
             : {}
@@ -609,7 +604,9 @@ export const useStore = create<GitCityState>((set, get, api) => ({
       return { kind: 'error', message: cleanError(error) }
     } finally {
       set({ rehearsalBusy: false, rehearsalExecutionRepo: null })
-      await get().loadRehearsals(get().repoPath ?? identity.origin_worktree, false)
+      await get()
+        .loadRehearsals(get().repoPath ?? identity.origin_worktree, false)
+        .catch(() => undefined)
     }
   },
   applyRehearsal: async (identity) => {
@@ -707,7 +704,9 @@ export const useStore = create<GitCityState>((set, get, api) => ({
           : state.rehearsalCurrent
     }))
     if (result.kind === 'report') rememberRehearsal(result.report.origin_worktree, result.report.id)
-    await get().loadRehearsals(repo, false)
+    await get()
+      .loadRehearsals(repo, false)
+      .catch(() => undefined)
   },
   screen: 'welcome',
   pendingRepo: null,

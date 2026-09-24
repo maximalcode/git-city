@@ -92,7 +92,6 @@ describe.skipIf(!tool)('real CLI rehearsal management', () => {
 
   it('warns about low space without deleting retained work, and treats unreadable space as unknown', async () => {
     await fixture()
-    await rehearseMerge(tool, repo, 'topic')
     vi.mocked(statfs).mockResolvedValueOnce({
       type: 0,
       bsize: 4096,
@@ -104,12 +103,15 @@ describe.skipIf(!tool)('real CLI rehearsal management', () => {
     })
     const low = await listRehearsals(tool, repo)
     expect(low.lowSpace).toBe(true)
-    expect(low.entries).toHaveLength(1)
+    expect(low.entries).toHaveLength(0)
+    expect(low.bytes).toBe(0)
+    await rehearseMerge(tool, repo, 'topic')
+    const retained = await listRehearsals(tool, repo)
     vi.mocked(statfs).mockRejectedValueOnce(new Error('unavailable'))
     const unknown = await listRehearsals(tool, repo)
     expect(unknown.freeBytes).toBeNull()
     expect(unknown.warning).toContain('unavailable')
-    expect(unknown.entries[0].id).toBe(low.entries[0].id)
+    expect(unknown.entries[0].id).toBe(retained.entries[0].id)
   }, 120_000)
 
   it('keeps linked-worktree ownership and never discards a rehearsal through another origin', async () => {

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { RehearsalEntry } from '../../../shared/types'
 import { useStore } from '../store'
+import { useRepoQuery } from '../lib/repoQuery'
 
 function bytes(value: number | null): string {
   if (value === null) return 'unknown'
@@ -28,9 +29,7 @@ export default function RehearsalHistory({ repo }: { repo: string }): React.JSX.
   const selected =
     inventory?.entries.filter((entry) => checked.includes(entry.id) && !entry.active) ?? []
 
-  useEffect(() => {
-    void load(repo)
-  }, [repo, load])
+  const query = useRepoQuery([repo], (_api, [origin]) => load(origin))
   useEffect(() => {
     if (targets) {
       confirmation.current?.showModal()
@@ -47,7 +46,7 @@ export default function RehearsalHistory({ repo }: { repo: string }): React.JSX.
         Retained rehearsals
       </h3>
       <p>Worktree: {inventory?.repository ?? repo}</p>
-      <button disabled={busy} onClick={() => void load(repo)}>
+      <button disabled={busy || query.loading} onClick={query.reload}>
         Refresh history
       </button>
       {executionRepo && (
@@ -62,7 +61,9 @@ export default function RehearsalHistory({ repo }: { repo: string }): React.JSX.
         Stop ends execution and reloads its actual state. It does not promise that Continue will be
         possible.
       </p>
-      {message && <p role="status">{message}</p>}
+      {query.loading && <p role="status">Refreshing retained history…</p>}
+      {query.error && <p role="alert">{query.error}</p>}
+      {message && message !== query.error && <p role="status">{message}</p>}
       {inventory && (
         <>
           <p>

@@ -1,6 +1,6 @@
 import { withRehearsal } from './rehearsalConflicts'
 import { lstat, readdir, realpath, statfs } from 'fs/promises'
-import { isAbsolute, join } from 'path'
+import { dirname, isAbsolute, join, resolve } from 'path'
 import type {
   RehearsalDiscardResult,
   RehearsalEntry,
@@ -85,16 +85,43 @@ async function listing(
   return { tool, origin, entries }
 }
 
+/** Cache location follows the pinned CLI's documented environment/platform precedence. */
+function cacheRoot(repo: string): string | null {
+  if (process.env.GIT_REHEARSE_CACHE_DIR) return resolve(repo, process.env.GIT_REHEARSE_CACHE_DIR)
+  const xdg = process.env.XDG_CACHE_HOME
+  if (xdg && isAbsolute(xdg)) return join(xdg, 'git-rehearse')
+  const home = process.env.HOME
+  const base =
+    process.platform === 'win32'
+      ? process.env.LOCALAPPDATA
+      : home && join(home, process.platform === 'darwin' ? 'Library/Caches' : '.cache')
+  return base ? join(base, 'git-rehearse') : null
+}
+
+async function availableSpace(
+  root: string | null,
+  nearestExisting = false
+): Promise<number | null> {
+  if (!root) return null
+  try {
+    const volume = await statfs(root)
+    return volume.bavail * volume.bsize
+  } catch (error) {
+    // A first rehearsal may not have created its cache directory yet.
+    if (
+      nearestExisting &&
+      (error as NodeJS.ErrnoException).code === 'ENOENT' &&
+      dirname(root) !== root
+    )
+      return availableSpace(dirname(root), true)
+    return null
+  }
+}
+
 /** Logical bytes, without following symlinks or counting hard links as freeable space. */
 async function storage(root: string): Promise<{ bytes: number | null; freeBytes: number | null }> {
   let bytes: number | null = null
-  let freeBytes: number | null = null
-  try {
-    const volume = await statfs(root)
-    freeBytes = volume.bavail * volume.bsize
-  } catch {
-    /* Missing or inaccessible volume: unknown, never zero. */
-  }
+  const freeBytes = await availableSpace(root)
   try {
     const count = async (entry: string): Promise<number> => {
       const stat = await lstat(entry)
@@ -159,7 +186,11 @@ export async function listRehearsals(
   }
   const knownFree = entries.flatMap((entry) => (entry.freeBytes === null ? [] : [entry.freeBytes]))
   const freeBytes =
-    knownFree.length === entries.length && entries.length ? Math.min(...knownFree) : null
+    entries.length === 0
+      ? await availableSpace(cacheRoot(listed.origin), true)
+      : knownFree.length === entries.length
+        ? Math.min(...knownFree)
+        : null
   return {
     repository: listed.origin,
     entries: entries.sort((a, b) => b.created_unix - a.created_unix || b.id.localeCompare(a.id)),
@@ -167,12 +198,14 @@ export async function listRehearsals(
       ? null
       : entries.reduce((sum, entry) => sum + entry.bytes!, 0),
     freeBytes,
-    lowSpace: knownFree.some((bytes) => bytes < 1024 ** 3),
+    lowSpace:
+      (freeBytes !== null && freeBytes < 1024 ** 3) || knownFree.some((bytes) => bytes < 1024 ** 3),
     protected: recovery.state !== 'none',
     warning:
       recovery.state !== 'none'
         ? recovery.message
-        : entries.some((entry) => entry.bytes === null || entry.freeBytes === null)
+        : freeBytes === null ||
+            entries.some((entry) => entry.bytes === null || entry.freeBytes === null)
           ? 'Some storage measurements are unavailable. No data was deleted.'
           : undefined
   }

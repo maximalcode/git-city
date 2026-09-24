@@ -156,7 +156,9 @@ test('retained history survives an Electron restart and keyboard discard/stop pr
     await page.getByLabel('Branch or commit to merge into the current checkout').fill('topic')
     await page.getByRole('button', { name: 'Rehearse', exact: true }).click()
     await expect.poll(async () => readFile(sentinel, 'utf8').catch(() => null)).toBe('')
-    await page.keyboard.press('Escape')
+    await page.getByRole('button', { name: 'Keep and close', exact: true }).focus()
+    await page.keyboard.press('Enter')
+    await expect(page.getByRole('button', { name: 'Rehearse (internal)' })).toBeFocused()
     await page.getByRole('button', { name: 'Rehearse (internal)' }).click()
     await page.getByRole('button', { name: 'Stop rehearsal', exact: true }).focus()
     await page.keyboard.press('Enter')
@@ -184,6 +186,6 @@ test('retained history survives an Electron restart and keyboard discard/stop pr
         .catch(() => undefined)
       await app.close()
     }
-    await rm(root, { recursive: true, force: true })
+    await rm(root, { recursive: true, force: true, maxRetries: 5 })
   }
 })

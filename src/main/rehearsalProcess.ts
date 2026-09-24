@@ -1,20 +1,67 @@
 import { spawn } from 'child_process'
 import { realpath } from 'fs/promises'
-import type { OpResult } from '../shared/types'
+import type { OpResult, RehearsalResult } from '../shared/types'
 import { searchPath } from './git/exec'
 
 type Execution = { stop(): Promise<void>; done: Promise<void> }
 const executions = new Map<string, Execution>()
+export interface RehearsalExecution {
+  check(): void
+}
+type PendingExecution = RehearsalExecution & { cancelled: boolean; done: Promise<void> }
+const pending = new Map<string, PendingExecution>()
+
+/** Register before the first asynchronous preparation step, including queued Continue. */
+export async function withRehearsalExecution(
+  repo: string,
+  operation: (execution: RehearsalExecution) => Promise<RehearsalResult>
+): Promise<RehearsalResult> {
+  if (pending.has(repo))
+    return { kind: 'refused', message: 'A rehearsal is already running in this worktree.' }
+  let finish!: () => void
+  const execution: PendingExecution = {
+    cancelled: false,
+    done: new Promise<void>((resolve) => {
+      finish = resolve
+    }),
+    check() {
+      if (this.cancelled)
+        throw new Error('Execution stopped before launch. Retained work has been preserved.')
+    }
+  }
+  pending.set(repo, execution)
+  let origin: string | undefined
+  try {
+    origin = await realpath(repo)
+    if (pending.has(origin) && pending.get(origin) !== execution)
+      throw new Error('A rehearsal is already running in this worktree.')
+    pending.set(origin, execution)
+    execution.check()
+    return await operation(execution)
+  } catch (error) {
+    return {
+      kind: 'error',
+      message: error instanceof Error ? error.message : 'Rehearsal could not run.'
+    }
+  } finally {
+    if (pending.get(repo) === execution) pending.delete(repo)
+    if (origin && pending.get(origin) === execution) pending.delete(origin)
+    finish()
+  }
+}
 
 /** Apply/recovery are never registered here. Ownership is a live child handle,
  * not a persisted PID or the CLI's implicitly latest rehearsal. */
 export async function stopRehearsal(repo: string): Promise<OpResult> {
   try {
+    const preparation = pending.get(repo) ?? pending.get(await realpath(repo))
+    if (preparation) preparation.cancelled = true
     const execution = executions.get(await realpath(repo))
-    if (!execution)
+    if (!execution && !preparation)
       return { ok: false, message: 'No app-owned rehearsal is running in this worktree.' }
-    await execution.stop()
-    await execution.done
+    await execution?.stop()
+    await execution?.done
+    await preparation?.done
     return {
       ok: true,
       message: 'Execution ended. Retained state will be reloaded; continuation is not guaranteed.'
@@ -69,7 +116,8 @@ export function runRehearsalTool(
           // Terminate the owned process tree, including Git/merge-driver children.
           await new Promise<void>((resolve, reject) => {
             const killer = spawn('taskkill', ['/PID', String(child.pid), '/T', '/F'], {
-              windowsHide: true
+              windowsHide: true,
+              stdio: 'ignore'
             })
             killer.on('error', reject)
             killer.on('close', (code) =>

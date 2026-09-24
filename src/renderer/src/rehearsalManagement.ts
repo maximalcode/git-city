@@ -76,7 +76,15 @@ export const createRehearsalManagement: StateCreator<
           const result = get().rehearsalResults[repo]
           const id = result?.kind === 'report' ? result.report.id : remembered(inventory.repository)
           const entry = inventory.entries.find((entry) => entry.id === id) ?? inventory.entries[0]
-          if (entry && !(result?.kind === 'report' && result.report.id === entry.id))
+          if (
+            entry &&
+            !(
+              result?.kind === 'report' &&
+              result.report.id === entry.id &&
+              result.report.outcome === entry.execution &&
+              !entry.active
+            )
+          )
             await get().selectRehearsal(repo, entry, () => requests.get(repo) === request)
           else if (entry) return inventory
           else

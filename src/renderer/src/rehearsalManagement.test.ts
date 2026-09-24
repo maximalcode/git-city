@@ -176,3 +176,63 @@ it('drops superseded inventory responses and errors without changing selection',
   await useStore.getState().loadRehearsals('/repo')
   expect(rehearsalShow).toHaveBeenCalledTimes(1)
 })
+
+it.each(['before', 'after'])(
+  'replaces the stopped report when Stop responds %s Continue settles',
+  async (order) => {
+    let finish!: (result: { kind: 'error'; message: string }) => void
+    const rehearsalContinue = vi.fn(
+      () =>
+        new Promise<{ kind: 'error'; message: string }>((resolve) => {
+          finish = resolve
+        })
+    )
+    const rehearsalShow = vi.fn(async () => shown(first))
+    const rehearsalList = vi.fn(async () => inventory([first]))
+    let finishStop!: (result: { ok: boolean; message: string }) => void
+    const rehearsalStop = vi.fn(
+      () =>
+        new Promise<{ ok: boolean; message: string }>((resolve) => {
+          finishStop = resolve
+        })
+    )
+    setBridge({
+      rehearsalContinue,
+      rehearsalShow,
+      rehearsalList,
+      rehearsalStop
+    } as unknown as GitCityApi)
+    useStore.setState({
+      rehearsalResults: {
+        '/repo': {
+          kind: 'report',
+          report: {
+            ...shown(first).report,
+            outcome: 'stopped',
+            conflicted: true
+          }
+        }
+      },
+      rehearsalCurrent: { '/repo': first.id }
+    })
+    const continuing = useStore
+      .getState()
+      .refreshRehearsal({ ...shown(first).report, outcome: 'stopped' }, true)
+    const stop = useStore.getState().stopRehearsal()
+    if (order === 'before') {
+      finishStop({ ok: true, message: 'Execution ended' })
+      await stop
+    }
+    finish({ kind: 'error', message: 'Execution interrupted' })
+    await continuing
+    if (order === 'after') finishStop({ ok: true, message: 'Execution ended' })
+    await stop
+    expect(rehearsalStop).toHaveBeenCalledExactlyOnceWith('/repo')
+    expect(useStore.getState().rehearsalResults['/repo']).toEqual(shown(first))
+    // RehearsalPanel mounts the conflict editor/Continue only for outcome=stopped.
+    expect(useStore.getState().rehearsalResults['/repo']).toMatchObject({
+      kind: 'report',
+      report: { outcome: 'incomplete', conflicted: false }
+    })
+  }
+)

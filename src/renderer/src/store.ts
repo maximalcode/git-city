@@ -605,7 +605,7 @@ export const useStore = create<GitCityState>((set, get, api) => ({
     } finally {
       set({ rehearsalBusy: false, rehearsalExecutionRepo: null })
       await get()
-        .loadRehearsals(get().repoPath ?? identity.origin_worktree, false)
+        .loadRehearsals(get().repoPath ?? identity.origin_worktree, resume)
         .catch(() => undefined)
     }
   },

@@ -1,4 +1,3 @@
-import { spawn } from 'child_process'
 import { mkdtemp, writeFile, rm, realpath } from 'fs/promises'
 import { isAbsolute, join } from 'path'
 import { tmpdir } from 'os'
@@ -10,50 +9,11 @@ import type {
   RehearsalResult
 } from '../shared/types'
 import { prepareRebasePlan } from '../shared/rebasePlan'
-import { searchPath } from './git/exec'
+import { runRehearsalTool } from './rehearsalProcess'
+export { runRehearsalTool } from './rehearsalProcess'
 
 const repair =
   'Rehearse is internal. Configure GIT_CITY_REHEARSE_BIN with an absolute path to a compatible development build of git-rehearse.'
-
-export function runRehearsalTool(
-  tool: string,
-  args: string[],
-  cwd?: string
-): Promise<{ code: number; stdout: string; stderr: string }> {
-  return new Promise((resolve, reject) => {
-    const child = spawn(tool, args, {
-      cwd,
-      stdio: ['ignore', 'pipe', 'pipe'],
-      env: {
-        ...process.env,
-        PATH: searchPath(),
-        GIT_TERMINAL_PROMPT: '0',
-        GIT_EDITOR: 'true',
-        GIT_SEQUENCE_EDITOR: 'true'
-      }
-    })
-    let stdout = ''
-    let stderr = ''
-    let bytes = 0
-    child.stdout.setEncoding('utf8')
-    child.stdout.on('data', (chunk: string) => {
-      bytes += Buffer.byteLength(chunk)
-      if (bytes > 16 * 1024 * 1024) {
-        child.kill()
-        reject(
-          new Error('Rehearse returned too much data. Any retained rehearsal remains on disk.')
-        )
-      } else stdout += chunk
-    })
-    child.stderr.setEncoding('utf8')
-    child.stderr.on('data', (chunk: string) => {
-      // Retain a bounded explanation while continuing to drain the pipe.
-      stderr = (stderr + chunk).slice(-64 * 1024)
-    })
-    child.on('error', reject)
-    child.on('close', (code) => resolve({ code: code ?? -1, stdout, stderr }))
-  })
-}
 
 export async function rehearsalAvailability(
   tool?: string
@@ -156,7 +116,16 @@ async function report(
     return { kind: 'unavailable', message: availability.message }
   try {
     const origin = await realpath(cwd)
-    const result = await runRehearsalTool(tool, ['--json', ...args], origin)
+    const result = await runRehearsalTool(
+      tool,
+      ['--json', ...args],
+      origin,
+      args.includes('--keep')
+    )
+    if (result.code === -1)
+      throw new Error(
+        'Execution interrupted. Retained work has been preserved; refresh history to inspect its actual state.'
+      )
     const value: unknown = JSON.parse(result.stdout)
     if (!object(value) || value.schema !== 1)
       throw new Error(
@@ -164,6 +133,27 @@ async function report(
       )
     if ((value.kind === 'refused' || value.kind === 'internal') && string(value.message)) {
       return { kind: value.kind === 'refused' ? 'refused' : 'error', message: value.message }
+    }
+    if (
+      expected &&
+      value.active === false &&
+      value.execution === 'incomplete' &&
+      value.lifecycle === 'kept' &&
+      strings(value.command) &&
+      object(value.checkout) &&
+      object(value.pre_state)
+    ) {
+      Object.assign(value, {
+        decision: 'kept',
+        outcome: 'incomplete',
+        exit_code: result.code,
+        can_apply: false,
+        conflicted: false,
+        drift_unexpected: false,
+        refs: [],
+        conflicts: [],
+        drift: []
+      })
     }
     if (!isReport(value))
       throw new Error(

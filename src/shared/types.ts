@@ -555,6 +555,36 @@ export interface RehearsalReport extends RehearsalIdentity {
   carried?: { paths: string[]; status: string; conflicts: string[]; reason?: string }
 }
 
+/** Inventory belongs to one canonical original worktree. Byte counts are logical,
+ * including shared Git objects; they are not a prediction of freed disk space. */
+export interface RehearsalEntry extends RehearsalIdentity {
+  command: string[]
+  checkout: RehearsalReport['checkout']
+  pre_state: Record<string, string>
+  created_unix: number
+  execution: RehearsalReport['outcome']
+  lifecycle: 'kept' | 'fresh'
+  active: boolean
+  stale: boolean
+  bytes: number | null
+  freeBytes: number | null
+}
+
+export interface RehearsalInventory {
+  repository: string
+  entries: RehearsalEntry[]
+  bytes: number | null
+  freeBytes: number | null
+  lowSpace: boolean
+  protected: boolean
+  warning?: string
+}
+
+export interface RehearsalDiscardResult {
+  discarded: string[]
+  failures: { id: string; message: string }[]
+}
+
 export interface RehearsalConflict {
   file: ConflictFile
   external?: boolean
@@ -615,6 +645,10 @@ export interface GitCityApi {
   ): Promise<void>
   rehearsalContinue(identity: RehearsalIdentity): Promise<RehearsalResult>
   rehearsalShow(identity: RehearsalIdentity): Promise<RehearsalResult>
+  rehearsalList(repo: string): Promise<RehearsalInventory>
+  rehearsalDiscard(repo: string, identities: RehearsalIdentity[]): Promise<RehearsalDiscardResult>
+  /** Stops only the app-owned preview/Continue process for this exact worktree. */
+  rehearsalStop(repo: string): Promise<OpResult>
 
   /** The installed git, or null if there isn't one on PATH. */
   checkGit(): Promise<GitVersion | null>

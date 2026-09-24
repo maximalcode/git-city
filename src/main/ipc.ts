@@ -1,3 +1,5 @@
+import { listRehearsals, discardRehearsals } from './rehearsalManagement'
+import { stopRehearsal } from './rehearsalProcess'
 import {
   readRehearsalConflict,
   saveRehearsalConflict,
@@ -40,6 +42,13 @@ export function registerIpc(): void {
   )
   ipcMain.handle('git-city:rehearse-merge', (_event, repo: string, target: string) =>
     rehearseMerge(rehearsalTool(), repo, target)
+  )
+  ipcMain.handle('git-city:rehearsal-list', (_event, repo) => listRehearsals(rehearsalTool(), repo))
+  ipcMain.handle('git-city:rehearsal-discard', (_event, repo, identities) =>
+    discardRehearsals(rehearsalTool(), repo, identities)
+  )
+  ipcMain.handle('git-city:rehearsal-stop', (_event, repo) =>
+    app.isPackaged ? { ok: false, message: 'Rehearse is internal.' } : stopRehearsal(repo)
   )
   ipcMain.handle('git-city:rehearsal-show', (_event, identity: RehearsalIdentity) =>
     rehearsalShow(rehearsalTool(), identity)

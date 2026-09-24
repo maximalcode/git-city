@@ -160,7 +160,7 @@ fly-to.
 An explicitly configured git-rehearse development build enables an internal
 merge, normal rebase and single-commit cherry-pick preview with retained results,
 branch/commit and file consequences,
-conflicts and textual content warnings. Closing keeps the preview. Confirmed
+conflicts and textual content warnings. Closing keeps the preview. Retained history and the current selection survive app restarts; each worktree has its own inventory. Stop ends app-owned preview/Continue execution and reloads its state without promising resumability. Confirmed single/batch Discard protects active and recovery data. Logical storage use and low-space warnings support deliberate cleanup, with no automatic deletion. Confirmed
 Apply adopts the checked result after backend revalidation. Interrupted Apply
 blocks repository writes across worktrees and offers backend-approved recovery.
 Public entry points remain unavailable pending the complete safety workflow.

@@ -59,3 +59,8 @@ Enter activates buttons; Escape keeps and closes the rehearsal panel. See
 In the internal interactive-rebase flow, Tab reaches Move up/down and Pick/Squash/Drop;
 Enter activates them. Rehearse opens the shared dialog with focus on submission,
 and Escape returns to the plan entry.
+
+In internal rehearsal history, Tab reaches Open, Stop, checkboxes and Discard;
+Space toggles a checkbox and Enter activates a button. Discard confirmation starts
+on Cancel Discard; Escape cancels it and returns focus to Discard selected.
+Completion focuses the history heading. These controls remain development-only.

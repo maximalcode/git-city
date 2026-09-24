@@ -1,11 +1,11 @@
 # Internal rehearsal
 
-Merge, normal and interactive rebase, and single-commit cherry-pick rehearsal are an internal development preview for #143–#148, not a public
+Merge, normal and interactive rebase, and single-commit cherry-pick rehearsal are an internal development preview for #143–#149, not a public
 feature. Packaged applications have no entry point and reject these operations.
 Checked Apply and mandatory recovery are available only in development. Public
 activation remains gated on the complete cross-platform safety workflow.
 
-Use a git-rehearse development build incorporating git-rehearse #87–#90 (durable
+Use a git-rehearse development build incorporating git-rehearse #87–#90 and #105 (durable
 retention, checked Apply, recovery and worktree-aware schema 1 reports). Its current version is 1.2.0;
 the older published 1.2.0 does not supply the required report fields. Set
 `GIT_CITY_REHEARSE_BIN` to the executable's absolute path before `npm run dev`.
@@ -18,7 +18,7 @@ Open a repository, activate **Rehearse (internal)**, enter a branch or commit,
 and press **Rehearse**. Tab navigates the native modal, Enter submits the form,
 and Escape or **Keep and close** closes it. Focus moves to the result on completion
 and returns to the entry button on closing. Closing during execution does not
-stop it. Reopening shows the current worktree's result. A response arriving after
+stop it. Reopening reloads the current worktree’s retained history. A response arriving after
 switching repositories stays associated with its original worktree.
 
 For normal rebase, open **Branches** and activate **Rehearse rebase** beside the
@@ -55,8 +55,47 @@ The CLI receives `--json --keep <merge|rebase|cherry-pick> <target>` (interactiv
 `--todo <prepared-file>` before `rebase -i <base|--root>`) with separate arguments and no
 interactive stdin. Closing never issues discard. The bridge's show operation uses
 the exact ID and checks repository/worktree identity on the returned report.
-Persistent in-app listing belongs to a later ticket. For now, after restarting the app, use the configured CLI's `--json list`
-and `--json show <exact-id>` from the original worktree to inspect retained work.
+The panel reloads `--json list` and inspects the selected exact ID with `--json show`.
+The CLI owns retained data; browser preferences remember only the current selection.
+After restart, the selection is restored when still present, otherwise the newest
+retained entry is selected. Each worktree has its own history and selection.
+
+## History, Stop and storage
+
+**Retained rehearsals** lists every entry for the original worktree, including
+outdated results, conflicts and interrupted execution. **Open <ID>** switches the
+current result; the pressed/current label identifies it. **Refresh history** reloads
+changes made by other CLI processes. Changed checkout/ref bases are marked with a
+text warning. This is an inspection hint; Apply still performs its authoritative
+checks of refs, local work and worktree occupancy.
+
+**Stop rehearsal** ends only a preview or Continue launched by this app and waits
+for its process tree to finish, then reloads the actual retained state. On Unix it
+sends termination to the process group and escalates after three seconds if needed;
+on Windows it terminates the owned process tree. Apply and recovery cannot be
+stopped through this control. An interrupted result is preserved and shown as
+incomplete; it cannot be applied or automatically continued. Work active in another
+process is labelled and protected; wait for that process to finish, then refresh.
+Closing the panel leaves execution running and never issues discard.
+
+Select one or more checkboxes and choose **Discard selected**. The confirmation
+names each exact ID, action, worktree, checkout and measured size. Focus starts on
+**Cancel Discard**; Tab then Enter confirms. Escape cancels and restores focus to
+Discard selected. Completion focuses the history heading. Active or recovery-protected
+work is disabled, and the CLI checks those protections again during deletion. A
+partial failure names each failed ID; unselected and refused entries remain intact.
+Discard never uses the CLI’s implicit latest result or `--all`.
+
+The panel shows total logical bytes for this worktree’s retained entries and the
+minimum available space on their storage volumes. Shared/hard-linked Git objects
+are included, so logical size is not an estimate of space freed by discard. Less
+than 1 GiB available raises a text warning. Unreadable measurements (or no storage
+volume yet) are shown as unknown, never zero. There is no timer-based cleanup;
+CLI list/pruning continues to preserve explicitly kept work.
+
+Tab, Space and Enter operate history selection, checkboxes, Stop and confirmation.
+No new global shortcut is introduced. Save any unsaved conflict-editor text before
+switching rehearsals; saved sandbox contents persist across sessions.
 
 ## Sandbox conflicts
 
@@ -158,3 +197,10 @@ stops, stale editor buffers, wrong identities, traversal/symlink/hard-link refus
 unchanged original HEAD/index/files before Apply and exact adopted commits/content.
 The Electron conflict test exercises hunk choices, free text, stale-buffer warning,
 refresh, staging, Continue and confirmed Apply through keyboard actions.
+
+The management integration tests use real CLI processes for exact discard, active
+ownership refusal, recovery protection, linked-worktree isolation, Stop, retained
+incomplete state and preservation of non-selected work. Storage failure/low-space
+responses are injected without deleting data. The Electron management test closes
+and restarts the actual app with the same profile, restores its selected rehearsal,
+and exercises single/batch discard confirmation and Stop through keyboard actions.

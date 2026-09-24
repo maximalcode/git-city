@@ -1,3 +1,4 @@
+import { withRehearsalExecution } from './rehearsalProcess'
 import { createHash } from 'crypto'
 import { constants, type Stats } from 'fs'
 import { lstat, open, realpath } from 'fs/promises'
@@ -204,4 +205,6 @@ export const continueRehearsal = (
   tool: string | undefined,
   identity: RehearsalIdentity
 ): ReturnType<typeof rehearsalContinue> =>
-  withRehearsal(identity, () => rehearsalContinue(tool, identity))
+  withRehearsalExecution(identity.origin_worktree, (execution) =>
+    withRehearsal(identity, () => rehearsalContinue(tool, identity, execution))
+  )

@@ -1,4 +1,3 @@
-import { spawn } from 'child_process'
 import { mkdtemp, writeFile, rm, realpath } from 'fs/promises'
 import { isAbsolute, join } from 'path'
 import { tmpdir } from 'os'
@@ -10,50 +9,15 @@ import type {
   RehearsalResult
 } from '../shared/types'
 import { prepareRebasePlan } from '../shared/rebasePlan'
-import { searchPath } from './git/exec'
+import {
+  runRehearsalTool,
+  withRehearsalExecution,
+  type RehearsalExecution
+} from './rehearsalProcess'
+export { runRehearsalTool } from './rehearsalProcess'
 
 const repair =
   'Rehearse is internal. Configure GIT_CITY_REHEARSE_BIN with an absolute path to a compatible development build of git-rehearse.'
-
-export function runRehearsalTool(
-  tool: string,
-  args: string[],
-  cwd?: string
-): Promise<{ code: number; stdout: string; stderr: string }> {
-  return new Promise((resolve, reject) => {
-    const child = spawn(tool, args, {
-      cwd,
-      stdio: ['ignore', 'pipe', 'pipe'],
-      env: {
-        ...process.env,
-        PATH: searchPath(),
-        GIT_TERMINAL_PROMPT: '0',
-        GIT_EDITOR: 'true',
-        GIT_SEQUENCE_EDITOR: 'true'
-      }
-    })
-    let stdout = ''
-    let stderr = ''
-    let bytes = 0
-    child.stdout.setEncoding('utf8')
-    child.stdout.on('data', (chunk: string) => {
-      bytes += Buffer.byteLength(chunk)
-      if (bytes > 16 * 1024 * 1024) {
-        child.kill()
-        reject(
-          new Error('Rehearse returned too much data. Any retained rehearsal remains on disk.')
-        )
-      } else stdout += chunk
-    })
-    child.stderr.setEncoding('utf8')
-    child.stderr.on('data', (chunk: string) => {
-      // Retain a bounded explanation while continuing to drain the pipe.
-      stderr = (stderr + chunk).slice(-64 * 1024)
-    })
-    child.on('error', reject)
-    child.on('close', (code) => resolve({ code: code ?? -1, stdout, stderr }))
-  })
-}
 
 export async function rehearsalAvailability(
   tool?: string
@@ -149,14 +113,25 @@ async function report(
   cwd: string,
   args: string[],
   expected?: RehearsalIdentity,
-  command = args.slice(1)
+  command = args.slice(1),
+  execution?: RehearsalExecution
 ): Promise<RehearsalResult> {
   const availability = await rehearsalAvailability(tool)
   if (!availability.available || !tool)
     return { kind: 'unavailable', message: availability.message }
   try {
     const origin = await realpath(cwd)
-    const result = await runRehearsalTool(tool, ['--json', ...args], origin)
+    execution?.check()
+    const result = await runRehearsalTool(
+      tool,
+      ['--json', ...args],
+      origin,
+      args.includes('--keep')
+    )
+    if (result.code === -1)
+      throw new Error(
+        'Execution interrupted. Retained work has been preserved; refresh history to inspect its actual state.'
+      )
     const value: unknown = JSON.parse(result.stdout)
     if (!object(value) || value.schema !== 1)
       throw new Error(
@@ -164,6 +139,32 @@ async function report(
       )
     if ((value.kind === 'refused' || value.kind === 'internal') && string(value.message)) {
       return { kind: value.kind === 'refused' ? 'refused' : 'error', message: value.message }
+    }
+    if (expected && value.active === true)
+      return {
+        kind: 'refused',
+        message: 'Rehearsal is in use by another process. Refresh after it finishes.'
+      }
+    if (
+      expected &&
+      value.active === false &&
+      value.execution === 'incomplete' &&
+      value.lifecycle === 'kept' &&
+      strings(value.command) &&
+      object(value.checkout) &&
+      object(value.pre_state)
+    ) {
+      Object.assign(value, {
+        decision: 'kept',
+        outcome: 'incomplete',
+        exit_code: result.code,
+        can_apply: false,
+        conflicted: false,
+        drift_unexpected: false,
+        refs: [],
+        conflicts: [],
+        drift: []
+      })
     }
     if (!isReport(value))
       throw new Error(
@@ -238,6 +239,19 @@ export async function rehearse(
   ) {
     return { kind: 'refused', message: 'Choose a repository and a branch or commit to rehearse.' }
   }
+  return withRehearsalExecution(repo, (execution) =>
+    executeRehearsal(tool, repo, action, target, plan, execution)
+  )
+}
+
+async function executeRehearsal(
+  tool: string | undefined,
+  repo: string,
+  action: RehearsalAction,
+  target: string,
+  plan: RehearsalPlan | undefined,
+  execution: RehearsalExecution
+): Promise<RehearsalResult> {
   if (plan !== undefined) {
     if (!plan || action !== 'rebase' || target !== (plan.base ?? 'root'))
       return { kind: 'refused', message: 'Choose the interactive plan and its original base.' }
@@ -253,7 +267,8 @@ export async function rehearse(
         repo,
         ['--keep', '--todo', todo, ...command],
         undefined,
-        command
+        command,
+        execution
       )
       if (result.kind === 'report') result.report.plan = plan
       return result
@@ -261,7 +276,7 @@ export async function rehearse(
       await rm(directory, { recursive: true, force: true })
     }
   }
-  return report(tool, repo, ['--keep', action, target])
+  return report(tool, repo, ['--keep', action, target], undefined, undefined, execution)
 }
 
 export async function rehearsalShow(
@@ -285,8 +300,10 @@ export async function rehearsalShow(
 /** Caller serializes this with editing for the same retained rehearsal. */
 export async function rehearsalContinue(
   tool: string | undefined,
-  identity: RehearsalIdentity
+  identity: RehearsalIdentity,
+  execution: RehearsalExecution
 ): Promise<RehearsalResult> {
+  execution.check()
   const current = await rehearsalShow(tool, identity)
   if (current.kind !== 'report') return current
   if (current.report.outcome !== 'stopped')
@@ -294,5 +311,12 @@ export async function rehearsalContinue(
       kind: 'refused',
       message: 'Only a stopped rehearsal can continue. Keep this result and start a new rehearsal.'
     }
-  return report(tool, identity.origin_worktree, ['--keep', 'continue', identity.id], identity)
+  return report(
+    tool,
+    identity.origin_worktree,
+    ['--keep', 'continue', identity.id],
+    identity,
+    undefined,
+    execution
+  )
 }

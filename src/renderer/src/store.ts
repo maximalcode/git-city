@@ -1,3 +1,9 @@
+import {
+  createRehearsalManagement,
+  rememberRehearsal,
+  reconcileRehearsal,
+  type RehearsalManagementState
+} from './rehearsalManagement'
 import { create } from 'zustand'
 import type {
   RehearsalPlan,
@@ -288,7 +294,7 @@ export function statusFingerprint(s: WorkingStatus | null): string {
   }|${s.files.map((f) => `${f.path}:${f.index}${f.worktree}${f.conflicted ? 'C' : ''}`).join(',')}`
 }
 
-interface GitCityState {
+export interface GitCityState extends RehearsalManagementState {
   screen: 'welcome' | 'loading' | 'city'
   /** a repo big enough to be worth warning about, awaiting the user's go-ahead */
   pendingRepo: { path: string; warning: RepoWarning } | null
@@ -535,7 +541,8 @@ async function readRehearsalRecovery(api: GitCityApi, repo: string): Promise<Reh
 
 let lastFingerprint = ''
 
-export const useStore = create<GitCityState>((set, get) => ({
+export const useStore = create<GitCityState>((set, get, api) => ({
+  ...createRehearsalManagement(set, get, api),
   rehearsalRecovery: {},
   rehearsalApplications: {},
   checkRehearsalRecovery: async () => {
@@ -569,7 +576,7 @@ export const useStore = create<GitCityState>((set, get) => ({
   refreshRehearsal: async (identity, resume = false) => {
     const api = bridge()
     if (!api || get().rehearsalBusy) return
-    set({ rehearsalBusy: true })
+    set({ rehearsalBusy: true, rehearsalExecutionRepo: resume ? identity.origin_worktree : null })
     try {
       const result = await (resume ? api.rehearsalContinue(identity) : api.rehearsalShow(identity))
       if (result.kind === 'report')
@@ -587,13 +594,7 @@ export const useStore = create<GitCityState>((set, get) => ({
             ? {
                 rehearsalResults: {
                   ...state.rehearsalResults,
-                  [entry[0]]: {
-                    ...result,
-                    report: {
-                      ...result.report,
-                      plan: entry[1].kind === 'report' ? entry[1].report.plan : undefined
-                    }
-                  }
+                  [entry[0]]: reconcileRehearsal(result, entry[1])
                 }
               }
             : {}
@@ -602,7 +603,10 @@ export const useStore = create<GitCityState>((set, get) => ({
     } catch (error) {
       return { kind: 'error', message: cleanError(error) }
     } finally {
-      set({ rehearsalBusy: false })
+      set({ rehearsalBusy: false, rehearsalExecutionRepo: null })
+      await get()
+        .loadRehearsals(get().repoPath ?? identity.origin_worktree, resume)
+        .catch(() => undefined)
     }
   },
   applyRehearsal: async (identity) => {
@@ -677,7 +681,7 @@ export const useStore = create<GitCityState>((set, get) => ({
     const api = bridge()
     const repo = get().repoPath
     if (!api || !repo || get().rehearsalBusy) return
-    set({ rehearsalBusy: true })
+    set({ rehearsalBusy: true, rehearsalExecutionRepo: repo })
     let result: RehearsalResult
     try {
       result =
@@ -692,8 +696,17 @@ export const useStore = create<GitCityState>((set, get) => ({
     // Keep ownership even if the user switched repositories while the CLI ran.
     set((state) => ({
       rehearsalBusy: false,
-      rehearsalResults: { ...state.rehearsalResults, [repo]: result }
+      rehearsalResults: { ...state.rehearsalResults, [repo]: result },
+      rehearsalExecutionRepo: null,
+      rehearsalCurrent:
+        result.kind === 'report'
+          ? { ...state.rehearsalCurrent, [repo]: result.report.id }
+          : state.rehearsalCurrent
     }))
+    if (result.kind === 'report') rememberRehearsal(result.report.origin_worktree, result.report.id)
+    await get()
+      .loadRehearsals(repo, false)
+      .catch(() => undefined)
   },
   screen: 'welcome',
   pendingRepo: null,

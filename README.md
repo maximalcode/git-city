@@ -197,7 +197,8 @@ Taking part means agreeing to the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 Development builds also support interactive-rebase rehearsal of the existing plan and [internal sandbox conflict editing](docs/rehearsal-development.md#sandbox-text-conflicts)
 with Tab/Enter navigation, checked save-and-stage and repeated Continue before
-confirmed Apply. This preview is hidden in packaged applications.
+confirmed Apply. Retained rehearsal history survives restarts, with Stop, confirmed
+single/batch Discard and storage warnings. This preview is hidden in packaged applications.
 
 ## License
 

@@ -2416,7 +2416,9 @@
     calc(100% - 13px) 50%,
     calc(100% - 9px) 50%;
   background-repeat: no-repeat;
-  background-size: 5px 5px, 5px 5px;
+  background-size:
+    5px 5px,
+    5px 5px;
   border: 1px solid var(--panel-border);
   border-radius: 8px;
   padding: 6px 30px 6px 10px;
@@ -2736,7 +2738,7 @@
 .rehearsal-dialog::backdrop {
   background: #0009;
 }
-.rehearsal-dialog input {
+.rehearsal-dialog input:not([type='checkbox']) {
   display: block;
   width: 100%;
   margin: 8px 0;
@@ -2762,11 +2764,18 @@
 .rehearsal-dialog form {
   margin: 16px 0;
 }
-.rehearsal-dialog input {
+.rehearsal-dialog input:not([type='checkbox']) {
   padding: 8px 10px;
   border: 1px solid var(--panel-border);
   border-radius: 6px;
   background: var(--panel-bg, #20242c);
   color: inherit;
   font: inherit;
+}
+
+.rehearsal-dialog input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
+  margin-right: 8px;
+  vertical-align: middle;
 }

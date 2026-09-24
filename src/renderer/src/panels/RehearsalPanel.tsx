@@ -1,3 +1,4 @@
+import RehearsalHistory from './RehearsalHistory'
 import RehearsalConflicts from './RehearsalConflicts'
 import { useEffect, useRef, useState } from 'react'
 import { useStore } from '../store'
@@ -26,6 +27,12 @@ function Report({ report }: { report: RehearsalReport }): React.JSX.Element {
   return (
     <>
       <h3 tabIndex={-1}>{status}</h3>
+      {report.outcome === 'incomplete' && (
+        <p role="alert">
+          ⚠ Execution was interrupted. Retained work is available for reference; Apply and automatic
+          continuation are unavailable.
+        </p>
+      )}
       {report.diagnostics && <p role="alert">⚠ {report.diagnostics}</p>}
       <p>
         Kept rehearsal: <code>{report.id}</code>
@@ -283,6 +290,7 @@ export default function RehearsalPanel(): React.JSX.Element | null {
           operation.
         </p>
         {!available && <p role="alert">⚠ {availability.message}</p>}
+        {open && configured && <RehearsalHistory key={repo} repo={repo} />}
         <form
           onSubmit={(event) => {
             event.preventDefault()

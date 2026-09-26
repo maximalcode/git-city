@@ -1,11 +1,11 @@
 # Internal rehearsal
 
-Merge, normal and interactive rebase, and single-commit cherry-pick rehearsal are an internal development preview for #143–#151, not a public
+Merge, normal and interactive rebase, and single-commit cherry-pick rehearsal are an internal development preview for #143–#153, not a public
 feature. Packaged applications have no entry point and reject these operations.
 Checked Apply and mandatory recovery are available only in development. Public
 activation remains gated on the complete cross-platform safety workflow.
 
-Use a git-rehearse development build incorporating git-rehearse #87–#91 and #105 (durable
+Use a git-rehearse development build incorporating git-rehearse #86–#93 and #105 (durable
 retention, checked Apply, recovery and worktree-aware schema 1 reports). Its current version is 1.2.0;
 the older published 1.2.0 does not supply the required report fields. Set
 `GIT_CITY_REHEARSE_BIN` to the executable's absolute path before `npm run dev`.
@@ -252,3 +252,22 @@ incomplete state and preservation of non-selected work. Storage failure/low-spac
 responses are injected without deleting data. The Electron management test closes
 and restarts the actual app with the same profile, restores its selected rehearsal,
 and exercises single/batch discard confirmation and Stop through keyboard actions.
+
+## Hooks, signing and learned resolutions
+
+The report explains that repository hooks were not run, including during Apply.
+Off continues to use direct Git actions with their existing hooks. Existing rerere
+settings and resolutions are copied into the sandbox. Newly learned resolutions
+stay there: Continue and Apply do not write them back to the original cache.
+
+Commit signature rows name the exact result commit and distinguish **Signature
+present** from **Signature missing**. **Verification: not checked** and **Signer
+trust: not checked** are separate facts: this version of the CLI inspects signature
+presence without cryptographic verification. Older reports without signature data
+say that information is unavailable. A report with no resulting commits says so.
+
+Signing settings remain effective, system signing dialogs can open, and terminal
+editors and prompts are disabled. Git City stores no secret keys. Signing failures
+remain visible and block Apply; there is no retry with signing disabled. Apply
+transplants the reviewed commit objects unchanged. These report details require
+no additional controls; completion still focuses the keyboard-accessible result.

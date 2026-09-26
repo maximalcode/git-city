@@ -530,6 +530,15 @@ export interface RehearsalIdentity {
 /** Validated subset of the public git-rehearse schema, never private metadata. */
 export interface RehearsalReport extends RehearsalIdentity {
   schema: 1
+  repository_hooks?: 'disabled'
+  rerere_resolution_transfer?: 'sandbox_only'
+  /** Presence is object metadata, not cryptographic verification or trust. */
+  signatures?: {
+    sha: string
+    present: boolean
+    verification: 'not_checked'
+    trust: 'not_checked'
+  }[]
   /** App-session snapshot of the submitted interactive plan, bound to this report ID. */
   plan?: RehearsalPlan
   sandbox?: string
@@ -538,7 +547,7 @@ export interface RehearsalReport extends RehearsalIdentity {
   checkout: { kind: 'branch' | 'detached'; target: string }
   pre_state: Record<string, string>
   lifecycle: 'kept'
-  /** Bounded process diagnostics for a failed Git command, not persisted metadata. */
+  /** Bounded process diagnostics for a failed or stopped Git command, not persisted metadata. */
   diagnostics?: string
   outcome: 'clean' | 'stopped' | 'failed' | 'incomplete'
   conflicted: boolean

@@ -88,3 +88,62 @@ it.each([
   )
   expect(spawn).not.toHaveBeenCalled()
 })
+
+it.each([
+  {
+    signatures: [
+      { sha: 'a'.repeat(40), present: 'yes', verification: 'not_checked', trust: 'not_checked' }
+    ]
+  },
+  {
+    signatures: [
+      { sha: 'a'.repeat(40), present: true, verification: 'verified', trust: 'not_checked' }
+    ]
+  },
+  { signatures: {} },
+  { repository_hooks: 'enabled' },
+  { rerere_resolution_transfer: 'original' }
+])('rejects incompatible execution evidence (%j)', async (fields) => {
+  const document = {
+    schema: 1,
+    id: 'test',
+    repository: process.cwd(),
+    origin_worktree: process.cwd(),
+    repository_id: 'test',
+    command: ['merge', 'topic'],
+    checkout: { kind: 'branch', target: 'main' },
+    pre_state: {},
+    lifecycle: 'kept',
+    decision: 'kept',
+    outcome: 'clean',
+    execution: 'clean',
+    exit_code: 0,
+    conflicted: false,
+    drift_unexpected: false,
+    refs: [],
+    conflicts: [],
+    drift: [],
+    ...fields
+  }
+  replies.push(
+    { code: 0, stdout: 'git-rehearse 1.2.0' },
+    { code: 0, stdout: JSON.stringify(document) }
+  )
+  expect((await rehearseMerge('/configured/tool', process.cwd(), 'topic')).kind).toBe('error')
+})
+
+it('allows system signing environment while disabling terminal prompts and editors', async () => {
+  vi.stubEnv('SSH_AUTH_SOCK', '/test/signing-agent')
+  replies.push({ code: 0, stdout: 'git-rehearse 1.2.0' })
+  await rehearsalAvailability('/configured/tool')
+  vi.unstubAllEnvs()
+  expect(vi.mocked(spawn).mock.calls[0][2]).toMatchObject({
+    stdio: ['ignore', 'pipe', 'pipe'],
+    env: {
+      SSH_AUTH_SOCK: '/test/signing-agent',
+      GIT_TERMINAL_PROMPT: '0',
+      GIT_EDITOR: 'true',
+      GIT_SEQUENCE_EDITOR: 'true'
+    }
+  })
+})

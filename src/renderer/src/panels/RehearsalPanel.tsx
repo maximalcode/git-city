@@ -46,7 +46,44 @@ function Report({ report }: { report: RehearsalReport }): React.JSX.Element {
         <br />
         Action: {report.command.join(' ')}
       </p>
-      <p>⚠ Repository hooks were not run. A clean Git result does not guarantee correct content.</p>
+      <section aria-label="Execution conditions">
+        <h4>Execution conditions</h4>
+        <p>
+          {report.repository_hooks === 'disabled'
+            ? '⚠ Repository hooks were not run. Apply also skips hooks; Off keeps direct Git hooks.'
+            : '⚠ Hook execution information unavailable from this report. Off keeps direct Git hooks.'}
+        </p>
+        <p>A clean Git result does not guarantee correct content.</p>
+        <p>
+          {report.rerere_resolution_transfer === 'sandbox_only'
+            ? '⚠ Existing rerere conflict resolutions are used as an isolated copy. Newly learned sandbox resolutions are not written back to the original cache, including on Apply.'
+            : '⚠ rerere resolution transfer information unavailable from this report.'}
+        </p>
+        <p>
+          Signing settings are preserved. System signing dialogs may open; terminal editors are
+          disabled. Git City does not store secret keys. Apply preserves the reviewed commit
+          objects.
+        </p>
+        <h4>Commit signatures</h4>
+        <p>
+          Signature presence does not establish validity or signer trust. Neither is verified here.
+        </p>
+        {!report.signatures ? (
+          <p>Signature information unavailable from this report.</p>
+        ) : report.signatures.length === 0 ? (
+          <p>No resulting commits reported for signature inspection.</p>
+        ) : (
+          <ul>
+            {report.signatures.map((signature) => (
+              <li key={signature.sha}>
+                <code>{signature.sha}</code>:{' '}
+                {signature.present ? 'Signature present' : 'Signature missing'}
+                {' · '}Verification: not checked · Signer trust: not checked
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
       {report.drift_unexpected && (
         <p role="alert">⚠ Unexpected content changes — review the affected files carefully.</p>
       )}

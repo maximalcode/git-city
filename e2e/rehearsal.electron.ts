@@ -61,9 +61,7 @@ test('real Electron merge preview preserves the original and supports keyboard k
     await expect(page.getByRole('button', { name: 'Apply', exact: true })).toBeDisabled()
     git('config', 'user.signingKey', signingKey)
     await page.getByRole('button', { name: 'Rehearse', exact: true }).click()
-    await expect(page.getByRole('heading', { name: 'Merge preview completed' })).toBeVisible({
-      timeout: 30_000
-    })
+    await expect(page.getByRole('heading', { name: 'Merge preview completed' })).toBeVisible()
     await expect(page.getByRole('button', { name: 'Apply', exact: true })).toBeEnabled()
     await expect(page.getByText(/Repository hooks were not run/)).toBeVisible()
     await expect(page.getByText('M file.txt')).toBeVisible()
@@ -76,9 +74,7 @@ test('real Electron merge preview preserves the original and supports keyboard k
     await page.keyboard.press('Escape')
     await expect(entry).toBeFocused()
     await page.keyboard.press('Enter')
-    await expect(page.getByRole('heading', { name: 'Merge preview completed' })).toBeVisible({
-      timeout: 30_000
-    })
+    await expect(page.getByRole('heading', { name: 'Merge preview completed' })).toBeVisible()
     expect(git('rev-parse', 'HEAD')).toBe(before.head)
     expect(await readFile(join(root, '.git/index'))).toEqual(before.index)
     expect(await readFile(join(root, 'file.txt'))).toEqual(before.file)

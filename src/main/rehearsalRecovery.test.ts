@@ -261,9 +261,12 @@ describe.skipIf(!tool)('exact Undo Apply through the real CLI', () => {
     async (change) => {
       const { root, status } = await applied()
       if (change === 'dirty') await writeFile(join(root, 'file.txt'), 'new local work\n')
-      if (change === 'ref') await runGit(root, ['update-ref', 'refs/heads/main', 'HEAD~1'])
-      if (change === 'occupancy')
+      if (change === 'ref')
+        await runGit(root, ['commit', '--allow-empty', '-m', 'intervening commit'])
+      if (change === 'occupancy') {
+        await writeFile(join(root, '.git/info/exclude'), 'linked/\n')
         await runGit(root, ['worktree', 'add', '--force', join(root, 'linked'), 'main'])
+      }
       const identity = { ...status }
       if (change === 'identity') identity.rehearsal = 'wrong-id'
       if (change === 'worktree') identity.worktree = join(root, 'wrong')

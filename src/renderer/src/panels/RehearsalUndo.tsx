@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { RehearsalUndoStatus } from '../../../shared/types'
-import { bridge } from '../lib/bridge'
+import { useRepoQuery } from '../lib/repoQuery'
 import { useStore } from '../store'
 
 export default function RehearsalUndo({
@@ -10,7 +10,6 @@ export default function RehearsalUndo({
   repo: string
   blocked: boolean
 }): React.JSX.Element {
-  const [status, setStatus] = useState<RehearsalUndoStatus | null>(null)
   const [confirmation, setConfirmation] = useState<RehearsalUndoStatus | null>(null)
   const [message, setMessage] = useState('')
   const busy = useStore((s) => s.rehearsalBusy)
@@ -20,17 +19,14 @@ export default function RehearsalUndo({
   const outcome = useRef<HTMLParagraphElement>(null)
   const mounted = useRef(true)
   const wasConfirming = useRef(false)
-  const refresh = useCallback(async () => {
-    try {
-      const value = await bridge()?.rehearsalUndoStatus(repo)
-      if (mounted.current) setStatus(value ?? null)
-    } catch {
-      if (mounted.current) {
-        setStatus(null)
-        setMessage('Could not inspect Undo availability. Refresh to try again.')
-      }
-    }
-  }, [repo])
+  const {
+    data: status,
+    loading,
+    error,
+    reload
+  } = useRepoQuery(busy ? null : ([repo, blocked] as const), (api, [origin]) =>
+    api.rehearsalUndoStatus(origin)
+  )
   useEffect(() => {
     mounted.current = true
     return () => {
@@ -38,15 +34,9 @@ export default function RehearsalUndo({
     }
   }, [])
   useEffect(() => {
-    if (!busy) void refresh()
-  }, [busy, blocked, refresh])
-  useEffect(() => {
-    const focused = (): void => {
-      void refresh()
-    }
-    window.addEventListener('focus', focused)
-    return () => window.removeEventListener('focus', focused)
-  }, [refresh])
+    window.addEventListener('focus', reload)
+    return () => window.removeEventListener('focus', reload)
+  }, [reload])
   useEffect(() => {
     if (confirmation) cancel.current?.focus()
     else if (wasConfirming.current) trigger.current?.focus()
@@ -81,13 +71,16 @@ export default function RehearsalUndo({
         ⚠ Undo cannot overwrite local changes, including carried uncommitted work, changed refs or
         branches checked out elsewhere. No force option is available.
       </p>
-      {!status?.available && <p role="status">{status?.reason ?? 'Checking Undo availability…'}</p>}
+      {error && <p role="alert">⚠ Could not inspect Undo availability: {error}</p>}
+      {!status?.available && !error && (
+        <p role="status">{status?.reason ?? 'Checking Undo availability…'}</p>
+      )}
       {message && (
         <p ref={outcome} tabIndex={-1} role="status">
           {message}
         </p>
       )}
-      <button disabled={busy} onClick={() => void refresh()}>
+      <button disabled={busy || loading} onClick={reload}>
         Refresh Undo availability
       </button>{' '}
       {confirmation ? (
@@ -107,7 +100,7 @@ export default function RehearsalUndo({
               const result = await undo(confirmation)
               if (mounted.current && result) {
                 setMessage(result.message)
-                await refresh()
+                reload()
               }
             }}
           >
@@ -117,7 +110,7 @@ export default function RehearsalUndo({
       ) : (
         <button
           ref={trigger}
-          disabled={busy || blocked || !status?.available}
+          disabled={busy || blocked || loading || !!error || !status?.available}
           onClick={() => setConfirmation(status)}
         >
           Undo Apply

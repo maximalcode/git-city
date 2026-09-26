@@ -61,6 +61,20 @@ const arrayOf = (v: unknown, check: (entry: unknown) => boolean): boolean =>
 function isReport(v: Record<string, unknown>): v is Record<string, unknown> & RehearsalReport {
   return (
     v.schema === 1 &&
+    (v.repository_hooks === undefined || v.repository_hooks === 'disabled') &&
+    (v.rerere_resolution_transfer === undefined ||
+      v.rerere_resolution_transfer === 'sandbox_only') &&
+    (v.signatures === undefined ||
+      arrayOf(
+        v.signatures,
+        (signature) =>
+          object(signature) &&
+          string(signature.sha) &&
+          /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(signature.sha) &&
+          typeof signature.present === 'boolean' &&
+          signature.verification === 'not_checked' &&
+          signature.trust === 'not_checked'
+      )) &&
     (v.can_apply === undefined || typeof v.can_apply === 'boolean') &&
     optionalString(v.sandbox) &&
     string(v.id) &&
@@ -197,8 +211,9 @@ async function report(
         // Plan annotations belong to this app session, not unvalidated CLI extensions.
         plan: undefined,
         diagnostics:
-          value.outcome === 'failed'
-            ? result.stderr.trim() || 'Git failed without a diagnostic message.'
+          value.outcome === 'failed' || value.outcome === 'stopped'
+            ? result.stderr.trim() ||
+              'Git did not complete. Check conflicts and signing configuration before continuing.'
             : undefined
       }
     }

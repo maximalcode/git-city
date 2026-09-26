@@ -28,6 +28,8 @@ test('real Electron merge preview preserves the original and supports keyboard k
   git('config', 'commit.gpgSign', 'true')
   git('commit', '--allow-empty', '-m', 'signed topic')
   git('checkout', 'main')
+  git('config', 'merge.ff', 'false')
+  git('config', 'user.signingKey', join(userData, 'missing-key'))
   const before = {
     head: git('rev-parse', 'HEAD'),
     index: await readFile(join(root, '.git/index')),
@@ -54,6 +56,11 @@ test('real Electron merge preview preserves the original and supports keyboard k
     await expect(target).toBeFocused()
     await target.fill('topic')
     await page.keyboard.press('Enter')
+    await expect(page.getByRole('heading', { name: 'Merge stopped' })).toBeVisible()
+    await expect(page.getByRole('alert').filter({ hasText: /key|sign/i })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Apply', exact: true })).toBeDisabled()
+    git('config', 'user.signingKey', signingKey)
+    await page.getByRole('button', { name: 'Rehearse', exact: true }).click()
     await expect(page.getByRole('heading', { name: 'Merge preview completed' })).toBeVisible({
       timeout: 30_000
     })
@@ -64,7 +71,7 @@ test('real Electron merge preview preserves the original and supports keyboard k
       'not written back'
     )
     await expect(page.getByText(/Signature missing/)).toBeVisible()
-    await expect(page.getByText(/Signature present/)).toBeVisible()
+    await expect(page.getByText(/Signature present/).first()).toBeVisible()
     await expect(page.getByText(/Verification: not checked/).first()).toBeVisible()
     await page.keyboard.press('Escape')
     await expect(entry).toBeFocused()
@@ -86,18 +93,8 @@ test('real Electron merge preview preserves the original and supports keyboard k
     await expect(page.getByRole('button', { name: 'Apply rehearsal', exact: true })).toBeFocused()
     await page.keyboard.press('Enter')
     await expect(page.getByText('The checked rehearsal was applied.')).toBeVisible()
-    expect(git('rev-parse', 'HEAD')).toBe(git('rev-parse', 'topic'))
+    expect(git('rev-parse', 'HEAD^2')).toBe(git('rev-parse', 'topic'))
     expect(await readFile(join(root, 'file.txt'), 'utf8')).toBe('preview\n')
-    git('checkout', '-b', 'signing-failure')
-    git('commit', '--allow-empty', '-m', 'new signed commit')
-    git('checkout', 'main')
-    git('commit', '--allow-empty', '-m', 'diverge')
-    git('config', 'user.signingKey', join(userData, 'missing-key'))
-    await target.fill('signing-failure')
-    await page.getByRole('button', { name: 'Rehearse', exact: true }).click()
-    await expect(page.getByRole('heading', { name: 'Merge stopped' })).toBeVisible()
-    await expect(page.getByRole('alert').filter({ hasText: /key|sign/i })).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Apply', exact: true })).toBeDisabled()
     await app.evaluate(
       (_electron, missing) => {
         process.env.GIT_CITY_REHEARSE_BIN = missing

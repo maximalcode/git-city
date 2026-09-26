@@ -613,6 +613,21 @@ export interface RehearsalRecovery {
   message: string
 }
 
+export interface RehearsalUndoStatus {
+  repository: string
+  rehearsal: string | null
+  worktree: string | null
+  applied_at_unix: number | null
+  available: boolean
+  reason: string | null
+}
+
+export interface RehearsalUndoResult {
+  kind: 'undone' | 'refused' | 'uncertain'
+  message: string
+  recovery: RehearsalRecovery
+}
+
 export interface RehearsalApplyResult {
   kind: 'applied' | 'refused' | 'uncertain'
   message: string
@@ -641,6 +656,8 @@ export interface GitCityApi {
     plan?: RehearsalPlan
   ): Promise<RehearsalResult>
   rehearseMerge(repoPath: string, target: string): Promise<RehearsalResult>
+  rehearsalUndoStatus(repo: string): Promise<RehearsalUndoStatus>
+  rehearsalUndo(repo: string, identity: RehearsalUndoStatus): Promise<RehearsalUndoResult>
   rehearsalApply(identity: RehearsalReport): Promise<RehearsalApplyResult>
   rehearsalRecovery(repo: string): Promise<RehearsalRecovery>
   rehearsalRecover(

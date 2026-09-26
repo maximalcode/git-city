@@ -12,6 +12,8 @@ const api: GitCityApi = {
   rehearse: (repo, action, target, plan) =>
     ipcRenderer.invoke('git-city:rehearse', repo, action, target, plan),
   rehearseMerge: (repo, target) => ipcRenderer.invoke('git-city:rehearse-merge', repo, target),
+  rehearsalUndoStatus: (repo) => ipcRenderer.invoke('git-city:rehearsal-undo-status', repo),
+  rehearsalUndo: (repo, identity) => ipcRenderer.invoke('git-city:rehearsal-undo', repo, identity),
   rehearsalApply: (identity) => ipcRenderer.invoke('git-city:rehearsal-apply', identity),
   rehearsalRecovery: (repo) => ipcRenderer.invoke('git-city:rehearsal-recovery', repo),
   rehearsalRecover: (repo, id, action) =>

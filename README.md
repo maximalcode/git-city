@@ -199,6 +199,7 @@ Development builds also support interactive-rebase rehearsal of the existing pla
 with Tab/Enter navigation, checked save-and-stage and repeated Continue before
 confirmed Apply. Internal Automatic / Ask / Off modes share one persistent setting across worktrees;
 Automatic routes supported actions to rehearsal without changing the real checkout.
+Development builds also offer [Undo Apply](docs/rehearsal-development.md#undo-apply) for the exact backend-reported Apply and original worktree, with safety refusals and interrupted-Undo recovery.
 Retained rehearsal history survives restarts, with Stop, confirmed
 single/batch Discard and storage warnings. This preview is hidden in packaged applications.
 

@@ -1,3 +1,4 @@
+import type { RehearsalUndoStatus, RehearsalUndoResult } from '../../shared/types'
 import {
   createRehearsalManagement,
   rememberRehearsal,
@@ -332,6 +333,7 @@ export interface GitCityState extends RehearsalManagementState {
     identity: RehearsalReport,
     resume?: boolean
   ): Promise<RehearsalResult | undefined>
+  undoRehearsal(identity: RehearsalUndoStatus): Promise<RehearsalUndoResult | undefined>
   applyRehearsal(identity: RehearsalReport): Promise<void>
   recoverRehearsal(id: string, action: 'complete' | 'rollback'): Promise<void>
   rehearsalOpen: boolean
@@ -617,6 +619,32 @@ export const useStore = create<GitCityState>((set, get, api) => ({
         .loadRehearsals(get().repoPath ?? identity.origin_worktree, resume)
         .catch(() => undefined)
     }
+  },
+  undoRehearsal: async (identity) => {
+    const api = bridge()
+    const repo = get().repoPath
+    if (!api || !repo || get().rehearsalBusy) return
+    set({ rehearsalBusy: true })
+    let result: RehearsalUndoResult
+    try {
+      result = await api.rehearsalUndo(repo, identity)
+    } catch (error) {
+      result = {
+        kind: 'uncertain',
+        message: `Undo response lost; status queried without retry. ${cleanError(error)}`,
+        recovery: await readRehearsalRecovery(api, repo)
+      }
+    }
+    set((state) => ({
+      rehearsalBusy: false,
+      rehearsalRecovery: { ...state.rehearsalRecovery, [repo]: result.recovery }
+    }))
+    if (get().repoPath === repo) {
+      await get().resync()
+      if (get().repoPath === repo && result.recovery.state === 'none') await get().refreshAnalysis()
+      await get().loadRehearsals(repo, true)
+    }
+    return result
   },
   applyRehearsal: async (identity) => {
     const api = bridge()

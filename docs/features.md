@@ -185,3 +185,5 @@ single-commit Cherry-pick entry to a retained rehearsal. Ask offers manual
 Rehearse entries; Off keeps direct actions. Tool failures never silently fall
 back, and recovery locks apply in every mode. Pull remains outside rehearsal
 routing. These controls remain hidden in packaged releases.
+
+Internal development rehearsal also offers backend-checked **Undo Apply**, naming the exact Apply and original worktree, refusing changed refs/local work/foreign checkout occupancy, and routing interrupted Undo to mandatory recovery. See [development instructions](rehearsal-development.md#undo-apply); public activation remains disabled.

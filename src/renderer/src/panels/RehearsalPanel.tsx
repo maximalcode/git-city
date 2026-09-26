@@ -1,3 +1,4 @@
+import RehearsalUndo from './RehearsalUndo'
 import RehearsalMode from './RehearsalMode'
 import RehearsalHistory from './RehearsalHistory'
 import RehearsalConflicts from './RehearsalConflicts'
@@ -295,6 +296,9 @@ export default function RehearsalPanel(): React.JSX.Element | null {
         </p>
         {!available && <p role="alert">⚠ {availability.message}</p>}
         {open && configured && <RehearsalHistory key={repo} repo={repo} />}
+        {open && configured && (
+          <RehearsalUndo key={`undo:${repo}`} repo={repo} blocked={!!blocked} />
+        )}
         <form
           onSubmit={(event) => {
             event.preventDefault()

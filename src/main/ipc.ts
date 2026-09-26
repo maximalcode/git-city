@@ -1,3 +1,4 @@
+import { inspectUndo, undoRehearsal } from './rehearsalUndo'
 import { listRehearsals, discardRehearsals } from './rehearsalManagement'
 import { stopRehearsal } from './rehearsalProcess'
 import {
@@ -68,6 +69,12 @@ export function registerIpc(): void {
     continueRehearsal(rehearsalTool(), identity)
   )
 
+  ipcMain.handle('git-city:rehearsal-undo-status', (_event, repo: string) =>
+    withRepositoryWrite(repo, () => inspectUndo(rehearsalTool(), repo))
+  )
+  ipcMain.handle('git-city:rehearsal-undo', (_event, repo, identity) =>
+    undoRehearsal(rehearsalTool(), repo, identity)
+  )
   ipcMain.handle('git-city:rehearsal-apply', (_event, identity: RehearsalReport) =>
     applyRehearsal(rehearsalTool(), identity)
   )

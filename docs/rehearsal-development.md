@@ -1,11 +1,11 @@
 # Internal rehearsal
 
-Merge, normal and interactive rebase, and single-commit cherry-pick rehearsal are an internal development preview for #143–#150, not a public
+Merge, normal and interactive rebase, and single-commit cherry-pick rehearsal are an internal development preview for #143–#151, not a public
 feature. Packaged applications have no entry point and reject these operations.
 Checked Apply and mandatory recovery are available only in development. Public
 activation remains gated on the complete cross-platform safety workflow.
 
-Use a git-rehearse development build incorporating git-rehearse #87–#90 and #105 (durable
+Use a git-rehearse development build incorporating git-rehearse #87–#91 and #105 (durable
 retention, checked Apply, recovery and worktree-aware schema 1 reports). Its current version is 1.2.0;
 the older published 1.2.0 does not supply the required report fields. Set
 `GIT_CITY_REHEARSE_BIN` to the executable's absolute path before `npm run dev`.
@@ -197,6 +197,23 @@ The persistent lock file alone does not indicate an interrupted operation. It do
 but unavailable or incompatible tool blocks writes when a recovery journal is
 present; ordinary direct Git actions remain available without a journal. Restore the compatible tool; do not delete recovery data to clear a
 warning. Packaged applications retain this presence guard without exposing Apply.
+
+## Undo Apply
+
+The internal panel reads **Undo Apply** availability from the backend on opening,
+after operations, on window focus and with **Refresh Undo availability**. It names
+the exact last Apply ID and original worktree even when that rehearsal is no longer
+selected. **Undo Apply** opens confirmation; focus starts on **Cancel Undo**.
+Tab and Enter reach **Undo this Apply**; Escape cancels and returns focus.
+Completion focuses the textual result and refreshes repository views, history and
+scene analysis.
+
+Undo rechecks the exact Apply and original worktree. Changed refs, branches checked
+out elsewhere and local changes (including carried uncommitted work) cause a textual
+refusal without a force option. Undo is not a general recovery of arbitrary file edits.
+Lost responses trigger status inspection, never automatic retry. Interrupted Undo
+uses the same mandatory recovery and shared repository write lock described above,
+including after app restart. Public activation remains disabled.
 
 ## Validation
 

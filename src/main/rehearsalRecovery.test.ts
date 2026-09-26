@@ -1,3 +1,4 @@
+import { inspectUndo, undoRehearsal } from './rehearsalUndo'
 import { afterEach, describe, expect, it } from 'vitest'
 import { spawnSync } from 'child_process'
 import { chmod, mkdtemp, readFile, rm, writeFile } from 'fs/promises'
@@ -15,6 +16,7 @@ import {
 const tool = process.env.GIT_CITY_REHEARSE_BIN
 const roots: string[] = []
 afterEach(async () => {
+  delete process.env.GIT_REHEARSE_ABORT_UNDO_AT
   delete process.env.GIT_REHEARSE_ABORT_APPLY_AT
   for (const root of roots.splice(0)) {
     if (tool) {
@@ -230,4 +232,73 @@ process.exit(result.status ?? 1);
     expect(await readFile(join(root, 'file.txt'), 'utf8')).toBe('topic\n')
     expect((await inspectRecovery(tool, linked)).state).toBe('none')
   }, 120_000)
+})
+
+describe.skipIf(!tool)('exact Undo Apply through the real CLI', () => {
+  async function applied() {
+    const root = await fixture()
+    const before = await snapshot(root)
+    const preview = await rehearseMerge(tool, root, 'topic')
+    if (preview.kind !== 'report') throw new Error(JSON.stringify(preview))
+    expect((await applyRehearsal(tool, preview.report)).kind).toBe('applied')
+    const status = await inspectUndo(tool, root)
+    expect(status.available).toBe(true)
+    expect(status.rehearsal).toBe(preview.report.id)
+    return { root, before, status }
+  }
+  it('restores the exact Apply and consumes backend availability', async () => {
+    const { root, before, status } = await applied()
+    expect((await undoRehearsal(tool, root, status)).kind).toBe('undone')
+    const after = await snapshot(root)
+    expect(after.head).toBe(before.head)
+    expect(after.file).toEqual(before.file)
+    expect(after.local).toEqual(before.local)
+    expect(await runGit(root, ['status', '--porcelain'])).toBe('')
+    expect((await inspectUndo(tool, root)).available).toBe(false)
+  })
+  it.each(['identity', 'worktree', 'dirty', 'ref', 'occupancy'] as const)(
+    'refuses %s changes without changing contents or index',
+    async (change) => {
+      const { root, status } = await applied()
+      if (change === 'dirty') await writeFile(join(root, 'file.txt'), 'new local work\n')
+      if (change === 'ref') await runGit(root, ['update-ref', 'refs/heads/main', 'HEAD~1'])
+      if (change === 'occupancy')
+        await runGit(root, ['worktree', 'add', '--force', join(root, 'linked'), 'main'])
+      const identity = { ...status }
+      if (change === 'identity') identity.rehearsal = 'wrong-id'
+      if (change === 'worktree') identity.worktree = join(root, 'wrong')
+      const before = await snapshot(root)
+      const refs = await runGit(root, ['show-ref'])
+      expect((await undoRehearsal(tool, root, identity)).kind).toBe('refused')
+      expect(await snapshot(root)).toEqual(before)
+      expect(await runGit(root, ['show-ref'])).toBe(refs)
+    }
+  )
+  it('refuses an Apply belonging to another real worktree', async () => {
+    const { root, status } = await applied()
+    const linked = join(root, 'linked')
+    await runGit(root, ['worktree', 'add', '-b', 'other', linked])
+    const before = await snapshot(root)
+    const linkedIndex = await readFile(join(root, '.git/worktrees/linked/index'))
+    expect((await inspectUndo(tool, linked)).available).toBe(false)
+    expect((await undoRehearsal(tool, linked, status)).kind).toBe('refused')
+    expect(await snapshot(root)).toEqual(before)
+    expect(await readFile(join(root, '.git/worktrees/linked/index'))).toEqual(linkedIndex)
+    expect(await readFile(join(linked, 'file.txt'), 'utf8')).toBe('topic\n')
+  })
+  it('routes interrupted Undo to recovery and never repeats it', async () => {
+    const { root, before, status } = await applied()
+    process.env.GIT_REHEARSE_ABORT_UNDO_AT = 'after-ref-transaction'
+    const result = await undoRehearsal(tool, root, status)
+    delete process.env.GIT_REHEARSE_ABORT_UNDO_AT
+    expect(result.kind).toBe('uncertain')
+    expect(result.recovery.operation).toBe('undo')
+    const restarted = await inspectRecovery(tool, root)
+    expect(restarted.state).not.toBe('none')
+    expect((await undoRehearsal(tool, root, status)).kind).toBe('refused')
+    expect((await recoverRehearsal(tool, root, status.rehearsal!, 'complete')).state).toBe('none')
+    expect((await snapshot(root)).head).toBe(before.head)
+    expect((await snapshot(root)).file).toEqual(before.file)
+    expect((await inspectUndo(tool, root)).available).toBe(false)
+  })
 })

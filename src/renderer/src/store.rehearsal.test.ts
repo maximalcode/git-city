@@ -230,3 +230,45 @@ it('keeps Continue bound to its origin after a worktree switch and retains repor
   ).toEqual({ ok: false, message: 'File changed on disk' })
   expect(rehearsalShow).toHaveBeenCalledTimes(1)
 })
+
+it('inspects lost Undo responses once and refreshes views without retrying the mutation', async () => {
+  const recovery = {
+    state: 'none',
+    repository: '/undo',
+    can_complete: false,
+    can_rollback: false,
+    message: 'clear'
+  }
+  const rehearsalUndo = vi.fn().mockRejectedValue(new Error('index.lock response lost'))
+  const rehearsalRecovery = vi.fn().mockResolvedValue(recovery)
+  const resync = vi.fn().mockResolvedValue(undefined)
+  const refreshAnalysis = vi.fn().mockResolvedValue(undefined)
+  const loadRehearsals = vi.fn().mockResolvedValue(undefined)
+  const saved = useStore.getState()
+  setBridge({ rehearsalUndo, rehearsalRecovery } as unknown as GitCityApi)
+  useStore.setState({ repoPath: '/undo', resync, refreshAnalysis, loadRehearsals })
+  try {
+    const identity = {
+      repository: '/undo',
+      worktree: '/undo',
+      rehearsal: 'exact',
+      applied_at_unix: 12,
+      available: true,
+      reason: null
+    }
+    const result = await useStore.getState().undoRehearsal(identity)
+    expect(result?.kind).toBe('uncertain')
+    expect(rehearsalUndo).toHaveBeenCalledExactlyOnceWith('/undo', identity)
+    expect(rehearsalRecovery).toHaveBeenCalledExactlyOnceWith('/undo')
+    expect(resync).toHaveBeenCalledOnce()
+    expect(refreshAnalysis).toHaveBeenCalledOnce()
+    expect(loadRehearsals).toHaveBeenCalledWith('/undo', true)
+    expect(useStore.getState().rehearsalRecovery['/undo']).toEqual(recovery)
+  } finally {
+    useStore.setState({
+      resync: saved.resync,
+      refreshAnalysis: saved.refreshAnalysis,
+      loadRehearsals: saved.loadRehearsals
+    })
+  }
+})

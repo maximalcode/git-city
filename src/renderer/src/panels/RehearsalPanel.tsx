@@ -1,3 +1,4 @@
+import RehearsalMode from './RehearsalMode'
 import RehearsalHistory from './RehearsalHistory'
 import RehearsalConflicts from './RehearsalConflicts'
 import { useEffect, useRef, useState } from 'react'
@@ -140,7 +141,9 @@ export default function RehearsalPanel(): React.JSX.Element | null {
     available: false,
     message: ''
   })
-  const { configured, available } = availability
+  const modeSetting = useStore((s) => s.rehearsalModeSetting)
+  const configured = availability.configured || !!modeSetting
+  const available = availability.available
   const [confirmApply, setConfirmApply] = useState<RehearsalReport | null>(null)
   const applyTrigger = useRef<HTMLButtonElement>(null)
   const wasConfirming = useRef(false)
@@ -234,6 +237,7 @@ export default function RehearsalPanel(): React.JSX.Element | null {
   if (!repo) return null
   return (
     <>
+      <RehearsalMode />
       {blocked && (
         <section role="alert" aria-label="Mandatory recovery">
           <h2 ref={recoveryHeading} tabIndex={-1}>

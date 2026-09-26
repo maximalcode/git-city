@@ -1,6 +1,6 @@
 # Internal rehearsal
 
-Merge, normal and interactive rebase, and single-commit cherry-pick rehearsal are an internal development preview for #143–#149, not a public
+Merge, normal and interactive rebase, and single-commit cherry-pick rehearsal are an internal development preview for #143–#150, not a public
 feature. Packaged applications have no entry point and reject these operations.
 Checked Apply and mandatory recovery are available only in development. Public
 activation remains gated on the complete cross-platform safety workflow.
@@ -26,9 +26,40 @@ chosen destination branch. For one cherry-pick, select a commit in **Graph** or
 open its detail from commit search, then activate **Rehearse cherry-pick**.
 The shared panel displays the selected branch or full commit ID as read-only;
 focus starts on **Rehearse**. Enter runs the preview, and closing returns focus
-to the entry that opened it. These explicit development entries do not change
-the existing direct actions. Automatic/Ask/Off routing belongs to a later ticket.
+to the entry that opened it. The mode setting determines how the existing actions run, as described below.
 There is no cherry-pick range selector or pull-rebase entry here.
+
+## Shared mode
+
+**Rehearse mode (internal)** offers **Automatic**, **Ask**, and **Off**. It is
+stored in the app's versioned preferences, keyed by the canonical common Git
+directory, so the main checkout and linked worktrees share one choice across
+restarts. New repositories start with Automatic. Repositories in the recent list
+when internal modes are first enabled receive a one-time keyboard-accessible
+choice; opening a linked worktree of a known repository also prompts. Escape
+defers the choice; supported actions remain blocked until a mode is selected.
+The previous app only retained its recent list, so repositories already removed
+from that list cannot be recognized as previously known.
+
+Automatic sends the existing Merge, normal Rebase, interactive Rebase, and both
+single-commit Cherry-pick entries into a retained rehearsal without requiring a
+second Rehearse click. Apply still requires explicit confirmation. Ask preserves
+the direct actions and offers the manual Rehearse entries. Off preserves direct
+Git behavior, including hooks, and hides the contextual manual entries. Retained
+history remains accessible. Pull (including pull with rebase), Fetch and Push
+are outside rehearsal routing in every mode.
+
+Select the mode with the keyboard using Tab and arrow keys. The one-time chooser
+focuses Automatic and returns focus after the choice. Settings are reread before
+each supported action and on window focus. Missing, broken or incompatible tool
+responses explain repair without falling back. Once initialized, a missing tool
+does not turn Automatic off; choose Off consciously to use direct actions.
+Off never removes a mandatory recovery lock. Corrupt or incompatible preference
+files block supported actions and are preserved for repair. Packaged releases and the production renderer loaded by `npm start`
+continue to hide all mode controls and retain current direct behavior until the
+complete public acceptance ticket. Internal modes require the development renderer
+started by `npm run dev`.
+
 
 For interactive rebase, open **Branches → Rebase…**, prepare the existing newest-first
 Pick/Squash/Drop plan with the up/down buttons, and activate **Rehearse interactive

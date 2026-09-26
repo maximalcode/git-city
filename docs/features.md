@@ -176,3 +176,12 @@ Internal rehearsal conflict handling also offers byte-preserving whole-file bina
 The internal interactive-rebase entry rehearses the existing Pick/Squash/Drop and
 reorder plan, including repeated sandbox conflict resolution and explicit adoption
 of the final reviewed commits. It remains hidden in packaged applications.
+
+Internal development mode also provides a persistent **Automatic / Ask / Off**
+choice shared by all worktrees of a repository. New repositories default to
+Automatic; repositories already in the recent list get a one-time choice.
+Automatic routes every existing Merge, Rebase (including interactive), and
+single-commit Cherry-pick entry to a retained rehearsal. Ask offers manual
+Rehearse entries; Off keeps direct actions. Tool failures never silently fall
+back, and recovery locks apply in every mode. Pull remains outside rehearsal
+routing. These controls remain hidden in packaged releases.

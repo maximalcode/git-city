@@ -6,6 +6,8 @@ import {
 } from './rehearsalManagement'
 import { create } from 'zustand'
 import type {
+  RehearsalMode,
+  RehearsalModeSetting,
   RehearsalPlan,
   RehearsalAction,
   RehearsalResult,
@@ -194,6 +196,8 @@ function loadRecent(): string[] {
     return []
   }
 }
+// Snapshot before this session adds new repositories to the recent list.
+const legacyRehearsalRepos = loadRecent()
 function saveRecent(paths: string[]): void {
   try {
     localStorage.setItem(RECENT_KEY, JSON.stringify(paths.slice(0, RECENT_MAX)))
@@ -333,6 +337,11 @@ export interface GitCityState extends RehearsalManagementState {
   rehearsalOpen: boolean
   rehearsalBusy: boolean
   rehearsalResults: Record<string, RehearsalResult>
+  rehearsalModeSetting: RehearsalModeSetting | null
+  rehearsalModeError: string | null
+  refreshRehearsalMode(choice?: RehearsalMode): Promise<void>
+  rehearsalRouting: boolean
+  routeRehearsal(action: RehearsalAction, target: string, plan?: RehearsalPlan): Promise<boolean>
   rehearsalConfigured: boolean
   rehearsalRequest: {
     repo: string
@@ -662,6 +671,43 @@ export const useStore = create<GitCityState>((set, get, api) => ({
   rehearsalOpen: false,
   rehearsalBusy: false,
   rehearsalResults: {},
+  rehearsalModeSetting: null,
+  rehearsalModeError: null,
+  rehearsalRouting: false,
+  refreshRehearsalMode: async (choice) => {
+    const api = bridge()
+    const repo = get().repoPath
+    if (!api?.rehearsalMode || !repo) return
+    try {
+      const setting = await api.rehearsalMode(repo, legacyRehearsalRepos, choice)
+      if (get().repoPath === repo) set({ rehearsalModeSetting: setting, rehearsalModeError: null })
+    } catch (error) {
+      if (get().repoPath === repo)
+        set({ rehearsalModeSetting: null, rehearsalModeError: cleanError(error) })
+    }
+  },
+  routeRehearsal: async (action, target, plan) => {
+    const api = bridge()
+    const repo = get().repoPath
+    if (!api?.rehearsalMode || !repo) return false
+    if (get().rehearsalRouting || get().rehearsalBusy || get().opInProgress) return true
+    set({ rehearsalRouting: true })
+    try {
+      const setting = await api.rehearsalMode(repo, legacyRehearsalRepos)
+      if (get().repoPath !== repo) return true
+      set({ rehearsalModeSetting: setting, rehearsalModeError: null })
+      if (setting?.mode === null) return true
+      if (setting?.mode !== 'automatic') return false
+      get().openRehearsal({ action, target, plan })
+      await get().rehearse(action, target, plan)
+      return true
+    } catch (error) {
+      if (get().repoPath === repo) set({ rehearsalModeError: cleanError(error) })
+      return true
+    } finally {
+      set({ rehearsalRouting: false })
+    }
+  },
   rehearsalConfigured: false,
   rehearsalRequest: null,
   openRehearsal: (request) => {
@@ -1154,6 +1200,8 @@ export const useStore = create<GitCityState>((set, get, api) => ({
   // existed only because runOp returned void and this had to report an
   // outcome (#107).
   runInteractiveRebase: async (base, entries) => {
+    if (await get().routeRehearsal('rebase', base ?? 'root', { base, entries }))
+      return { ok: false, message: 'Action routed to Rehearse.' }
     const result = await runOp(
       set,
       get,
@@ -1288,21 +1336,30 @@ export const useStore = create<GitCityState>((set, get, api) => ({
     }),
   deleteBranch: (name, force) =>
     runOp(set, get, 'Deleting branch…', (api, repo) => api.deleteBranch(repo, name, force)),
-  merge: (name) =>
-    runOp(set, get, `Merging ${name}…`, (api, repo) => api.merge(repo, name), {
+  merge: async (name) => {
+    if (await get().routeRehearsal('merge', name))
+      return { ok: false, message: 'Action routed to Rehearse.' }
+    return runOp(set, get, `Merging ${name}…`, (api, repo) => api.merge(repo, name), {
       reanalyze: true,
       conflictsOpenMerge: true
-    }),
-  rebaseOnto: (name) =>
-    runOp(set, get, `Rebasing onto ${name}…`, (api, repo) => api.rebase(repo, name), {
+    })
+  },
+  rebaseOnto: async (name) => {
+    if (await get().routeRehearsal('rebase', name))
+      return { ok: false, message: 'Action routed to Rehearse.' }
+    return runOp(set, get, `Rebasing onto ${name}…`, (api, repo) => api.rebase(repo, name), {
       reanalyze: true,
       conflictsOpenMerge: true
-    }),
-  cherryPick: (hash) =>
-    runOp(set, get, 'Cherry-picking…', (api, repo) => api.cherryPick(repo, hash), {
+    })
+  },
+  cherryPick: async (hash) => {
+    if (await get().routeRehearsal('cherry-pick', hash))
+      return { ok: false, message: 'Action routed to Rehearse.' }
+    return runOp(set, get, 'Cherry-picking…', (api, repo) => api.cherryPick(repo, hash), {
       reanalyze: true,
       conflictsOpenMerge: true
-    }),
+    })
+  },
   stashPush: (message, includeUntracked) =>
     runOp(set, get, 'Stashing…', (api, repo) => api.stashPush(repo, message, includeUntracked)),
   stashPop: (index) =>
@@ -1522,6 +1579,8 @@ async function loadRepo(
       recentRepos: recent,
       analysis,
       repoPath: path,
+      rehearsalModeSetting: null,
+      rehearsalModeError: null,
       snapshotIndex: Math.max(0, analysis.snapshots.length - 1),
       // a commit-less repo lands on the Changes panel — the only useful next step
       panel: analysis.snapshots.length === 0 ? 'changes' : 'none',

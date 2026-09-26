@@ -2,6 +2,8 @@ import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import type { GitCityApi, ProgressInfo, RepoChangeReason } from '../shared/types'
 
 const api: GitCityApi = {
+  rehearsalMode: (repo, known, choice) =>
+    ipcRenderer.invoke('git-city:rehearsal-mode', repo, known, choice),
   rehearsalList: (repo) => ipcRenderer.invoke('git-city:rehearsal-list', repo),
   rehearsalDiscard: (repo, identities) =>
     ipcRenderer.invoke('git-city:rehearsal-discard', repo, identities),

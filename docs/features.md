@@ -189,3 +189,7 @@ routing. These controls remain hidden in packaged releases.
 Internal development rehearsal also offers backend-checked **Undo Apply**, naming the exact Apply and original worktree, refusing changed refs/local work/foreign checkout occupancy, and routing interrupted Undo to mandatory recovery. See [development instructions](rehearsal-development.md#undo-apply); public activation remains disabled.
 
 Internal rehearsal reports explain hook suppression and sandbox-only rerere learning, and show signature presence separately from unchecked validity and signer trust. Signing failures remain visible without an unsigned fallback. See [execution conditions](rehearsal-development.md#hooks-signing-and-learned-resolutions).
+
+The internal rehearsal tool is bundled and integrity-checked for Windows/Linux x64
+and both macOS architectures. Packaged rehearsal controls remain hidden pending
+#155; see [internal development and update validation](rehearsal-development.md).

@@ -12,6 +12,7 @@ files:
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
   - '!{README.md,.gitignore}'
   - '!dist/*'
+afterPack: ./scripts/bundle-rehearse.js
 asar: true
 npmRebuild: false
 win:
@@ -26,6 +27,7 @@ nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
 mac:
+  signIgnore: ['/rehearse/']
   category: public.app-category.developer-tools
   icon: build/icon.png
   target:

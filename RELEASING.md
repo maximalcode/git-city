@@ -113,3 +113,26 @@ users assume the build is broken.
 Fixing it properly needs an **Apple Developer account ($99/yr)** for signing + notarization. Same
 pattern as Windows: store `APPLE_ID` / `APPLE_APP_SPECIFIC_PASSWORD` / the signing certificate as
 repository secrets and reference them from the macOS build step.
+
+
+### Pinned Rehearse packages (internal until #155)
+
+Before a local `dist:*` build, run `npm run tool:prepare` (requires authenticated
+`gh` and Python 3). Pass a target such as `-- darwin-arm64` to prepare one target.
+The build fails if any selected architecture lacks the exact executable and MIT
+license checksums in `rehearse-toolchain.json`. No PATH tool or latest release is
+accepted. The pin currently uses a tested upstream Actions artifact, not the older
+public v1.2.0 release. If that artifact expires, packaging fails closed: obtain a
+reviewed replacement and update the pin in a PR; never bypass checksum checks.
+
+The release workflow also runs on PRs without publishing. Each of Windows x64,
+Linux x64, macOS arm64 and macOS x64 builds on its native runner and launches the
+packaged executable for version, integrity, rehearsal/Apply and retained-metadata
+upgrade checks. Intel macOS is tested natively rather than only cross-built.
+`node scripts/smoke-package.mjs "<packaged executable>"` runs the same local check.
+Only tag builds publish installers, after all four package jobs succeed.
+
+The current unsigned macOS distribution preserves the reviewed tool bytes using
+`signIgnore` for `rehearse/`. Adding signing/notarization requires signed upstream
+tool artifacts and a new reviewed digest pin; do not silently sign the binary after
+hashing it. Tool updates are app updates, with no independent background updater.

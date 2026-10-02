@@ -1,11 +1,11 @@
 # Internal rehearsal
 
-Merge, normal and interactive rebase, and single-commit cherry-pick rehearsal are an internal development preview for #143–#153, not a public
+Merge, normal and interactive rebase, and single-commit cherry-pick rehearsal are an internal development preview for #143–#154, not a public
 feature. Packaged applications have no entry point and reject these operations.
 Checked Apply and mandatory recovery are available only in development. Public
 activation remains gated on the complete cross-platform safety workflow.
 
-Use a git-rehearse development build incorporating git-rehearse #86–#93 and #105 (durable
+For development, use a git-rehearse build incorporating git-rehearse #86–#93 and #105 (durable
 retention, checked Apply, recovery and worktree-aware schema 1 reports). Its current version is 1.2.0;
 the older published 1.2.0 does not supply the required report fields. Set
 `GIT_CITY_REHEARSE_BIN` to the executable's absolute path before `npm run dev`.
@@ -271,3 +271,29 @@ editors and prompts are disabled. Git City stores no secret keys. Signing failur
 remain visible and block Apply; there is no retry with signing disabled. Apply
 transplants the reviewed commit objects unchanged. These report details require
 no additional controls; completion still focuses the keyboard-accessible result.
+
+
+## Bundled toolchain and updates
+
+Packaged apps include the exact upstream test artifacts recorded in
+`rehearse-toolchain.json`: version, source revision, workflow run, archive SHA-256,
+executable SHA-256 and license SHA-256 for Windows x64, Linux x64, Intel macOS and
+Apple Silicon macOS. Version 1.2.0 alone is insufficient to identify this build.
+The executable and MIT license live outside ASAR in `resources/rehearse`, alongside
+the upstream README and installation notes. Production availability verifies the
+compiled-in checksums before executing the tool; development environment overrides
+and PATH cannot replace it. Missing, damaged, wrong-version or incompatible-schema
+tools require repair/reinstallation. Nothing downloads or updates tools at runtime.
+
+Public preview and mutation IPC remain disabled, and the renderer has no public
+entry point until #155. Package tests launch the real application, check bundled
+availability despite a bogus development override, verify the gate, and run the
+bundled public CLI against disposable repositories. They repeat after app restart.
+
+Git-rehearse owns retained metadata and migration. Package tests retain a real
+conflict and saved sandbox edits, simulate legacy schema 1 metadata, verify a
+byte-for-byte `meta.json.bak` before schema 3 conversion, and check optional unknown
+fields survive repeated reads and retry. Backup failure refuses conversion without
+changing the source. Missing legacy origin leaves Apply protected. Future schema
+metadata remains byte-for-byte intact and refuses inspection; do not delete it to
+clear an error. No app updater scans, rewrites or prunes retained work.

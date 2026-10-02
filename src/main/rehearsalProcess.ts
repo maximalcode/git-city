@@ -1,3 +1,4 @@
+import { verifyRehearsalInvocation } from './rehearsalBundle'
 import { spawn } from 'child_process'
 import { realpath } from 'fs/promises'
 import type { OpResult, RehearsalResult } from '../shared/types'
@@ -97,12 +98,13 @@ export function runRehearsalTool(
   return result
 }
 
-function spawnRehearsalTool(
+async function spawnRehearsalTool(
   tool: string,
   args: string[],
   cwd?: string,
   stoppable = false
 ): Promise<{ code: number; stdout: string; stderr: string }> {
+  await verifyRehearsalInvocation(tool)
   return new Promise((resolve, reject) => {
     if (stoppable && (!cwd || executions.has(cwd))) {
       reject(new Error('A rehearsal is already running in this worktree.'))

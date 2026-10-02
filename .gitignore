@@ -20,3 +20,6 @@ docs/media/.frames/
 .claude/agent-guard/__pycache__/
 .claude/agent-guard-receipt.json.tmp
 .claude/agent-guard-ledger.jsonl
+
+# Pinned tool archives are prepared explicitly before packaging
+build/rehearse/

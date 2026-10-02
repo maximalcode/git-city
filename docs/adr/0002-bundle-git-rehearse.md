@@ -14,8 +14,8 @@ Werkzeugs findet nicht statt. Kompatibilität und Migration bestehender Probelä
 gehören deshalb zum gemeinsamen Update. Vor der Auslieferung muss für jede von
 Git City unterstützte Plattform und Architektur ein passendes Programm vorliegen,
 einschließlich Intel-macOS. Die Funktion wird auf keiner offiziell unterstützten
-Plattform durch eine nachträgliche manuelle Installation ersetzt. Die Auslieferung
-ist noch nicht umgesetzt.
+Plattform durch eine nachträgliche manuelle Installation ersetzt. Die Paketierung ist in #154 umgesetzt; die öffentliche Aktivierung bleibt #155
+vorbehalten. Version, Revision und Prüfsummen stehen in `rehearse-toolchain.json`.
 
 Die Umsetzung und Prüfung erfolgt in kleinen internen Schritten. Öffentlich
 verfügbar wird die Funktion erst, wenn die Sicherheit bei mehreren Worktrees,

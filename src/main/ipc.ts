@@ -1,3 +1,4 @@
+import { compareRehearsal } from './rehearsalComparison'
 import { resolveRehearsalTool } from './rehearsalBundle'
 import { inspectUndo, undoRehearsal } from './rehearsalUndo'
 import { listRehearsals, discardRehearsals } from './rehearsalManagement'
@@ -57,6 +58,9 @@ export function registerIpc(): void {
   )
   ipcMain.handle('git-city:rehearsal-stop', (_event, repo) =>
     app.isPackaged ? { ok: false, message: 'Rehearse is internal.' } : stopRehearsal(repo)
+  )
+  ipcMain.handle('git-city:rehearsal-comparison', (_event, identity: RehearsalIdentity) =>
+    compareRehearsal(rehearsalTool(), identity)
   )
   ipcMain.handle('git-city:rehearsal-show', (_event, identity: RehearsalIdentity) =>
     rehearsalShow(rehearsalTool(), identity)

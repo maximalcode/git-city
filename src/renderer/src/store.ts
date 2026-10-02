@@ -1,3 +1,4 @@
+import { createRehearsalComparison, type RehearsalComparisonState } from './rehearsalComparison'
 import type { RehearsalUndoStatus, RehearsalUndoResult } from '../../shared/types'
 import {
   createRehearsalManagement,
@@ -299,7 +300,7 @@ export function statusFingerprint(s: WorkingStatus | null): string {
   }|${s.files.map((f) => `${f.path}:${f.index}${f.worktree}${f.conflicted ? 'C' : ''}`).join(',')}`
 }
 
-export interface GitCityState extends RehearsalManagementState {
+export interface GitCityState extends RehearsalManagementState, RehearsalComparisonState {
   screen: 'welcome' | 'loading' | 'city'
   /** a repo big enough to be worth warning about, awaiting the user's go-ahead */
   pendingRepo: { path: string; warning: RepoWarning } | null
@@ -554,6 +555,7 @@ let lastFingerprint = ''
 
 export const useStore = create<GitCityState>((set, get, api) => ({
   ...createRehearsalManagement(set, get, api),
+  ...createRehearsalComparison(set, get, api),
   rehearsalRecovery: {},
   rehearsalApplications: {},
   checkRehearsalRecovery: async () => {
@@ -567,6 +569,7 @@ export const useStore = create<GitCityState>((set, get, api) => ({
     const api = bridge()
     if (!api || get().rehearsalBusy)
       return { ok: false, message: 'Rehearsal is busy or unavailable.' }
+    get().clearRehearsalComparison()
     set({ rehearsalBusy: true })
     try {
       await api.rehearsalConflictSave(identity, path, revision, text)
@@ -587,6 +590,7 @@ export const useStore = create<GitCityState>((set, get, api) => ({
   refreshRehearsal: async (identity, resume = false) => {
     const api = bridge()
     if (!api || get().rehearsalBusy) return
+    get().clearRehearsalComparison()
     set({ rehearsalBusy: true, rehearsalExecutionRepo: resume ? identity.origin_worktree : null })
     try {
       const result = await (resume ? api.rehearsalContinue(identity) : api.rehearsalShow(identity))
@@ -624,6 +628,7 @@ export const useStore = create<GitCityState>((set, get, api) => ({
     const api = bridge()
     const repo = get().repoPath
     if (!api || !repo || get().rehearsalBusy) return
+    get().clearRehearsalComparison()
     set({ rehearsalBusy: true })
     let result: RehearsalUndoResult
     try {
@@ -651,6 +656,7 @@ export const useStore = create<GitCityState>((set, get, api) => ({
     const repo = get().repoPath
     if (!api || !repo || get().rehearsalBusy || get().rehearsalApplications[repo]?.[identity.id])
       return
+    get().clearRehearsalComparison()
     set({ rehearsalBusy: true })
     let result: RehearsalApplyResult
     try {
@@ -680,6 +686,7 @@ export const useStore = create<GitCityState>((set, get, api) => ({
     const api = bridge()
     const repo = get().repoPath
     if (!api || !repo || get().rehearsalBusy) return
+    get().clearRehearsalComparison()
     set({ rehearsalBusy: true })
     try {
       const recovery = await api.rehearsalRecover(repo, id, action)
@@ -755,6 +762,7 @@ export const useStore = create<GitCityState>((set, get, api) => ({
     const api = bridge()
     const repo = get().repoPath
     if (!api || !repo || get().rehearsalBusy) return
+    get().clearRehearsalComparison()
     set({ rehearsalBusy: true, rehearsalExecutionRepo: repo })
     let result: RehearsalResult
     try {

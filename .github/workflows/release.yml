@@ -37,24 +37,28 @@ jobs:
             platform: win32
             arch: x64
             build: win
+            targets: nsis
             executable: dist/win-unpacked/GitCity.exe
             artifact: dist/*-setup.exe
           - os: macos-latest
             platform: darwin
             arch: arm64
             build: mac
+            targets: dmg
             executable: dist/mac-arm64/Git City.app/Contents/MacOS/Git City
             artifact: dist/*.dmg
           - os: macos-15-intel
             platform: darwin
             arch: x64
             build: mac
+            targets: dmg
             executable: dist/mac/Git City.app/Contents/MacOS/Git City
             artifact: dist/*.dmg
           - os: ubuntu-latest
             platform: linux
             arch: x64
             build: linux
+            targets: AppImage deb
             executable: dist/linux-unpacked/git-city
             artifact: |
               dist/*.AppImage
@@ -80,7 +84,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: npm run tool:prepare -- ${{ matrix.platform }}-${{ matrix.arch }}
       - run: npm run typecheck && npm run lint && npm test
-      - run: npm run dist:${{ matrix.build }} -- --${{ matrix.arch }}
+      - run: npm run build
+      # Explicit targets override the dual-architecture local macOS default.
+      - run: npx electron-builder --${{ matrix.build }} ${{ matrix.targets }} --${{ matrix.arch }} --publish never
       - name: Packaged application and upgrade smoke (Linux)
         if: runner.os == 'Linux'
         run: xvfb-run -a node scripts/smoke-package.mjs "${{ matrix.executable }}"

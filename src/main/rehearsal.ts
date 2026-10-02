@@ -1,3 +1,5 @@
+import pin from '../../rehearse-toolchain.json'
+import { bundledRepair } from './rehearsalBundle'
 import { mkdtemp, writeFile, rm, realpath } from 'fs/promises'
 import { isAbsolute, join } from 'path'
 import { tmpdir } from 'os'
@@ -17,7 +19,8 @@ import {
 export { runRehearsalTool } from './rehearsalProcess'
 
 const repair =
-  'Rehearse is internal. Configure GIT_CITY_REHEARSE_BIN with an absolute path to a compatible development build of git-rehearse.'
+  bundledRepair +
+  ' Development only: configure GIT_CITY_REHEARSE_BIN with an absolute path to a compatible development build of git-rehearse.'
 
 export async function rehearsalAvailability(
   tool?: string
@@ -26,8 +29,8 @@ export async function rehearsalAvailability(
     return { available: false, configured: Boolean(tool), message: repair }
   try {
     const result = await runRehearsalTool(tool, ['--version'])
-    // The development contract is pinned until bundled-tool compatibility is shipped.
-    if (result.code !== 0 || result.stdout.trim() !== 'git-rehearse 1.2.0') {
+    // Both the pinned bundle and explicit development builds use this contract.
+    if (result.code !== 0 || result.stdout.trim() !== `git-rehearse ${pin.version}`) {
       return {
         available: false,
         configured: true,
@@ -149,7 +152,7 @@ async function report(
     const value: unknown = JSON.parse(result.stdout)
     if (!object(value) || value.schema !== 1)
       throw new Error(
-        'Unsupported Rehearse JSON schema. Update the configured development tool; retained data has not been deleted.'
+        'Unsupported Rehearse JSON schema. Repair or update Git City and its compatible tool; retained data has not been deleted.'
       )
     if ((value.kind === 'refused' || value.kind === 'internal') && string(value.message)) {
       return { kind: value.kind === 'refused' ? 'refused' : 'error', message: value.message }

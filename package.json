@@ -19,7 +19,8 @@
     "dist:mac": "electron-vite build && electron-builder --mac --publish never",
     "dist:linux": "electron-vite build && electron-builder --linux --publish never",
     "media": "node scripts/capture-media.mjs",
-    "media:app": "node scripts/capture-app.mjs"
+    "media:app": "node scripts/capture-app.mjs",
+    "tool:prepare": "python3 scripts/prepare-rehearse.py"
   },
   "dependencies": {
     "simple-git": "^3.27.0"

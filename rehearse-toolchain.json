@@ -1,0 +1,42 @@
+{
+  "version": "1.2.0",
+  "jsonSchema": 1,
+  "metadataSchema": 3,
+  "repository": "maximalcode/git-rehearse",
+  "runId": 36755220008,
+  "revision": "d57a6aa9e569e11817a86364775e46a377240511",
+  "targets": {
+    "darwin-arm64": {
+      "target": "aarch64-apple-darwin",
+      "archive": "git-rehearse-v1.2.0-test-d57a6aa9e569e11817a86364775e46a377240511-aarch64-apple-darwin.tar.gz",
+      "sha256": "945ba944c51f84e6cd5ead0be95ec3f3295a75f51a12943f04859b7fa0c5f9d6",
+      "executable": "git-rehearse",
+      "binarySha256": "44b16f5d2c34f196e330177e901b9227322ecff9defa78524307972e47e5a031",
+      "licenseSha256": "93a6ecdcbd3e29aa261196b94b489feda4f33d83e810522f99f3b7fe952e6b7e"
+    },
+    "darwin-x64": {
+      "target": "x86_64-apple-darwin",
+      "archive": "git-rehearse-v1.2.0-test-d57a6aa9e569e11817a86364775e46a377240511-x86_64-apple-darwin.tar.gz",
+      "sha256": "e2fb2870a24f25cdd57c9ec7d7c1d942bbcfabfde2c8a066cc3c2a7c932d920b",
+      "executable": "git-rehearse",
+      "binarySha256": "b81bf0d19024129feba6f00323611c13ecf047c5606bdf120321ae1cd535f551",
+      "licenseSha256": "93a6ecdcbd3e29aa261196b94b489feda4f33d83e810522f99f3b7fe952e6b7e"
+    },
+    "win32-x64": {
+      "target": "x86_64-pc-windows-msvc",
+      "archive": "git-rehearse-v1.2.0-test-d57a6aa9e569e11817a86364775e46a377240511-x86_64-pc-windows-msvc.zip",
+      "sha256": "5d0f02d8dbb818a41fd8c462bd6a04cdd32e528fd811f677a2d16270c57148fb",
+      "executable": "git-rehearse.exe",
+      "binarySha256": "92521e76d3925650fc6583b19ba3a102452c6d650bf2b05335502f39757b2ffb",
+      "licenseSha256": "08e8c3a229c173c54570edb9b8baf47614930c4170ba478a10116230412cd89b"
+    },
+    "linux-x64": {
+      "target": "x86_64-unknown-linux-gnu",
+      "archive": "git-rehearse-v1.2.0-test-d57a6aa9e569e11817a86364775e46a377240511-x86_64-unknown-linux-gnu.tar.gz",
+      "sha256": "de7a51c2507d88b8ac0d325e4f6bfe015dbd08fef77562dc35bb857d0a122e50",
+      "executable": "git-rehearse",
+      "binarySha256": "2a2a6f8889702bda47ad6a4a162f87a5f50e32b45bc83394945581897e0a4328",
+      "licenseSha256": "93a6ecdcbd3e29aa261196b94b489feda4f33d83e810522f99f3b7fe952e6b7e"
+    }
+  }
+}

@@ -1,3 +1,4 @@
+import { resolveRehearsalTool } from './rehearsalBundle'
 import { inspectUndo, undoRehearsal } from './rehearsalUndo'
 import { listRehearsals, discardRehearsals } from './rehearsalManagement'
 import { stopRehearsal } from './rehearsalProcess'
@@ -39,7 +40,9 @@ export function registerIpc(): void {
   // Deliberately outside the retrying mutation helper; never fall back to git merge.
   const rehearsalTool = (): string | undefined =>
     app.isPackaged ? undefined : process.env.GIT_CITY_REHEARSE_BIN
-  ipcMain.handle('git-city:rehearsal-availability', () => rehearsalAvailability(rehearsalTool()))
+  ipcMain.handle('git-city:rehearsal-availability', () =>
+    rehearsalAvailability(resolveRehearsalTool(app.isPackaged, process.resourcesPath))
+  )
   ipcMain.handle(
     'git-city:rehearse',
     (_event, repo: string, action: RehearsalAction, target: string, plan?: RehearsalPlan) =>

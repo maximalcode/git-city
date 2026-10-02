@@ -28,8 +28,11 @@ try {
       const available = await page.evaluate(() => window.gitCity.rehearsalAvailability())
       assert.equal(available.available, true, available.message)
       // Packaging must not publicly activate the feature or allow preview IPC.
-      const refused = await page.evaluate(() => window.gitCity.rehearseMerge('/invalid', 'main'))
-      assert.notEqual(refused.kind, 'report')
+      const refused = await page.evaluate(
+        (repo) => window.gitCity.rehearseMerge(repo, 'main'),
+        profile
+      )
+      assert.equal(refused.kind, 'unavailable')
       assert.equal(
         await page.getByRole('button', { name: 'Rehearse (internal)', exact: true }).count(),
         0

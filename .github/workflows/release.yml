@@ -28,6 +28,7 @@ on:
 
 jobs:
   package:
+    name: package (${{ matrix.platform }}-${{ matrix.arch }})
     strategy:
       fail-fast: false
       matrix:

@@ -102,6 +102,8 @@ test('retained history survives an Electron restart and keyboard discard/stop pr
     expect(
       (await page.evaluate((repo) => window.gitCity.rehearsalList(repo), repo)).entries
     ).toHaveLength(2)
+    // Background report refreshes can restore focus while the IPC read awaits.
+    await discard.focus()
     await page.keyboard.press('Enter')
     await page.keyboard.press('Tab')
     await expect(

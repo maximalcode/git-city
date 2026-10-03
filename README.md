@@ -200,6 +200,7 @@ with Tab/Enter navigation, checked save-and-stage and repeated Continue before
 confirmed Apply. Internal Automatic / Ask / Off modes share one persistent setting across worktrees;
 Automatic routes supported actions to rehearsal without changing the real checkout.
 Development builds also offer [Undo Apply](docs/rehearsal-development.md#undo-apply) for the exact backend-reported Apply and original worktree, with safety refusals and interrupted-Undo recovery.
+New previews wait for app-owned post-Apply inspection to finish; Stop also cancels queued previews.
 Internal reports explain hooks and isolated rerere learning, and distinguish signature presence from verification.
 Retained rehearsal history survives restarts, with Stop, confirmed
 single/batch Discard and storage warnings. This preview is hidden in packaged applications.

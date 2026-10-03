@@ -6,12 +6,9 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 import { runGit } from './git/exec'
 import { rehearse, rehearseMerge, rehearsalShow } from './rehearsal'
-import {
-  applyRehearsal,
-  commonRepository,
-  inspectRecovery,
-  recoverRehearsal
-} from './rehearsalRecovery'
+import { applyRehearsal, inspectRecovery, recoverRehearsal } from './rehearsalRecovery'
+
+import { commonRepository } from './repositoryQueue'
 
 const tool = process.env.GIT_CITY_REHEARSE_BIN
 const roots: string[] = []

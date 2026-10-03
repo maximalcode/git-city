@@ -1,4 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest'
+import { runGit } from './git/exec'
 import { mkdtemp, rm } from 'fs/promises'
 import { join } from 'path'
 import { tmpdir } from 'os'
@@ -16,6 +17,7 @@ afterEach(async () => {
 
 it('Stop immediately cancels preparation before any asynchronous launch work starts', async () => {
   repo = await mkdtemp(join(tmpdir(), 'git-city-pending-'))
+  await runGit(repo, ['init', '-b', 'main'])
   const launch = vi.fn()
   const running = withRehearsalExecution(repo, async () => {
     launch()
@@ -32,6 +34,7 @@ it('Stop immediately cancels preparation before any asynchronous launch work sta
 
 it('Stop during queued preparation prevents launch and waits for the request to settle', async () => {
   repo = await mkdtemp(join(tmpdir(), 'git-city-pending-'))
+  await runGit(repo, ['init', '-b', 'main'])
   const preparation = new Promise<void>((resolve) => {
     release = resolve
   })

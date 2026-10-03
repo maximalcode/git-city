@@ -257,6 +257,8 @@ export async function rehearse(
   ) {
     return { kind: 'refused', message: 'Choose a repository and a branch or commit to rehearse.' }
   }
+  // Packaged preview is disabled before repository admission or any Git lookup.
+  if (!tool || !isAbsolute(tool)) return { kind: 'unavailable', message: repair }
   return withRehearsalExecution(repo, (execution) =>
     executeRehearsal(tool, repo, action, target, plan, execution)
   )

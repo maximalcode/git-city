@@ -2,7 +2,7 @@ import { mkdir, readFile, rename, writeFile } from 'fs/promises'
 import { dirname } from 'path'
 import type { RehearsalMode, RehearsalModeSetting } from '../shared/types'
 import { withRepoLock } from './git/queue'
-import { commonRepository } from './rehearsalRecovery'
+import { commonRepository } from './repositoryQueue'
 
 interface Settings {
   schema: 1

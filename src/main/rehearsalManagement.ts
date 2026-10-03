@@ -9,7 +9,8 @@ import type {
 } from '../shared/types'
 import { runGit } from './git/exec'
 import { rehearsalAvailability, runRehearsalTool } from './rehearsal'
-import { inspectRecovery, withRepositoryWrite } from './rehearsalRecovery'
+import { inspectRecovery } from './rehearsalRecovery'
+import { withRepositoryWrite } from './repositoryQueue'
 
 const object = (v: unknown): v is Record<string, unknown> =>
   typeof v === 'object' && v !== null && !Array.isArray(v)
@@ -143,9 +144,11 @@ export async function listRehearsals(
   repo: string
 ): Promise<RehearsalInventory> {
   const listed = await listing(tool, repo)
-  const recovery = await withRepositoryWrite(listed.origin, () =>
-    inspectRecovery(tool, listed.origin)
-  )
+  // Active history must remain readable so the user can inspect and Stop it.
+  // Defer the journal-owning recovery command and conservatively protect data.
+  const recovery = listed.entries.some((entry) => entry.active)
+    ? { state: 'unknown', message: 'Recovery inspection is deferred while a rehearsal is active.' }
+    : await withRepositoryWrite(listed.origin, () => inspectRecovery(tool, listed.origin))
   const refs = new Map(
     (await runGit(listed.origin, ['for-each-ref', '--format=%(refname) %(objectname)']))
       .trim()
@@ -227,40 +230,48 @@ export async function discardRehearsals(
   const result: RehearsalDiscardResult = { discarded: [], failures: [] }
   for (const identity of identities) {
     try {
-      await withRehearsal(identity, async () => {
-        const listed = await listing(tool, repo)
-        const entry = listed.entries.find(
-          (item) =>
-            item.id === identity.id &&
-            item.repository === identity.repository &&
-            item.repository_id === identity.repository_id &&
-            item.origin_worktree === identity.origin_worktree
-        )
-        if (!entry)
-          throw new Error(
-            'Exact rehearsal identity is no longer present in this worktree. Refresh the inventory.'
+      // Refuse active work promptly rather than queue deletion behind its execution.
+      const initial = await listing(tool, repo)
+      if (initial.entries.some((entry) => entry.id === identity.id && entry.active))
+        throw new Error('Rehearsal is active. Stop its execution before discarding.')
+      await withRepositoryWrite(repo, () =>
+        withRehearsal(identity, async () => {
+          const listed = await listing(tool, repo)
+          const entry = listed.entries.find(
+            (item) =>
+              item.id === identity.id &&
+              item.repository === identity.repository &&
+              item.repository_id === identity.repository_id &&
+              item.origin_worktree === identity.origin_worktree
           )
-        if (entry.active)
-          throw new Error('Rehearsal is active. Stop its execution before discarding.')
-        const response = await withRepositoryWrite(listed.origin, () =>
-          runRehearsalTool(listed.tool, ['--json', 'discard', entry.id], listed.origin)
-        )
-        const value: unknown = JSON.parse(response.stdout)
-        if (object(value) && text(value.message)) throw new Error(value.message)
-        if (
-          response.code !== 0 ||
-          !object(value) ||
-          value.schema !== 1 ||
-          value.exit_code !== 0 ||
-          !Array.isArray(value.discarded) ||
-          value.discarded.length !== 1 ||
-          value.discarded[0] !== entry.id
-        )
-          throw new Error(
-            'Discard completion is uncertain. Refresh the inventory before trying again.'
+          if (!entry)
+            throw new Error(
+              'Exact rehearsal identity is no longer present in this worktree. Refresh the inventory.'
+            )
+          if (entry.active)
+            throw new Error('Rehearsal is active. Stop its execution before discarding.')
+          const response = await runRehearsalTool(
+            listed.tool,
+            ['--json', 'discard', entry.id],
+            listed.origin
           )
-        result.discarded.push(entry.id)
-      })
+          const value: unknown = JSON.parse(response.stdout)
+          if (object(value) && text(value.message)) throw new Error(value.message)
+          if (
+            response.code !== 0 ||
+            !object(value) ||
+            value.schema !== 1 ||
+            value.exit_code !== 0 ||
+            !Array.isArray(value.discarded) ||
+            value.discarded.length !== 1 ||
+            value.discarded[0] !== entry.id
+          )
+            throw new Error(
+              'Discard completion is uncertain. Refresh the inventory before trying again.'
+            )
+          result.discarded.push(entry.id)
+        })
+      )
     } catch (error) {
       result.failures.push({ id: identity.id, message: messages(error) })
     }

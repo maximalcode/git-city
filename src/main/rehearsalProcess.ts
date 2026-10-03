@@ -10,7 +10,11 @@ const executions = new Map<string, Execution>()
 export interface RehearsalExecution {
   check(): void
 }
-type PendingExecution = RehearsalExecution & { cancelled: boolean; done: Promise<void> }
+type PendingExecution = RehearsalExecution & {
+  cancelled: boolean
+  cancel(): void
+  done: Promise<void>
+}
 const pending = new Map<string, PendingExecution>()
 
 /** Register before the first asynchronous preparation step, including queued Continue. */
@@ -21,8 +25,16 @@ export async function withRehearsalExecution(
   if (pending.has(repo))
     return { kind: 'refused', message: 'A rehearsal is already running in this worktree.' }
   let finish!: () => void
+  let cancel!: () => void
+  const cancellation = new Promise<void>((resolve) => {
+    cancel = resolve
+  })
   const execution: PendingExecution = {
     cancelled: false,
+    cancel() {
+      this.cancelled = true
+      cancel()
+    },
     done: new Promise<void>((resolve) => {
       finish = resolve
     }),
@@ -39,10 +51,21 @@ export async function withRehearsalExecution(
       throw new Error('A rehearsal is already running in this worktree.')
     pending.set(origin, execution)
     execution.check()
-    return await withRepositoryPreview(origin, () => {
+    let started = false
+    const result = withRepositoryPreview(origin, () => {
       execution.check()
+      started = true
       return operation(execution)
     })
+    return await Promise.race([
+      result,
+      cancellation.then(() => {
+        // A cancelled queue entry must never launch when it is eventually admitted.
+        // Settle Stop now; once preparation starts, retain the usual drain semantics.
+        if (!started) execution.check()
+        return result
+      })
+    ])
   } catch (error) {
     return {
       kind: 'error',
@@ -60,7 +83,7 @@ export async function withRehearsalExecution(
 export async function stopRehearsal(repo: string): Promise<OpResult> {
   try {
     const preparation = pending.get(repo) ?? pending.get(await realpath(repo))
-    if (preparation) preparation.cancelled = true
+    preparation?.cancel()
     const execution = executions.get(await realpath(repo))
     if (!execution && !preparation)
       return { ok: false, message: 'No app-owned rehearsal is running in this worktree.' }

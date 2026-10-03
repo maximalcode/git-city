@@ -167,7 +167,6 @@ it('Stop cancels a preview waiting for inspection without launching it', async (
   await vi.waitFor(() => expect(withRepoLock).toHaveBeenCalledTimes(2))
   const stopped = stopRehearsal(root)
   running.push(stopped)
-  inspecting.release()
   expect((await stopped).ok).toBe(true)
   expect(await next).toMatchObject({
     kind: 'error',
@@ -175,6 +174,9 @@ it('Stop cancels a preview waiting for inspection without launching it', async (
   })
   expect(launch).not.toHaveBeenCalled()
   expect((await stopRehearsal(root)).ok).toBe(false)
+  inspecting.release()
+  await withRepositoryWrite(root, async () => undefined)
+  expect(launch).not.toHaveBeenCalled()
 })
 
 it('releases failed previews and inspections without blocking the next operation', async () => {

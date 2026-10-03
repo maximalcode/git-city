@@ -2800,3 +2800,9 @@
   outline: 2px solid var(--accent, #88baff);
   outline-offset: 2px;
 }
+
+.rehearsal-city {
+  height: 360px;
+  position: relative;
+  margin-block: 12px;
+}

@@ -564,6 +564,15 @@ export interface RehearsalReport extends RehearsalIdentity {
   carried?: { paths: string[]; status: string; conflicts: string[]; reason?: string }
 }
 
+/** Two immutable endpoints sharing one layout and string table. */
+export interface RehearsalComparison {
+  reportKey: string
+  identity: RehearsalIdentity
+  analysis: RepoAnalysis
+  afterAvailable: boolean
+  notice: string
+}
+
 /** Inventory belongs to one canonical original worktree. Byte counts are logical,
  * including shared Git objects; they are not a prediction of freed disk space. */
 export interface RehearsalEntry extends RehearsalIdentity {
@@ -682,6 +691,7 @@ export interface GitCityApi {
     text: string | { side: 'ours' | 'theirs' }
   ): Promise<void>
   rehearsalContinue(identity: RehearsalIdentity): Promise<RehearsalResult>
+  rehearsalComparison(identity: RehearsalIdentity): Promise<RehearsalComparison>
   rehearsalShow(identity: RehearsalIdentity): Promise<RehearsalResult>
   rehearsalList(repo: string): Promise<RehearsalInventory>
   rehearsalDiscard(repo: string, identities: RehearsalIdentity[]): Promise<RehearsalDiscardResult>

@@ -193,3 +193,9 @@ Internal rehearsal reports explain hook suppression and sandbox-only rerere lear
 The internal rehearsal tool is bundled and integrity-checked for Windows/Linux x64
 and both macOS architectures. Packaged rehearsal controls remain hidden pending
 #155; see [internal development and update validation](rehearsal-development.md).
+
+Internal rehearsal reports also offer **Compare city**: keyboard-operated Before
+and After views of the same frozen rehearsal, with tracked carried work, a shared
+scene layout and a text file/line inventory. Unfinished rehearsals explicitly lack
+a finished After. See the [development guide](rehearsal-development.md#frozen-city-comparison);
+public activation remains disabled.

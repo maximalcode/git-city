@@ -32,13 +32,15 @@ export default function FarmScene({
   targets,
   snapshot,
   hotspots = [],
-  reviewPaths = []
+  reviewPaths = [],
+  liveWorktree = true
 }: {
   model: FarmModel
   targets: FarmTargets
   snapshot: Snapshot
   hotspots?: string[]
   reviewPaths?: string[]
+  liveWorktree?: boolean
 }): React.JSX.Element {
   const theme = getTheme(useStore((s) => s.themeId))
   const manualTimeOfDay = useStore((s) => s.timeOfDay)
@@ -111,12 +113,12 @@ export default function FarmScene({
       {/* crop stands a fraction of a building's height, so both marker layers
           get a floor — otherwise a selected field is a bright smear on the soil
           rather than a box you can see from the default camera */}
-      <Highlight model={model} targets={targets} floor={MARKER_FLOOR} />
-      <StatusOverlay model={model} targets={targets} floor={MARKER_FLOOR} />
-      <ConstructionSites model={model} size={size} />
+      {liveWorktree && <Highlight model={model} targets={targets} floor={MARKER_FLOOR} />}
+      {liveWorktree && <StatusOverlay model={model} targets={targets} floor={MARKER_FLOOR} />}
+      {liveWorktree && <ConstructionSites model={model} size={size} />}
       <Hotspots anchors={beacons} />
       <Hotspots anchors={reviewBeacons} color="#6ec8ff" />
-      <Effects citySize={size} />
+      {liveWorktree && <Effects citySize={size} />}
     </group>
   )
 }

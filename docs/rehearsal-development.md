@@ -60,7 +60,6 @@ continue to hide all mode controls and retain current direct behavior until the
 complete public acceptance ticket. Internal modes require the development renderer
 started by `npm run dev`.
 
-
 For interactive rebase, open **Branches → Rebase…**, prepare the existing newest-first
 Pick/Squash/Drop plan with the up/down buttons, and activate **Rehearse interactive
 rebase**. Tab and Enter operate the plan controls; the selected action is announced
@@ -272,7 +271,6 @@ remain visible and block Apply; there is no retry with signing disabled. Apply
 transplants the reviewed commit objects unchanged. These report details require
 no additional controls; completion still focuses the keyboard-accessible result.
 
-
 ## Bundled toolchain and updates
 
 Packaged apps include the exact upstream test artifacts recorded in
@@ -297,3 +295,37 @@ fields survive repeated reads and retry. Backup failure refuses conversion witho
 changing the source. Missing legacy origin leaves Apply protected. Future schema
 metadata remains byte-for-byte intact and refuses inspection; do not delete it to
 clear an error. No app updater scans, rewrites or prunes retained work.
+
+## Frozen city comparison
+
+Open a retained report and choose **Compare city**. **Before** receives focus;
+Tab and Enter/Space switch to **After** in the same scene and camera. Both
+endpoints use one shared layout, the existing city/farm renderer and history
+analysis. A text status names the rehearsal, endpoint, file count and line count;
+**Snapshot files and line counts** provides a keyboard-accessible text inventory.
+Playback pauses and the live canvas unmounts while this comparison is visible, so
+only one 3D scene runs at a time. Live worktree status overlays and file actions
+are excluded from this scene.
+
+Before uses the rehearsal's frozen original commit, including its tracked carried
+work. After uses the completed result, including restored carried work. Neither
+uses the current original HEAD or mutable sandbox files. Untracked files are
+excluded, as in the report. Stopped, incomplete, failed and unresolved carried-work
+results have no finished After and explain this in text. An incomplete report
+without carried-work details explicitly labels Before as the frozen committed
+tree only. Continue and report
+refresh invalidate the comparison; choose Compare city again to analyze the result.
+Switching rehearsals or worktrees rejects late analysis responses.
+
+The main process validates the exact report identity through public JSON `show`,
+then reads immutable Git objects in the separate sandbox without checkout or index
+changes. The compatibility adapter uses the pinned tool's retained
+`refs/rehearse/carried` and `refs/rehearse/replayed` stash commits and validates their
+first parents against the report. It does not read private metadata. Missing or
+incompatible retained objects produce an error, never a live-HEAD fallback. A second
+report/endpoint check rejects changes during analysis. The real-tool tests must be
+run when updating the pinned tool because these retained refs are an integration
+assumption beyond the JSON schema.
+
+This comparison remains inside the development-only rehearsal panel. Public
+screenshots and the released feature pitch are unchanged.

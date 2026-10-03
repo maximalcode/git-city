@@ -111,6 +111,7 @@ export const createRehearsalManagement: StateCreator<
     selectRehearsal: async (repo, entry, isCurrent = () => true) => {
       const api = bridge()
       if (!api || get().rehearsalBusy) return
+      get().clearRehearsalComparison()
       rememberRehearsal(entry.origin_worktree, entry.id)
       set((state) => ({
         rehearsalBusy: true,

@@ -1,3 +1,4 @@
+import RehearsalCityComparison from './RehearsalCityComparison'
 import RehearsalUndo from './RehearsalUndo'
 import RehearsalMode from './RehearsalMode'
 import RehearsalHistory from './RehearsalHistory'
@@ -387,6 +388,7 @@ export default function RehearsalPanel(): React.JSX.Element | null {
             )
           )}
         </div>
+        {open && result?.kind === 'report' && <RehearsalCityComparison report={result.report} />}
         {result?.kind === 'report' && result.report.outcome === 'stopped' && (
           <RehearsalConflicts
             key={`${repo}:${result.report.id}`}

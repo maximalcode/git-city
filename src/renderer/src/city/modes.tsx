@@ -30,6 +30,8 @@ export interface MinimapDot {
 }
 
 export interface SceneProps {
+  /** Frozen comparisons exclude live worktree overlays and operation effects. */
+  liveWorktree?: boolean
   snapshot: Snapshot
   hotspots: string[]
   reviewPaths: string[]

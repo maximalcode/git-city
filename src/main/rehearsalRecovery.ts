@@ -1,15 +1,8 @@
 import { lstat, realpath } from 'fs/promises'
 import { join } from 'path'
 import type { RehearsalApplyResult, RehearsalReport, RehearsalRecovery } from '../shared/types'
-import { runGit } from './git/exec'
-import { withRepoLock } from './git/queue'
+import { commonRepository, withRepositoryWrite } from './repositoryQueue'
 import { rehearsalAvailability, rehearsalShow, runRehearsalTool } from './rehearsal'
-
-export async function commonRepository(repo: string): Promise<string> {
-  return realpath(
-    (await runGit(repo, ['rev-parse', '--path-format=absolute', '--git-common-dir'])).trim()
-  )
-}
 
 const unknown = (repository: string, message: string): RehearsalRecovery => ({
   repository,
@@ -106,11 +99,6 @@ export async function inspectRecovery(
       error instanceof Error ? error.message : 'Recovery status could not be established.'
     )
   }
-}
-
-/** The same common-directory queue covers Apply, Recovery and every ordinary write. */
-export async function withRepositoryWrite<T>(repo: string, fn: () => Promise<T>): Promise<T> {
-  return withRepoLock(await commonRepository(repo), fn)
 }
 
 export async function applyRehearsal(

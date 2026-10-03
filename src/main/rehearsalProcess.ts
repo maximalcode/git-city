@@ -1,3 +1,4 @@
+import { withRepositoryPreview } from './repositoryQueue'
 import { verifyRehearsalInvocation } from './rehearsalBundle'
 import { spawn } from 'child_process'
 import { realpath } from 'fs/promises'
@@ -38,7 +39,10 @@ export async function withRehearsalExecution(
       throw new Error('A rehearsal is already running in this worktree.')
     pending.set(origin, execution)
     execution.check()
-    return await operation(execution)
+    return await withRepositoryPreview(origin, () => {
+      execution.check()
+      return operation(execution)
+    })
   } catch (error) {
     return {
       kind: 'error',

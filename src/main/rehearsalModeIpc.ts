@@ -2,7 +2,7 @@ import { app } from 'electron'
 import { join } from 'path'
 import type { RehearsalMode, RehearsalModeSetting } from '../shared/types'
 import { rehearsalMode } from './rehearsalMode'
-import { withRepositoryWrite } from './rehearsalRecovery'
+import { withRepositoryWrite } from './repositoryQueue'
 
 export function getRehearsalMode(
   repo: string,

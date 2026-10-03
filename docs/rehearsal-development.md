@@ -178,6 +178,13 @@ status, branches, other repository views and scene analysis refresh.
 Apply and recovery never use the ordinary index.lock retry. If a response is
 lost, the app queries recovery status and reports uncertain completion without
 repeating Apply. Review the refreshed repository before another rehearsal.
+New previews and Continue wait for app-owned recovery/Undo inspections and writes
+to finish, including post-Apply history refreshes. Recovery/Undo inspections and writes also wait
+for running previews; Stop remains available while a preview is queued or running.
+History with active entries remains readable, with deletion protected until recovery
+can be inspected after execution ends.
+Previews in separate linked worktrees can still run together. External CLI lock
+refusals remain visible and are never retried automatically.
 
 Opening a repository (including after restart) checks recovery independently of
 the preview entry point. Every ordinary write checks again under the same queue

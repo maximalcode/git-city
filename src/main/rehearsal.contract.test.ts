@@ -4,6 +4,10 @@ import { PassThrough } from 'stream'
 import { spawn } from 'child_process'
 import { rehearse, rehearseMerge, rehearsalAvailability } from './rehearsal'
 
+vi.mock('./repositoryQueue', () => ({
+  withRepositoryPreview: (_repo: string, run: () => Promise<unknown>) => run()
+}))
+
 vi.mock('child_process', () => ({ spawn: vi.fn() }))
 const replies: { code: number; stdout: string }[] = []
 beforeEach(() => {

@@ -185,6 +185,7 @@ test('retained history survives an Electron restart and keyboard discard/stop pr
       page.getByRole('button', { name: 'Stop rehearsal', exact: true })
     ).not.toBeVisible()
     await expect(page.getByText(/Execution ended. Retained state/)).toBeVisible()
+    await expect(page.locator('.rehearsal-panel [aria-live="polite"]')).toBeFocused()
     await expandRehearsal(page, /^Saved rehearsals/)
     await page.getByRole('button', { name: 'Refresh history' }).click()
     const stopped = (

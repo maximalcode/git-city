@@ -131,6 +131,7 @@ test('real Electron merge preview preserves the original and supports keyboard k
     await expect(page.getByRole('button', { name: 'Apply rehearsal', exact: true })).toBeFocused()
     await page.keyboard.press('Enter')
     await expect(page.getByText('The checked rehearsal was applied.')).toBeVisible()
+    await expect(page.locator('.rehearsal-panel [aria-live="polite"]')).toBeFocused()
     expect(git('rev-parse', 'HEAD^2')).toBe(git('rev-parse', 'topic'))
     expect(await readFile(join(root, 'file.txt'), 'utf8')).toBe('preview\n')
     const appliedHead = git('rev-parse', 'HEAD')

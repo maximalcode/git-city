@@ -404,7 +404,13 @@ export default function RehearsalPanel(): React.JSX.Element | null {
             </p>
             <div className="rehearsal-actions">
               {running && (
-                <button disabled={stopping} onClick={() => void stop()}>
+                <button
+                  disabled={stopping}
+                  onClick={() => {
+                    status.current?.focus()
+                    void stop()
+                  }}
+                >
                   {stopping ? 'Stopping…' : 'Stop rehearsal'}
                 </button>
               )}
@@ -456,6 +462,8 @@ export default function RehearsalPanel(): React.JSX.Element | null {
                 <button
                   disabled={busy || !!blocked}
                   onClick={() => {
+                    confirmation.current?.close()
+                    status.current?.focus()
                     setConfirmApply(null)
                     void apply(result.report)
                   }}

@@ -46,7 +46,7 @@ test('retained history survives an Electron restart and keyboard discard/stop pr
     }, repo)
     const page = await launched.firstWindow()
     await page.getByRole('button', { name: 'Open a local repository…' }).click()
-    await page.getByRole('button', { name: 'Rehearse (internal)' }).click()
+    await page.getByRole('button', { name: 'Rehearse panel' }).click()
     return launched
   }
   try {
@@ -81,7 +81,7 @@ test('retained history survives an Electron restart and keyboard discard/stop pr
       page.getByRole('button', { name: `Open ${first.id} (current)`, exact: true })
     ).toBeEnabled()
     await page.keyboard.press('Escape')
-    await expect(page.getByRole('button', { name: 'Rehearse (internal)' })).toBeFocused()
+    await expect(page.getByRole('button', { name: 'Rehearse panel' })).toBeFocused()
     await app.close()
     app = undefined
     // A real main/renderer process restart, with the same browser preference storage.
@@ -177,8 +177,8 @@ test('retained history survives an Electron restart and keyboard discard/stop pr
     await page.screenshot({ path: 'test-results/rehearsal-running.png' })
     await page.getByRole('button', { name: 'Keep and close', exact: true }).focus()
     await page.keyboard.press('Enter')
-    await expect(page.getByRole('button', { name: 'Rehearse (internal)' })).toBeFocused()
-    await page.getByRole('button', { name: 'Rehearse (internal)' }).click()
+    await expect(page.getByRole('button', { name: 'Rehearse panel' })).toBeFocused()
+    await page.getByRole('button', { name: 'Rehearse panel' }).click()
     await page.getByRole('button', { name: 'Stop rehearsal', exact: true }).focus()
     await page.keyboard.press('Enter')
     await expect(

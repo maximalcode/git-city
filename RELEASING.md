@@ -114,8 +114,7 @@ Fixing it properly needs an **Apple Developer account ($99/yr)** for signing + n
 pattern as Windows: store `APPLE_ID` / `APPLE_APP_SPECIFIC_PASSWORD` / the signing certificate as
 repository secrets and reference them from the macOS build step.
 
-
-### Pinned Rehearse packages (internal until #155)
+### Pinned Rehearse packages
 
 Before a local `dist:*` build, run `npm run tool:prepare` (requires authenticated
 `gh` and Python 3). Pass a target such as `-- darwin-arm64` to prepare one target.

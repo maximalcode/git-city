@@ -49,7 +49,7 @@ test('nonmodal rehearsal panel keeps the city usable and explains retained state
     )
     await page.getByRole('button', { name: 'Open a local repository…' }).click()
     await page.getByRole('button', { name: 'Got it', exact: true }).click()
-    await page.getByRole('button', { name: 'Rehearse (internal)' }).click()
+    await page.getByRole('button', { name: 'Rehearse panel' }).click()
 
     const panel = page.getByRole('complementary', { name: 'Rehearse merge', exact: true })
     await expect(panel).toBeVisible()

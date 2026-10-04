@@ -34,7 +34,7 @@ export default function RehearsalMode(): React.JSX.Element | null {
       else select.current?.focus()
     }
   }, [needsChoice])
-  if (!import.meta.env.DEV || !repo || (!setting && !error)) return null
+  if (!repo || (!setting && !error)) return null
   const choose = async (mode: Mode): Promise<void> => {
     setSaving(true)
     await refresh(mode)
@@ -50,7 +50,7 @@ export default function RehearsalMode(): React.JSX.Element | null {
     >
       {error && <p role="alert">⚠ Could not load or save Rehearse mode: {error}</p>}
       <label>
-        Rehearse mode (internal)
+        Rehearse mode
         <select
           ref={select}
           value={setting?.mode ?? ''}

@@ -43,7 +43,7 @@ for (const entry of ['merge', 'rebase', 'graph', 'detail', 'interactive'] as con
       }, root)
       const page = await app.firstWindow()
       await page.getByRole('button', { name: 'Open a local repository…' }).click()
-      await expect(page.getByLabel('Rehearse mode (internal)')).toHaveValue('automatic')
+      await expect(page.getByRole('combobox', { name: /Rehearse mode/ })).toHaveValue('automatic')
       await page.keyboard.press('Escape')
       if (entry === 'merge' || entry === 'rebase' || entry === 'interactive') {
         await page.keyboard.press('b')
@@ -147,13 +147,13 @@ test('known repository choice, linked-worktree restart, missing tool and explici
     await page.keyboard.press('Tab')
     await page.keyboard.press('Enter')
     await expect(chooser).not.toBeVisible()
-    await expect(page.getByLabel('Rehearse mode (internal)')).toHaveValue('ask')
+    await expect(page.getByRole('combobox', { name: /Rehearse mode/ })).toHaveValue('ask')
     await page.keyboard.press('Escape')
     await page.keyboard.press('b')
     await expect(
       page.getByRole('button', { name: 'Rehearse rebase', exact: true }).first()
     ).toBeVisible()
-    await page.getByLabel('Rehearse mode (internal)').selectOption('automatic')
+    await page.getByRole('combobox', { name: /Rehearse mode/ }).selectOption('automatic')
     await expect
       .poll(() => page.evaluate((path) => window.gitCity.rehearsalMode(path, []), root))
       .toMatchObject({ mode: 'automatic' })
@@ -168,7 +168,7 @@ test('known repository choice, linked-worktree restart, missing tool and explici
       dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] })
     }, root)
     await page.getByRole('button', { name: 'Open a local repository…' }).click()
-    await expect(page.getByLabel('Rehearse mode (internal)')).toHaveValue('automatic')
+    await expect(page.getByRole('combobox', { name: /Rehearse mode/ })).toHaveValue('automatic')
     await expect(page.getByRole('dialog', { name: 'Choose a Rehearse mode' })).not.toBeVisible()
     await page.keyboard.press('Escape')
     await page.keyboard.press('b')
@@ -189,7 +189,7 @@ test('known repository choice, linked-worktree restart, missing tool and explici
     ).toBe(true)
     expect(git('rev-parse', 'HEAD')).toBe(before)
     await page.keyboard.press('Escape')
-    await page.getByLabel('Rehearse mode (internal)').selectOption('off')
+    await page.getByRole('combobox', { name: /Rehearse mode/ }).selectOption('off')
     await expect
       .poll(() => page.evaluate((path) => window.gitCity.rehearsalMode(path, []), linked))
       .toMatchObject({ mode: 'off' })
@@ -213,7 +213,7 @@ test('known repository choice, linked-worktree restart, missing tool and explici
   }
 })
 
-test('unpackaged production renderer ignores internal preferences without hiding required choices', async () => {
+test('production renderer prompts known repositories and routes Automatic without direct mutation', async () => {
   const userData = await mkdtemp(join(tmpdir(), 'city-mode-production-'))
   const root = await mkdtemp(join(tmpdir(), 'city-mode-production-repo-'))
   const git = (...args: string[]): string =>
@@ -253,17 +253,16 @@ test('unpackaged production renderer ignores internal preferences without hiding
     const page = await app.firstWindow()
     await page.getByRole('button', { name: 'Open a local repository…' }).click()
     await expect(page.getByRole('button', { name: 'Branches', exact: true })).toBeVisible()
-    expect(await page.evaluate((path) => window.gitCity.rehearsalMode(path, []), root)).toBeNull()
-    await expect(page.getByLabel('Rehearse mode (internal)')).toHaveCount(0)
-    await expect(page.getByRole('button', { name: 'Rehearse (internal)' })).toHaveCount(0)
+    await expect(page.getByRole('dialog', { name: 'Choose a Rehearse mode' })).toBeVisible()
+    await page.getByRole('button', { name: 'Automatic', exact: true }).click()
+    await expect(page.getByRole('combobox', { name: /Rehearse mode/ })).toHaveValue('automatic')
+    await expect(page.getByRole('button', { name: 'Rehearse panel' })).toBeVisible()
     await page.keyboard.press('Escape')
     await page.keyboard.press('b')
     await page.getByRole('button', { name: 'Merge', exact: true }).click()
-    await expect.poll(() => git('rev-parse', 'HEAD')).toBe(git('rev-parse', 'topic'))
-    // The hidden development preference was not converted or overwritten.
-    expect(
-      JSON.parse(await readFile(join(userData, 'rehearsal-modes.json'), 'utf8')).legacy
-    ).toEqual([root])
+    await expect(page.getByRole('heading', { name: 'Merge preview completed' })).toBeVisible()
+    expect(git('rev-parse', 'HEAD')).not.toBe(git('rev-parse', 'topic'))
+    await expect(page.getByRole('button', { name: 'Apply', exact: true })).toBeEnabled()
   } finally {
     await app.close()
     await rm(root, { recursive: true, force: true })

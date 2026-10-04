@@ -13,7 +13,7 @@ export function RehearseButton({
   const mode = useStore((s) => s.rehearsalModeSetting?.mode)
   const busy = useStore((s) => s.rehearsalBusy || s.opInProgress !== null)
   const open = useStore((s) => s.openRehearsal)
-  if (!import.meta.env.DEV || !configured || mode === 'off' || mode === null) return null
+  if (!configured || mode === 'off' || mode === null) return null
   return (
     <button
       disabled={busy}

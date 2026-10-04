@@ -57,7 +57,7 @@ for (const [entryKind, conflict] of [
         }, root)
         const page = await app.firstWindow()
         await page.getByRole('button', { name: 'Open a local repository…' }).click()
-        await expect(page.getByRole('button', { name: 'Rehearse (internal)' })).toBeVisible()
+        await expect(page.getByRole('button', { name: 'Rehearse panel' })).toBeVisible()
         await page.keyboard.press('Escape')
         if (entryKind === 'branches') {
           await page.keyboard.press('b')
@@ -112,7 +112,7 @@ for (const [entryKind, conflict] of [
         await page.keyboard.press('Escape')
         await expect(entry).toBeFocused()
         // Reopen the retained report without creating another rehearsal.
-        await page.getByRole('button', { name: 'Rehearse (internal)' }).click()
+        await page.getByRole('button', { name: 'Rehearse panel' }).click()
         await page.getByRole('button', { name: 'Apply', exact: true }).click()
         await expect(page.getByRole('button', { name: 'Cancel Apply' })).toBeFocused()
         await expect(page.getByRole('region', { name: 'Confirm Apply' })).toContainText(action)

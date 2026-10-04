@@ -40,7 +40,7 @@ export async function rehearsalAvailability(
     return {
       available: true,
       configured: true,
-      message: 'Internal rehearsal with checked Apply and recovery.'
+      message: 'Rehearsal with checked Apply and recovery.'
     }
   } catch {
     return {
@@ -257,7 +257,7 @@ export async function rehearse(
   ) {
     return { kind: 'refused', message: 'Choose a repository and a branch or commit to rehearse.' }
   }
-  // Packaged preview is disabled before repository admission or any Git lookup.
+  // Missing development configuration is refused before any repository lookup.
   if (!tool || !isAbsolute(tool)) return { kind: 'unavailable', message: repair }
   return withRehearsalExecution(repo, (execution) =>
     executeRehearsal(tool, repo, action, target, plan, execution)

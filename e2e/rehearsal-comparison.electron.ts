@@ -41,7 +41,7 @@ test('keyboard city comparison stays with its frozen rehearsal when switching re
     const page = await app.firstWindow()
     await page.getByRole('button', { name: 'Open a local repository…' }).click()
     await page.getByRole('button', { name: 'Got it', exact: true }).click()
-    await page.getByRole('button', { name: 'Rehearse (internal)' }).click()
+    await page.getByRole('button', { name: 'Rehearse panel' }).click()
     const create = async (target: string): Promise<void> => {
       await expandRehearsal(page, /Rehearse again|Choose rehearsal target/)
       await page.getByLabel('Branch or commit to merge into the current checkout').fill(target)
@@ -105,7 +105,7 @@ test('keyboard city comparison stays with its frozen rehearsal when switching re
     expect(git('rev-parse', 'HEAD')).toBe(before.head)
     expect(await readFile(join(repo, '.git/index'))).toEqual(before.index)
     await page.keyboard.press('Escape')
-    await expect(page.getByRole('button', { name: 'Rehearse (internal)' })).toBeFocused()
+    await expect(page.getByRole('button', { name: 'Rehearse panel' })).toBeFocused()
     await expect(page.locator('canvas:not(.minimap canvas)')).toHaveCount(1)
   } finally {
     await app.close()

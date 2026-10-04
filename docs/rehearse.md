@@ -5,12 +5,13 @@ retained sandbox. Review the result, resolve conflicts there, then explicitly
 confirm **Apply** to adopt the reviewed result in the original worktree.
 A clean Git result is not proof that the resulting code is correct.
 
-Public activation is currently gated by [acceptance](rehearsal-acceptance.md).
-Until that gate is removed, use the [development setup](rehearsal-development.md).
+Git City includes the compatible tool; no separate installation is needed.
+Missing or damaged tools require repairing or reinstalling the app.
+See [acceptance evidence](rehearsal-acceptance.md) and [development setup](rehearsal-development.md).
 
 ## The side panel
 
-Choose **Rehearse (internal)**, or open a contextual Rehearse action beside a
+Choose **Rehearse panel**, or open a contextual Rehearse action beside a
 branch or commit. Git City opens a nonmodal panel on the right side of the
 workspace. The city remains visible beside it, there is no backdrop, and focus
 is not trapped inside the panel. The panel shows the operation in its header,
@@ -36,6 +37,8 @@ inventory of files and line counts. Stopped, incomplete, failed, and unresolved
 results explain when an After view is unavailable. While the comparison is
 open, the live scene is paused so the comparison is the only active 3D scene in
 the main workspace. **Return to live city** leaves the comparison.
+
+![The Rehearse panel beside the city](media/app-rehearsal.png)
 
 ## Choose a mode
 

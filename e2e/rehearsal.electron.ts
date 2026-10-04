@@ -51,7 +51,7 @@ test('real Electron merge preview preserves the original and supports keyboard k
     const page = await app.firstWindow()
     await page.getByRole('button', { name: 'Open a local repository…' }).click()
     await page.getByRole('button', { name: 'Got it', exact: true }).click()
-    const entry = page.getByRole('button', { name: 'Rehearse (internal)' })
+    const entry = page.getByRole('button', { name: 'Rehearse panel' })
     await entry.focus()
     await page.keyboard.press('Enter')
     const target = page.getByLabel('Branch or commit to merge into the current checkout')

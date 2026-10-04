@@ -155,57 +155,52 @@ MediaRecorder, so it needs no extra dependency.
 **Recent repositories**, drag-and-drop a folder to open, and file search with
 fly-to.
 
-### Internal rehearsal (development only)
+### Rehearse
 
-An explicitly configured git-rehearse development build enables an internal
-merge, normal rebase and single-commit cherry-pick preview with retained results,
-branch/commit and file consequences,
-conflicts and textual content warnings. The nonmodal right-side panel keeps the city
-visible and usable, labels the current branch and operation target, and keeps Stop,
-Keep and Apply in a fixed footer. Expand Review changes, Saved rehearsals and
-Technical details for the full report, history/storage and execution metadata.
-Compare city shows frozen Before/After snapshots when a completed result supports
-it, and Undo Apply stays tied to the backend-reported Apply. Actionable warnings
-stay prominent; unavailable Apply has an explanation. See the [Rehearse panel
-guide](rehearse.md) for the workflow.
-Closing keeps the preview; **Rehearse (internal)** reopens it. Retained history and the current selection survive app restarts; each worktree has its own inventory. Stop ends app-owned preview/Continue execution and reloads its state without promising resumability. Confirmed single/batch Discard protects active and recovery data. Logical storage use and low-space warnings support deliberate cleanup, with no automatic deletion. Confirmed
-Apply adopts the checked result after backend revalidation. Interrupted Apply
-blocks repository writes across worktrees and offers backend-approved recovery.
-New previews and Continue wait for app-owned post-Apply recovery/Undo inspections;
-linked-worktree previews can still run concurrently, and queued previews can be stopped.
-Public entry points remain unavailable pending the complete safety workflow.
-Rebase starts from the selected branch; cherry-pick starts from one commit in
-the graph or commit detail view. Both reuse the shared preview and confirmation.
-Stopped rehearsals offer the existing text hunk choices and free-text editing in
-the sandbox, checked save-and-stage, external-editor refresh and repeated Continue.
-The final reviewed sandbox commits are adopted only through confirmed Apply.
-See [development setup and limitations](rehearsal-development.md).
+Git City bundles a compatible, integrity-checked git-rehearse tool for Windows x64,
+Linux x64, Intel macOS and Apple Silicon. Merge, normal Rebase, the existing
+interactive Pick/Squash/Drop/reorder plan, and single Cherry-pick from Graph or
+commit details run in retained sandboxes. There is no separate installation.
 
-Internal rehearsal conflict handling also offers byte-preserving whole-file binary choices and sandbox-specific external deletion/rename resolution instructions, with content and conflict status refreshed on return. This remains hidden in packaged applications (see [development guide](rehearsal-development.md)).
+The nonmodal **Rehearse panel** keeps the city usable and names the operation,
+original checkout and target. Review changes, Saved rehearsals and Technical
+details expose refs/commits, files, conflicts, unexpected content, tracked carried
+work, history/storage and execution conditions. Text warnings stay prominent.
+**Compare city** switches one scene between frozen Before/After snapshots with a
+shared layout and text inventory; unfinished results explain the missing After.
 
-The internal interactive-rebase entry rehearses the existing Pick/Squash/Drop and
-reorder plan, including repeated sandbox conflict resolution and explicit adoption
-of the final reviewed commits. It remains hidden in packaged applications.
+Text conflicts support hunk choices, free editing, checked save-and-stage,
+external-edit refresh and repeated Continue. Binary conflicts support complete
+Ours/Theirs versions; deletion/rename conflicts have external sandbox instructions.
+Apply confirms origin and consequences, rechecks state, then adopts exact reviewed
+objects. Stale results and local-work/foreign-checkout collisions are refused and
+retained. Carried tracked edits become unstaged; untracked files are not carried.
 
-Internal development mode also provides a persistent **Automatic / Ask / Off**
-choice shared by all worktrees of a repository. New repositories default to
-Automatic; repositories already in the recent list get a one-time choice.
-Automatic routes every existing Merge, Rebase (including interactive), and
-single-commit Cherry-pick entry to a retained rehearsal. Ask offers manual
-Rehearse entries; Off keeps direct actions. Tool failures never silently fall
-back, and recovery locks apply in every mode. Pull remains outside rehearsal
-routing. These controls remain hidden in packaged releases.
+**Automatic / Ask / Off** persists across linked worktrees. New repositories use
+Automatic; existing recent repositories get a one-time choice. Automatic routes
+supported existing actions to rehearsal; Ask adds explicit manual entries; Off
+keeps direct actions. Pull, Fetch and Push are outside routing. Missing or damaged
+tools require repair, without a silent direct fallback. Recovery locks apply in all modes.
 
-Internal development rehearsal also offers backend-checked **Undo Apply**, naming the exact Apply and original worktree, refusing changed refs/local work/foreign checkout occupancy, and routing interrupted Undo to mandatory recovery. See [development instructions](rehearsal-development.md#undo-apply); public activation remains disabled.
+Keep closes without deleting work or stopping execution. Saved selection and
+history survive restart, independently per worktree. Stop preserves incomplete
+work; confirmed single/batch Discard protects active and recovery data. Logical
+storage and low-space warnings never cause automatic deletion. Independent linked
+worktree previews can run concurrently; recovery/Undo inspection and writes wait
+for app-owned previews, and previews wait for those inspections and writes.
 
-Internal rehearsal reports explain hook suppression and sandbox-only rerere learning, and show signature presence separately from unchecked validity and signer trust. Signing failures remain visible without an unsigned fallback. See [execution conditions](rehearsal-development.md#hooks-signing-and-learned-resolutions).
+**Undo Apply** names the exact last Apply and origin, refusing changed refs, local
+work or foreign checkout occupancy. Interrupted Apply/Undo blocks writes across
+the common repository and offers only backend-approved recovery. Unknown states
+remain blocked; external processes are not locked by Git City.
 
-The internal rehearsal tool is bundled and integrity-checked for Windows/Linux x64
-and both macOS architectures. Packaged rehearsal controls remain hidden pending
-#155; see [internal development and update validation](rehearsal-development.md).
+Hooks are disabled in rehearsal and Apply; Off retains direct hook behavior.
+Existing rerere solutions are copied; new solutions stay in the sandbox. Signing
+failures never downgrade to unsigned commits. Signature presence is distinct from
+cryptographic verification and signer trust, which are not checked. The sandbox
+is not operating-system isolation. Existing tool restrictions still apply.
 
-Internal rehearsal reports also offer **Compare city**: keyboard-operated Before
-and After views of the same frozen rehearsal, with tracked carried work, a shared
-scene layout and a text file/line inventory. Unfinished rehearsals explicitly lack
-a finished After. See the [development guide](rehearsal-development.md#frozen-city-comparison);
-public activation remains disabled.
+All controls use native keyboard operation, deliberate focus restoration and
+textual warnings. See the [user guide](rehearse.md), [keyboard reference](shortcuts.md),
+[acceptance evidence](rehearsal-acceptance.md), and
+[development/update checks](rehearsal-development.md).

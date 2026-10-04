@@ -46,7 +46,7 @@ test('interrupted real Apply survives restart and blocks IPC writes across workt
   }
   try {
     let page = await open(root)
-    await page.getByRole('button', { name: 'Rehearse (internal)' }).click()
+    await page.getByRole('button', { name: 'Rehearse panel' }).click()
     await expandRehearsal(page, /Rehearse again|Choose rehearsal target/)
     await page.getByLabel('Branch or commit to merge into the current checkout').fill('topic')
     await expandRehearsal(page, /Rehearse again|Choose rehearsal target/)

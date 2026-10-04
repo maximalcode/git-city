@@ -36,7 +36,7 @@ export function registerIpc(): void {
 
   // Deliberately outside the retrying mutation helper; never fall back to git merge.
   const rehearsalTool = (): string | undefined =>
-    app.isPackaged ? undefined : process.env.GIT_CITY_REHEARSE_BIN
+    resolveRehearsalTool(app.isPackaged, process.resourcesPath)
   ipcMain.handle('git-city:rehearsal-availability', () =>
     rehearsalAvailability(resolveRehearsalTool(app.isPackaged, process.resourcesPath))
   )
@@ -52,9 +52,7 @@ export function registerIpc(): void {
   ipcMain.handle('git-city:rehearsal-discard', (_event, repo, identities) =>
     discardRehearsals(rehearsalTool(), repo, identities)
   )
-  ipcMain.handle('git-city:rehearsal-stop', (_event, repo) =>
-    app.isPackaged ? { ok: false, message: 'Rehearse is internal.' } : stopRehearsal(repo)
-  )
+  ipcMain.handle('git-city:rehearsal-stop', (_event, repo) => stopRehearsal(repo))
   ipcMain.handle('git-city:rehearsal-comparison', (_event, identity: RehearsalIdentity) =>
     compareRehearsal(rehearsalTool(), identity)
   )

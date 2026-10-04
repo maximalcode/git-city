@@ -67,36 +67,28 @@ Electron suites use the real bridge, Git repositories and executable.
 | 43    | Keyboard operation                    | `e2e/rehearsal*.electron.ts`                                                     |
 | 44    | Focus and textual warnings            | `e2e/rehearsal*.electron.ts`                                                     |
 
-## Evidence and remaining gates
+## Acceptance runs
 
-Acceptance is blocked by [git-rehearse #113](https://github.com/maximalcode/git-rehearse/issues/113).
-Public controls and mutation IPC remain gated. No release or public activation
-is authorized by this coverage inventory alone.
+The original concurrency blocker, [git-rehearse #113](https://github.com/maximalcode/git-rehearse/issues/113),
+was fixed in upstream PR #114. The toolchain now pins artifact revision
+`0ecca205f38fb1bcd88ef2e6a62f6943e2ddc65d` from
+[run 37208097702](https://github.com/maximalcode/git-rehearse/actions/runs/37208097702).
+All four archive checksums were independently verified against their checksum
+files. Each upstream target passed concurrent worktree previews, Apply and
+retained-metadata migration. Git City's previously failing real Electron worktree
+regression now passes, including stale Apply refusal and retention.
 
-- Local typecheck, lint and build passed at the baseline above.
-- The new `e2e/rehearsal-worktrees.electron.ts` regression fails against the pinned
-  executable: two simultaneous previews from separate linked worktrees produce
-  one report and one refusal claiming another process owns the live Apply journal.
-  No Apply, Undo or recovery operation is running. Two direct public-CLI replays
-  also reproduced exit 4 with the same refusal, isolating the problem from Electron.
-  Story 23 therefore lacks passing real-tool acceptance; the scheduling double in
-  `rehearsalCoordination.test.ts` does not establish upstream concurrency behavior.
-- Six existing Electron scenarios passed (branch/graph/detail selection, branch
-  and graph conflict refusal, and city comparison). The full Electron and unit
-  suites were stopped after establishing the blocker and are **not** reported as
-  passing. Remaining scenarios and the new test's post-concurrency stale assertions
-  still require a completed run.
-- Packaged smoke tests passed for Windows x64, Linux x64, Intel macOS and
-  Apple Silicon macOS at the baseline revision in
-  [run 37205451609](https://github.com/maximalcode/git-city/actions/runs/37205451609).
-- Public user documentation, real app screenshots and production entry-point
-  checks must accompany the eventual gate removal.
+The activation candidate incorporates `develop` through
+`7c1117e4e21240659475f2a373e06ddab8949b72`, including the side panel and focus fixes.
+The review fixed point is that commit; the original baseline above records the
+first blocked attempt. The candidate removes the internal renderer and packaged
+IPC gates together and preserves bundled integrity checks and explicit Apply.
 
-Next prerequisite: fix upstream preview concurrency without weakening recovery
-ownership, produce tested artifacts for all targets, update the immutable toolchain
-pin, then rerun complete safety, keyboard and platform acceptance. The draft
-[user guide](rehearse.md) describes the existing internal workflow and explicitly
-retains the public-activation warning. No public activation PR has been opened.
+Full local and packaged activation validation is in progress. This document does
+not yet attest completion; no public activation PR has been opened. Final evidence
+must include the native packaged entry point on every shipped target and the full
+Electron suite. The [user guide](rehearse.md), feature inventory, troubleshooting,
+keyboard reference and real repository screenshot accompany activation.
 
 Signature presence is not cryptographic verification or signer trust. Sandbox
 execution is not operating-system isolation. Tests do not establish control over

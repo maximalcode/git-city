@@ -40,7 +40,7 @@ for (const conflict of [false, true]) {
       }, root)
       const page = await app.firstWindow()
       await page.getByRole('button', { name: 'Open a local repository…' }).click()
-      await expect(page.getByRole('button', { name: 'Rehearse (internal)' })).toBeVisible()
+      await expect(page.getByRole('button', { name: 'Rehearse panel' })).toBeVisible()
       await page.keyboard.press('Escape')
       await page.keyboard.press('b')
       await page.getByTitle('Interactive rebase', { exact: true }).focus()
@@ -94,7 +94,7 @@ for (const conflict of [false, true]) {
       if (!conflict) {
         await page.keyboard.press('Escape')
         await expect(entry).toBeFocused()
-        await page.getByRole('button', { name: 'Rehearse (internal)' }).click()
+        await page.getByRole('button', { name: 'Rehearse panel' }).click()
         await expandRehearsal(page, /^Rehearse again$/)
         await expect(
           page.getByLabel('Interactive plan base (Root includes the root commit)')
@@ -116,9 +116,9 @@ for (const conflict of [false, true]) {
       }).trim()
       await page.keyboard.press('Escape')
       await expect(
-        conflict ? entry : page.getByRole('button', { name: 'Rehearse (internal)' })
+        conflict ? entry : page.getByRole('button', { name: 'Rehearse panel' })
       ).toBeFocused()
-      await page.getByRole('button', { name: 'Rehearse (internal)' }).click()
+      await page.getByRole('button', { name: 'Rehearse panel' }).click()
       await page.getByRole('button', { name: 'Apply', exact: true }).focus()
       await page.keyboard.press('Enter')
       await expect(page.getByRole('button', { name: 'Cancel Apply' })).toBeFocused()

@@ -136,7 +136,7 @@ export default function RebasePanel(): React.JSX.Element | null {
 
       <div className="rebase-foot">
         <button onClick={() => setRebaseOpen(false)}>Cancel</button>
-        {import.meta.env.DEV && configured && mode !== 'off' && mode !== null && (
+        {configured && mode !== 'off' && mode !== null && (
           <button
             disabled={busy || rehearsalBusy || loading || !!error || entries.length === 0}
             onClick={() =>

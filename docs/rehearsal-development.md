@@ -1,376 +1,85 @@
-# Internal rehearsal
+# Rehearse development and updates
 
-Merge, normal and interactive rebase, and single-commit cherry-pick rehearsal are an internal development preview for #143–#154, not a public
-feature. Packaged applications have no entry point and reject these operations.
-Checked Apply and mandatory recovery are available only in development. Public
-activation remains gated on the complete cross-platform safety workflow.
+For user workflows, modes, conflict editing, local work, recovery and limits,
+see the [Rehearse guide](rehearse.md). Packaged applications expose the same
+workflow and include their compatible tool. Source builds require an explicit
+absolute `GIT_CITY_REHEARSE_BIN`; they never search PATH or download a tool.
+Both the development renderer and `npm start` support these source builds.
 
-For development, use a git-rehearse build incorporating git-rehearse #86–#93 and #105 (durable
-retention, checked Apply, recovery and worktree-aware schema 1 reports). Its current version is 1.2.0;
-the older published 1.2.0 does not supply the required report fields. Set
-`GIT_CITY_REHEARSE_BIN` to the executable's absolute path before `npm run dev`.
-The adapter checks that version and validates the JSON schema and required fields;
-unknown fields are tolerated, incompatible results are reported as errors without
-deleting retained data. It never searches PATH for this executable or falls back
-to a direct Git action. Separate tool installation is only for development.
+## Pinned toolchain
 
-Open a repository, activate **Rehearse (internal)**, enter a branch or commit,
-and press **Rehearse**. The focused right-side panel keeps the city visible and usable,
-with the operation, current branch and target above the result. It has no backdrop
-or focus trap. Tab can leave the panel for the workspace; Enter submits the form.
-Escape while focus is in the panel, its close button, or **Keep for later** closes
-it. During execution the footer offers **Stop rehearsal** and **Keep and close**.
-Focus moves to the completed result only while you are working inside the panel;
-background completion does not pull focus away from the workspace. Closing returns
-focus to the entry button. Closing during execution does not
-stop it. Reopening reloads the current worktree’s retained history. A response arriving after
-switching repositories stays associated with its original worktree.
+`rehearse-toolchain.json` records version, source revision, workflow run, archive,
+executable and license checksums for Windows/Linux x64 and Intel/Apple Silicon
+macOS. Version 1.2.0 alone does not identify a compatible build. Prepare a target
+with `npm run tool:prepare -- darwin-arm64` (or another manifest key), then set
+`GIT_CITY_REHEARSE_BIN` to its absolute path under `build/rehearse/<target>`.
 
-For normal rebase, open **Branches** and activate **Rehearse rebase** beside the
-chosen destination branch. For one cherry-pick, select a commit in **Graph** or
-open its detail from commit search, then activate **Rehearse cherry-pick**.
-The shared panel displays the selected branch or full commit ID as read-only;
-focus starts on **Rehearse**. Enter runs the preview, and closing returns focus
-to the entry that opened it. The mode setting determines how the existing actions run, as described below.
-There is no cherry-pick range selector or pull-rebase entry here.
+Production resolves only `resources/rehearse`, outside ASAR, and verifies the
+compiled-in binary/license digests before invocation. Environment overrides cannot
+replace the packaged executable. Missing, damaged or incompatible tools give
+repair guidance and preserve retained work; Automatic never silently becomes Off.
+The executable, MIT license, upstream README and installation notes ship together.
 
-## Shared mode
-
-**Rehearse mode (internal)** offers **Automatic**, **Ask**, and **Off**. It is
-stored in the app's versioned preferences, keyed by the canonical common Git
-directory, so the main checkout and linked worktrees share one choice across
-restarts. New repositories start with Automatic. Repositories in the recent list
-when internal modes are first enabled receive a one-time keyboard-accessible
-choice; opening a linked worktree of a known repository also prompts. Escape
-defers the choice; supported actions remain blocked until a mode is selected.
-The previous app only retained its recent list, so repositories already removed
-from that list cannot be recognized as previously known.
-
-Automatic sends the existing Merge, normal Rebase, interactive Rebase, and both
-single-commit Cherry-pick entries into a retained rehearsal without requiring a
-second Rehearse click. Apply still requires explicit confirmation. Ask preserves
-the direct actions and offers the manual Rehearse entries. Off preserves direct
-Git behavior, including hooks, and hides the contextual manual entries. Retained
-history remains accessible. Pull (including pull with rebase), Fetch and Push
-are outside rehearsal routing in every mode.
-
-Select the mode with the keyboard using Tab and arrow keys. The one-time chooser
-focuses Automatic and returns focus after the choice. Settings are reread before
-each supported action and on window focus. Missing, broken or incompatible tool
-responses explain repair without falling back. Once initialized, a missing tool
-does not turn Automatic off; choose Off consciously to use direct actions.
-Off never removes a mandatory recovery lock. Corrupt or incompatible preference
-files block supported actions and are preserved for repair. Packaged releases and the production renderer loaded by `npm start`
-continue to hide all mode controls and retain current direct behavior until the
-complete public acceptance ticket. Internal modes require the development renderer
-started by `npm run dev`.
-
-For interactive rebase, open **Branches → Rebase…**, prepare the existing newest-first
-Pick/Squash/Drop plan with the up/down buttons, and activate **Rehearse interactive
-rebase**. Tab and Enter operate the plan controls; the selected action is announced
-as pressed. The rehearsal uses a snapshot of that plan and its base (Root includes
-the root commit), with no terminal editor. The oldest instruction is promoted from
-Squash to Pick just as in the direct editor; dropping every commit is refused.
-The retained report shows the submitted plan, and sandbox Continue preserves the
-remaining Git instructions across repeated conflict stops. Review the final report
-and confirm Apply to adopt exactly those commit objects. Escape returns focus to
-the plan entry. The plan summary is kept in the current app session; restart
-inspection through the CLI retains the actual sandbox Git state.
-
-**Review changes** expands the complete branch/commit and file report, including
-interactive plans. **Compare city** displays the frozen Before/After scene in the
-main workspace, with its controls in the panel. **Rehearse again** expands the
-submission controls. **Saved rehearsals** expands selection, storage and confirmed
-Discard. **Technical details** contains exact IDs, full paths, execution conditions,
-signing and rerere disclosures. Unexpected changes, stale results, carried-work
-warnings, low disk space and recovery requirements remain visible without opening
-these sections. The action footer stays available while long reports scroll; it
-explains why Apply is unavailable.
-
-The panel distinguishes conflicts, stopped/failed execution, no-op, refusal and
-technical errors. Failed Git commands include their bounded diagnostic output.
-An unavailable configured tool shows repair guidance immediately and disables
-submission. It shows the original checkout, action, exact retained ID,
-branch/commit movements, file consequences, conflicts and unexpected content
-changes. Warnings are textual. Repository hooks are disabled by git-rehearse;
-a conflict-free result still requires content review. Untracked files are not
-represented as carried work.
-
-The CLI receives `--json --keep <merge|rebase|cherry-pick> <target>` (interactive rebase adds
-`--todo <prepared-file>` before `rebase -i <base|--root>`) with separate arguments and no
-interactive stdin. Closing never issues discard. The bridge's show operation uses
-the exact ID and checks repository/worktree identity on the returned report.
-The panel reloads `--json list` and inspects the selected exact ID with `--json show`.
-The CLI owns retained data; browser preferences remember only the current selection.
-After restart, the selection is restored when still present, otherwise the newest
-retained entry is selected. Each worktree has its own history and selection.
-
-## History, Stop and storage
-
-Expand **Saved rehearsals** to find **Retained rehearsals**, which lists every entry for the original worktree, including
-outdated results, conflicts and interrupted execution. **Open <ID>** switches the
-current result; the pressed/current label identifies it. **Refresh history** reloads
-changes made by other CLI processes. Changed checkout/ref bases are marked with a
-text warning. This is an inspection hint; Apply still performs its authoritative
-checks of refs, local work and worktree occupancy.
-
-**Stop rehearsal** ends only a preview or Continue launched by this app and waits
-for its process tree to finish, then reloads the actual retained state. On Unix it
-sends termination to the process group and escalates after three seconds if needed;
-on Windows it terminates the owned process tree. Apply and recovery cannot be
-stopped through this control. An interrupted result is preserved and shown as
-incomplete; it cannot be applied or automatically continued. Work active in another
-process is labelled and protected; wait for that process to finish, then refresh.
-Closing the panel leaves execution running and never issues discard.
-
-Select one or more checkboxes and choose **Discard selected**. The confirmation
-names each exact ID, action, worktree, checkout and measured size. Focus starts on
-**Cancel Discard**; Tab then Enter confirms. Escape cancels and restores focus to
-Discard selected. Completion focuses the history heading. Active or recovery-protected
-work is disabled, and the CLI checks those protections again during deletion. A
-partial failure names each failed ID; unselected and refused entries remain intact.
-Discard never uses the CLI’s implicit latest result or `--all`.
-
-The panel shows total logical bytes for this worktree’s retained entries and the
-minimum available space on their storage volumes. Shared/hard-linked Git objects
-are included, so logical size is not an estimate of space freed by discard. Less
-than 1 GiB available raises a text warning. Unreadable measurements (or no storage
-volume yet) are shown as unknown, never zero. There is no timer-based cleanup;
-CLI list/pruning continues to preserve explicitly kept work.
-
-Tab, Space and Enter operate history selection, checkboxes, Stop and confirmation.
-No new global shortcut is introduced. Save any unsaved conflict-editor text before
-switching rehearsals; saved sandbox contents persist across sessions.
-
-## Sandbox conflicts
-
-A stopped merge, rebase or cherry-pick offers **Resolve <file>** in the retained
-sandbox. The existing hunk controls offer Ours, Theirs, Both and Edit; **Edit whole
-file** allows free text, including files already edited externally. **Save and
-stage in sandbox** checks the exact bytes read by the editor before writing and
-stages only that sandbox path. A changed file is refused with a text warning;
-**Refresh sandbox** reloads it for review. Returning from another app also rereads
-the file and preserves choices only when its bytes are unchanged.
-
-Binary conflicts offer **Use ours in sandbox** and **Use theirs in sandbox** to
-save and stage a complete version without JavaScript decoding its bytes. Git applies
-its checkout encoding/filter conversion; Git-declared binary attributes also
-receive whole-file choices. Ours/Theirs refer
-to Git stages 2/3; during rebase these mean the destination/replayed commit.
-Changed content or conflict stages require a fresh review before saving.
-
-Deletion/rename conflicts with missing stages show external guidance instead of
-a text editor. Open the displayed sandbox folder in your editor or terminal,
-choose the final paths and contents, and stage each resolution with `git add`
-or `git rm` for deletions. **Refresh sandbox**, or returning to the app, rereads
-content and conflict status. Missing, renamed or already staged paths cannot be
-blindly recreated by an older buffer. Path traversal, symlink paths and hard-linked
-files are refused. Requests carry the exact rehearsal ID and originating worktree.
-
-Tab reaches file selection, every hunk choice, editable text, save, refresh and
-Continue; Enter activates buttons. Focus moves to the editor heading on file load
-and to the report after refresh/Continue. **Continue rehearsal** is available once
-no unmerged paths remain. It can stop again at another conflict; resolve each stop
-and continue until the final report is complete. Failed, incomplete and stopped
-results cannot be applied. Continue keeps the sandbox and never reruns the action
-in the original worktree. Closing the panel keeps saved sandbox work; save text
-before closing to retain in-app edits.
-
-## Apply and recovery
-
-For a clean result with branch changes, **Apply** opens a confirmation showing
-its original worktree, action, checkout, affected branches and tracked local work.
-Focus starts on **Cancel Apply**; Tab reaches **Apply rehearsal**. No confirmation
-word is required. Escape cancels confirmation and returns focus to Apply.
-Tracked edits are initially replayed as unstaged changes; the original staging
-selection is not restored. The dialog calls this out before confirmation. Git-rehearse checks the current
-checkout, refs, local work and worktree occupancy immediately before adoption.
-The original Git action is not rerun. A refusal preserves the sandbox and its
-report; rehearse again against the new basis to obtain another applicable result.
-No-op and incomplete results cannot be applied. After adoption, repository
-status, branches, other repository views and scene analysis refresh.
-
-Apply and recovery never use the ordinary index.lock retry. If a response is
-lost, the app queries recovery status and reports uncertain completion without
-repeating Apply. Review the refreshed repository before another rehearsal.
-New previews and Continue wait for app-owned recovery/Undo inspections and writes
-to finish, including post-Apply history refreshes. Recovery/Undo inspections and writes also wait
-for running previews; Stop remains available while a preview is queued or running.
-History with active entries remains readable, with deletion protected until recovery
-can be inspected after execution ends.
-Previews in separate linked worktrees can still run together. External CLI lock
-refusals remain visible and are never retried automatically.
-
-Opening a repository (including after restart) checks recovery independently of
-the preview entry point. Every ordinary write checks again under the same queue
-used by Apply, keyed by the common Git directory so linked worktrees share it.
-A blocked state shows a textual warning and **Check recovery status**. Only the
-CLI's allowed **Complete interrupted apply/undo** and **Roll back interrupted
-apply/undo** actions are offered, bound to the reported exact ID and worktree.
-From another worktree the CLI may refuse inspection; open the original worktree
-to recover. Unknown, damaged or externally changed states remain blocked.
-There is no generic repair command that overwrites user files. This protection
-is independent of the future Automatic/Ask/Off preference.
-
-Without a configured tool, the app checks for the pinned development CLI's
-`rehearse-apply` journal in the common Git directory and blocks if it exists.
-The persistent lock file alone does not indicate an interrupted operation. It does not parse or repair those files. A configured
-but unavailable or incompatible tool blocks writes when a recovery journal is
-present; ordinary direct Git actions remain available without a journal. Restore the compatible tool; do not delete recovery data to clear a
-warning. Packaged applications retain this presence guard without exposing Apply.
-
-## Undo Apply
-
-The internal panel reads **Undo Apply** availability from the backend on opening,
-after operations, on window focus and with **Refresh Undo availability**. It names
-the exact last Apply ID and original worktree even when that rehearsal is no longer
-selected. Expand **Undo Apply · <ID>** for that exact applied result and its restrictions.
-The **Undo Apply** button opens confirmation; focus starts on **Cancel Undo**.
-Tab and Enter reach **Undo this Apply**; Escape cancels and returns focus.
-Completion focuses the textual result and refreshes repository views, history and
-scene analysis. Interrupted Undo gives focus to the mandatory recovery notice,
-which remains accessible beside the nonmodal panel.
-
-Undo rechecks the exact Apply and original worktree. Changed refs, branches checked
-out elsewhere and local changes (including carried uncommitted work) cause a textual
-refusal without a force option. Undo is not a general recovery of arbitrary file edits.
-Lost responses trigger status inspection, never automatic retry. Interrupted Undo
-uses the same mandatory recovery and shared repository write lock described above,
-including after app restart. Public activation remains disabled.
+The public JSON CLI is the integration boundary. Git City uses explicit argv,
+`--json --keep`, exact IDs and original-worktree identity. The tool owns sandbox
+execution, safety, Apply, Undo, recovery and retained metadata. Apply/Undo/recovery
+do not use the ordinary index.lock retry. Unknown completion causes inspection.
+App-owned coordination uses the canonical common Git directory; external tools
+remain outside that queue, so authoritative CLI checks still determine safety.
 
 ## Validation
 
-`npm run typecheck && npm run lint && npm test` runs the normal project checks.
-To also run the real CLI safety test, export `GIT_CITY_REHEARSE_BIN` for the test
-command. Without it the real-tool test is explicitly skipped. It creates a real
-repository, verifies retention and exact identity, and compares HEAD, raw index
-bytes and working file bytes before/after merge. It also verifies a no-op and an isolated conflicting merge. The
-fixture removes only its own exact rehearsal IDs, including after assertion
-failures. A merge-commit fixture installs sentinel hooks through a custom hooks
-directory and checks that rehearsal does not execute them; a real commit serves
-as the positive control.
+Run `npm run typecheck && npm run lint && npm test`. Export
+`GIT_CITY_REHEARSE_BIN` for the test command to include real-tool integration;
+without it those suites are explicitly skipped and do not count as acceptance.
+Tests use disposable real repositories and verify HEAD, refs, raw index bytes,
+files, exact retained IDs and resulting action availability.
 
-Build with `npm run build`, then run the Electron/real-tool check with
-`npx playwright test -c playwright.rehearsal.config.ts` and the same exported
-`GIT_CITY_REHEARSE_BIN`. This harness opens a temporary real repository through
-the UI and checks keyboard submission, focus, text warnings, confirmed Apply,
-keep/reopen and unchanged original contents. It starts a development renderer
-on port 5199; the packaged renderer keeps the entry hidden.
+After `npm run build`, run
+`npx playwright test -c playwright.rehearsal.config.ts` with the same executable.
+This exercises the Electron bridge, real Git/tool execution, keyboard and focus,
+all action entries, repeated conflicts, history/restart, parallel worktree previews,
+stale refusal, Apply, Undo, recovery and frozen city comparison. The production
+renderer case verifies existing-repository mode choice and Automatic routing.
 
-The real CLI tests also exercise clean rebase and single cherry-pick, retained
-identity and origin, exact adopted commit IDs, carried work, and refusal to apply
-conflicted results. Electron tests select branches and commits through the real
-branch, graph and detail views and verify keyboard submission, focus restoration
-and confirmed adoption.
+The Release workflow builds native packages on all four targets, then runs
+`scripts/smoke-package.mjs` against the actual packaged executable. It launches
+with a bogus development override, opens a real repository, performs a keyboard
+preview/confirmed Apply, verifies the resulting commit and file, and repeats after
+restart. Corrupted bundled files must give repair guidance without mutation or
+changing Automatic. The extracted CLI also runs Apply and metadata migration
+checks through `scripts/smoke-rehearse.py`. PR/manual runs produce artifacts only;
+public releases still require the normal tag/release process.
 
-Text-conflict integration tests cover real merge, cherry-pick and repeated rebase
-stops, stale editor buffers, wrong identities, traversal/symlink/hard-link refusal,
-unchanged original HEAD/index/files before Apply and exact adopted commits/content.
-The Electron conflict test exercises hunk choices, free text, stale-buffer warning,
-refresh, staging, Continue and confirmed Apply through keyboard actions.
+The [44-story acceptance inventory](rehearsal-acceptance.md) identifies evidence
+and its revision. Run the complete suite whenever the toolchain pin changes;
+unit doubles do not prove Git safety or concurrent CLI behavior.
 
-The management integration tests use real CLI processes for exact discard, active
-ownership refusal, recovery protection, linked-worktree isolation, Stop, retained
-incomplete state and preservation of non-selected work. Storage failure/low-space
-responses are injected without deleting data. The Electron management test closes
-and restarts the actual app with the same profile, restores its selected rehearsal,
-and exercises single/batch discard confirmation and Stop through keyboard actions.
+## Retained work across updates
 
-## Hooks, signing and learned resolutions
+The tool's schema-1 to schema-3 migration must preserve exact original bytes in
+`meta.json.bak` before conversion, keep saved sandbox edits and optional fields,
+and tolerate repeated reads. Backup failure must leave the source unchanged.
+Missing legacy origin prevents Apply. Unsupported future schemas are preserved
+byte-for-byte and refused; do not delete data to clear an error. Git City does
+not scan, rewrite or prune retained metadata during updates.
 
-The report explains that repository hooks were not run, including during Apply.
-Off continues to use direct Git actions with their existing hooks. Existing rerere
-settings and resolutions are copied into the sandbox. Newly learned resolutions
-stay there: Continue and Apply do not write them back to the original cache.
+## Frozen city integration
 
-Commit signature rows name the exact result commit and distinguish **Signature
-present** from **Signature missing**. **Verification: not checked** and **Signer
-trust: not checked** are separate facts: this version of the CLI inspects signature
-presence without cryptographic verification. Older reports without signature data
-say that information is unavailable. A report with no resulting commits says so.
+Comparison reads immutable objects from the exact retained sandbox after checking
+identity through public JSON `show`; it never checks out a commit or uses live
+original HEAD as a fallback. Before includes tracked carried work; After includes
+restored carried work only for a completed result. Untracked files are excluded.
+The adapter reads pinned `refs/rehearse/carried` and `refs/rehearse/replayed` stash
+commits and checks their first parents. This is an explicit compatibility assumption
+beyond the JSON schema and requires the real-tool comparison tests on updates.
+A second endpoint check rejects changes during analysis.
 
-Signing settings remain effective, system signing dialogs can open, and terminal
-editors and prompts are disabled. Git City stores no secret keys. Signing failures
-remain visible and block Apply; there is no retry with signing disabled. Apply
-transplants the reviewed commit objects unchanged. These report details require
-no additional controls; completion still focuses the keyboard-accessible result.
+## Real screenshots
 
-## Bundled toolchain and updates
-
-Packaged apps include the exact upstream test artifacts recorded in
-`rehearse-toolchain.json`: version, source revision, workflow run, archive SHA-256,
-executable SHA-256 and license SHA-256 for Windows x64, Linux x64, Intel macOS and
-Apple Silicon macOS. Version 1.2.0 alone is insufficient to identify this build.
-The executable and MIT license live outside ASAR in `resources/rehearse`, alongside
-the upstream README and installation notes. Production availability verifies the
-compiled-in checksums before executing the tool; development environment overrides
-and PATH cannot replace it. Missing, damaged, wrong-version or incompatible-schema
-tools require repair/reinstallation. Nothing downloads or updates tools at runtime.
-
-Public preview and mutation IPC remain disabled, and the renderer has no public
-entry point until #155. Package tests launch the real application, check bundled
-availability despite a bogus development override, verify the gate, and run the
-bundled public CLI against disposable repositories. They repeat after app restart.
-
-Git-rehearse owns retained metadata and migration. Package tests retain a real
-conflict and saved sandbox edits, simulate legacy schema 1 metadata, verify a
-byte-for-byte `meta.json.bak` before schema 3 conversion, and check optional unknown
-fields survive repeated reads and retry. Backup failure refuses conversion without
-changing the source. Missing legacy origin leaves Apply protected. Future schema
-metadata remains byte-for-byte intact and refuses inspection; do not delete it to
-clear an error. No app updater scans, rewrites or prunes retained work.
-
-## Frozen city comparison
-
-Open a retained report and choose **Compare city**. **Before** receives focus;
-Tab and Enter/Space switch to **After** in the same scene and camera. Both
-endpoints use one shared layout, the existing city/farm renderer and history
-analysis. A text status names the rehearsal, endpoint, file count and line count;
-**Snapshot files and line counts** provides a keyboard-accessible text inventory.
-Playback pauses and the live canvas unmounts while this comparison is visible, so
-only one 3D scene runs at a time. Live worktree status overlays and file actions
-are excluded from this scene.
-
-Before uses the rehearsal's frozen original commit, including its tracked carried
-work. After uses the completed result, including restored carried work. Neither
-uses the current original HEAD or mutable sandbox files. Untracked files are
-excluded, as in the report. Stopped, incomplete, failed and unresolved carried-work
-results have no finished After and explain this in text. An incomplete report
-without carried-work details explicitly labels Before as the frozen committed
-tree only. Continue and report
-refresh invalidate the comparison; choose Compare city again to analyze the result.
-Switching rehearsals or worktrees rejects late analysis responses.
-
-The main process validates the exact report identity through public JSON `show`,
-then reads immutable Git objects in the separate sandbox without checkout or index
-changes. The compatibility adapter uses the pinned tool's retained
-`refs/rehearse/carried` and `refs/rehearse/replayed` stash commits and validates their
-first parents against the report. It does not read private metadata. Missing or
-incompatible retained objects produce an error, never a live-HEAD fallback. A second
-report/endpoint check rejects changes during analysis. The real-tool tests must be
-run when updating the pinned tool because these retained refs are an integration
-assumption beyond the JSON schema.
-
-This comparison remains inside the development-only rehearsal panel. Public
-screenshots and the released feature pitch are unchanged.
-
-## Side-panel screenshot
-
-The internal panel is captured from the real Electron app and repository data,
-using the normal media workflow with an opt-in development shot:
-
-```bash
-npm run build
-# Start the development renderer separately:
-npx vite -c vite.preview.config.ts
-# With GIT_CITY_REHEARSE_BIN already set to the compatible tool:
-ELECTRON_RENDERER_URL=http://localhost:5199 npm run media:app -- \
-  --only=app-rehearsal --repo=/path/to/repository --rehearsal-target=topic
-```
-
-This creates a retained merge preview; it never applies or discards it. Use an
-isolated checkout for capture and manage its retained history afterwards. The
-shot is excluded from the default production media run, so release gating stays
-unchanged. The screenshot below uses this repository's actual issue #172 change.
-
-![Internal Rehearse side panel beside the real Git City repository](media/app-rehearsal.png)
+Build, configure the development executable, then run
+`npm run media:app -- --only=app-rehearsal --rehearsal-target=HEAD` to capture the
+real app on this repository without Apply. Source capture supports the production
+renderer; `ELECTRON_RENDERER_URL` is optional. Capture a meaningful target in a
+controlled repository when showing changed-file or conflict states. Never apply
+or discard existing user work for a screenshot.

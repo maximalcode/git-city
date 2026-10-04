@@ -98,8 +98,6 @@ export default function RehearsalPanel(): React.JSX.Element | null {
     wasConfirming.current = confirming
   }, [confirming, open])
   useEffect(() => {
-    // There is no public entry point, even when a packaged app inherits the env var.
-    if (!import.meta.env.DEV) return
     void bridge()
       ?.rehearsalAvailability()
       .then((value) => {
@@ -207,7 +205,7 @@ export default function RehearsalPanel(): React.JSX.Element | null {
             openPanel()
           }}
         >
-          Rehearse (internal)
+          Rehearse panel
         </button>
       )}
       {open && configured && (
@@ -228,7 +226,7 @@ export default function RehearsalPanel(): React.JSX.Element | null {
           }}
         >
           <header className="rehearsal-header">
-            <p className="rehearsal-eyebrow">Preview changes · internal</p>
+            <p className="rehearsal-eyebrow">Preview changes</p>
             <div className="rehearsal-title-row">
               <h2 id="rehearsal-title" ref={heading} tabIndex={-1}>
                 Rehearse {interactive ? 'interactive rebase' : action}

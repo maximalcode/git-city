@@ -73,6 +73,25 @@ test('nonmodal rehearsal panel keeps the city usable and explains retained state
     await branches.focus()
     await expect(branches).toBeFocused()
     await expect(panel).toBeVisible()
+    await branches.click()
+    await page
+      .locator('.branch-row')
+      .filter({ hasText: longBranch })
+      .getByRole('button', { name: 'Delete', exact: true })
+      .click()
+    const cityConfirmation = page.getByRole('alertdialog')
+    await expect(cityConfirmation).toBeVisible()
+    // The app's destructive confirmation must stack above the adjacent panel.
+    await cityConfirmation
+      .getByRole('button', { name: 'Delete', exact: true })
+      .click({ trial: true })
+    await cityConfirmation.getByRole('button', { name: 'Cancel', exact: true }).click()
+    await expect(cityConfirmation).not.toBeVisible()
+    await expect(panel).toBeVisible()
+    await page
+      .locator('.branches-panel')
+      .getByRole('button', { name: 'Close', exact: true })
+      .click()
     await expandRehearsal(page, /^Choose rehearsal target$/)
     const target = page.getByLabel('Branch or commit to merge into the current checkout')
     await target.fill(longBranch)

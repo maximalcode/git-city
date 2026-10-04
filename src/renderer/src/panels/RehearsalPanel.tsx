@@ -47,7 +47,12 @@ export default function RehearsalPanel(): React.JSX.Element | null {
     'merge'
   const context = `${repo}:${selected ? `${selected.action}:${selected.target}` : (report?.id ?? 'merge')}`
   const chosenTarget =
-    selected?.target ?? (draft.context === context ? draft.value : (report?.command.at(-1) ?? ''))
+    selected?.target ??
+    (draft.context === context
+      ? draft.value
+      : report?.plan
+        ? (report.plan.base ?? 'root')
+        : (report?.command.at(-1) ?? ''))
   const branch = useStore((s) => s.workingStatus?.branch)
   const executionRepo = useStore((s) => s.rehearsalExecutionRepo)
   const stopping = useStore((s) => s.rehearsalStopping)
@@ -130,10 +135,16 @@ export default function RehearsalPanel(): React.JSX.Element | null {
   useEffect(() => {
     // Announce new results without taking focus from the city or child workflows.
     if (busy) return
-    const changed = previousStatus.current.result !== result || previousStatus.current.application !== application
+    const changed =
+      previousStatus.current.result !== result || previousStatus.current.application !== application
     previousStatus.current = { result, application }
-    if (changed && open && panel.current?.contains(document.activeElement) &&
-        !document.activeElement?.closest('[aria-label="Undo Apply"]')) status.current?.focus()
+    if (
+      changed &&
+      open &&
+      panel.current?.contains(document.activeElement) &&
+      !document.activeElement?.closest('[aria-label="Undo Apply"]')
+    )
+      status.current?.focus()
   }, [result, application, open, busy])
   const applyReason = busy
     ? 'Wait for the current operation to finish.'
@@ -336,7 +347,7 @@ export default function RehearsalPanel(): React.JSX.Element | null {
                 }}
               >
                 <label htmlFor="rehearsal-target">
-                  {selected?.plan
+                  {interactive
                     ? 'Interactive plan base (Root includes the root commit)'
                     : action === 'rebase'
                       ? 'Rebase current checkout onto selected branch'

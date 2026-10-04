@@ -352,3 +352,24 @@ assumption beyond the JSON schema.
 
 This comparison remains inside the development-only rehearsal panel. Public
 screenshots and the released feature pitch are unchanged.
+
+## Side-panel screenshot
+
+The internal panel is captured from the real Electron app and repository data,
+using the normal media workflow with an opt-in development shot:
+
+```bash
+npm run build
+# Start the development renderer separately:
+npx vite -c vite.preview.config.ts
+# With GIT_CITY_REHEARSE_BIN already set to the compatible tool:
+ELECTRON_RENDERER_URL=http://localhost:5199 npm run media:app -- \
+  --only=app-rehearsal --repo=/path/to/repository --rehearsal-target=topic
+```
+
+This creates a retained merge preview; it never applies or discards it. Use an
+isolated checkout for capture and manage its retained history afterwards. The
+shot is excluded from the default production media run, so release gating stays
+unchanged. The screenshot below uses this repository's actual issue #172 change.
+
+![Internal Rehearse side panel beside the real Git City repository](media/app-rehearsal.png)

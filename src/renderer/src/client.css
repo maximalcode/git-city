@@ -2719,7 +2719,7 @@
   position: fixed;
   right: 16px;
   bottom: 16px;
-  z-index: 100;
+  z-index: 70;
 }
 .rehearsal-dialog {
   margin: auto;
@@ -2784,7 +2784,7 @@
   position: fixed;
   right: 16px;
   bottom: 52px;
-  z-index: 100;
+  z-index: 70;
   max-width: 330px;
   padding: 8px 12px;
   color: var(--text, #eee);
@@ -2825,7 +2825,7 @@ body:has(.rehearsal-panel) .rehearsal-mode {
 .rehearsal-panel {
   position: fixed;
   inset: 0 0 0 auto;
-  z-index: 110;
+  z-index: 80;
   width: var(--rehearsal-width);
   display: flex;
   flex-direction: column;
@@ -2987,7 +2987,7 @@ body:has(.rehearsal-panel) .rehearsal-mode {
 }
 .rehearsal-recovery {
   position: fixed;
-  z-index: 120;
+  z-index: 90;
   left: 16px;
   top: 80px;
   max-width: min(500px, calc(100vw - var(--rehearsal-width) - 32px));

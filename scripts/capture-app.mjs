@@ -80,6 +80,10 @@ const SHOTS = [
         .locator('.rehearsal-panel [aria-busy="false"] h3')
         .first()
         .waitFor({ timeout: 180_000 })
+      await page
+        .locator('.rehearsal-history > summary')
+        .filter({ hasText: /Saved rehearsals · [1-9]/ })
+        .waitFor({ timeout: 180_000 })
     }
   },
   // ── Hero ─────────────────────────────────────────────────────────────────

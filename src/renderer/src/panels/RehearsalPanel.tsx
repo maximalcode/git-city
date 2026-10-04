@@ -1,3 +1,4 @@
+import RehearsalReportView, { RehearsalDetails } from './RehearsalReportView'
 import RehearsalCityComparison from './RehearsalCityComparison'
 import RehearsalUndo from './RehearsalUndo'
 import RehearsalMode from './RehearsalMode'
@@ -7,172 +8,6 @@ import { useEffect, useRef, useState } from 'react'
 import { useStore } from '../store'
 import { bridge } from '../lib/bridge'
 import type { RehearsalReport } from '../../../shared/types'
-
-function Report({ report }: { report: RehearsalReport }): React.JSX.Element {
-  const action =
-    { merge: 'Merge', rebase: 'Rebase', 'cherry-pick': 'Cherry-pick' }[report.command[0]] ??
-    'Git action'
-  const noOp =
-    report.outcome === 'clean' &&
-    report.refs.length === 0 &&
-    !report.drift_unexpected &&
-    report.conflicts.length === 0
-  const status = report.conflicted
-    ? 'Conflicts need attention'
-    : noOp
-      ? 'No-op — no branch changes'
-      : {
-          clean: `${action} preview completed`,
-          stopped: `${action} stopped`,
-          failed: `Git could not complete the ${action.toLowerCase()}`,
-          incomplete: `${action} execution is incomplete`
-        }[report.outcome]
-  return (
-    <>
-      <h3 tabIndex={-1}>{status}</h3>
-      {report.outcome === 'incomplete' && (
-        <p role="alert">
-          ⚠ Execution was interrupted. Retained work is available for reference; Apply and automatic
-          continuation are unavailable.
-        </p>
-      )}
-      {report.diagnostics && <p role="alert">⚠ {report.diagnostics}</p>}
-      <p>
-        Kept rehearsal: <code>{report.id}</code>
-      </p>
-      <p>
-        Original worktree: {report.origin_worktree}
-        <br />
-        Checkout: {report.checkout.target}
-        <br />
-        Action: {report.command.join(' ')}
-      </p>
-      <section aria-label="Execution conditions">
-        <h4>Execution conditions</h4>
-        <p>
-          {report.repository_hooks === 'disabled'
-            ? '⚠ Repository hooks were not run. Apply also skips hooks; Off keeps direct Git hooks.'
-            : '⚠ Hook execution information unavailable from this report. Off keeps direct Git hooks.'}
-        </p>
-        <p>A clean Git result does not guarantee correct content.</p>
-        <p>
-          {report.rerere_resolution_transfer === 'sandbox_only'
-            ? '⚠ Existing rerere conflict resolutions are used as an isolated copy. Newly learned sandbox resolutions are not written back to the original cache, including on Apply.'
-            : '⚠ rerere resolution transfer information unavailable from this report.'}
-        </p>
-        <p>
-          Signing settings are preserved. System signing dialogs may open; terminal editors are
-          disabled. Git City does not store secret keys. Apply preserves the reviewed commit
-          objects.
-        </p>
-        <h4>Commit signatures</h4>
-        <p>
-          Signature presence does not establish validity or signer trust. Neither is verified here.
-        </p>
-        {!report.signatures ? (
-          <p>Signature information unavailable from this report.</p>
-        ) : report.signatures.length === 0 ? (
-          <p>No resulting commits reported for signature inspection.</p>
-        ) : (
-          <ul>
-            {report.signatures.map((signature) => (
-              <li key={signature.sha}>
-                <code>{signature.sha}</code>:{' '}
-                {signature.present ? 'Signature present' : 'Signature missing'}
-                {' · '}Verification: not checked · Signer trust: not checked
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-      {report.drift_unexpected && (
-        <p role="alert">⚠ Unexpected content changes — review the affected files carefully.</p>
-      )}
-      {report.plan && (
-        <section aria-label="Rehearsed plan">
-          <h4>Interactive plan · newest → oldest</h4>
-          <p>Base: {report.plan.base ?? 'Root'}</p>
-          <ol>
-            {report.plan.entries.map((entry) => (
-              <li key={entry.hash}>
-                {entry.action} {entry.hash} {entry.subject}
-              </li>
-            ))}
-          </ol>
-        </section>
-      )}
-      <h4>Branches and commits</h4>
-      {report.refs.length === 0 ? (
-        <p>No branch or commit movements reported.</p>
-      ) : (
-        <ul>
-          {report.refs.map((ref) => (
-            <li key={ref.name}>
-              {ref.name}: <code>{ref.before ?? '(new)'}</code> →{' '}
-              <code>{ref.after ?? '(deleted)'}</code>
-            </li>
-          ))}
-        </ul>
-      )}
-      <h4>File consequences</h4>
-      {report.drift.length === 0 && <p>No completed file comparison reported.</p>}
-      {report.drift.map((drift) => (
-        <section key={drift.reference}>
-          <p>
-            {drift.reference}: {drift.commits_before} commits before, {drift.commits_after} after
-          </p>
-          <ul>
-            {drift.files.map((file) => (
-              <li key={file.path}>
-                {file.status} {file.path}
-              </li>
-            ))}
-          </ul>
-          {drift.replay.changed.map((subject, i) => (
-            <p key={`changed-${i}`}>⚠ Changed patch: {subject}</p>
-          ))}
-          {drift.replay.dropped.map((subject, i) => (
-            <p key={`dropped-${i}`}>Dropped commit: {subject}</p>
-          ))}
-          {drift.replay.added.map((subject, i) => (
-            <p key={`added-${i}`}>Added commit: {subject}</p>
-          ))}
-        </section>
-      ))}
-      <h4>Conflicts</h4>
-      {report.conflicts.length === 0 ? (
-        <p>No unmerged paths reported.</p>
-      ) : (
-        <ul>
-          {report.conflicts.map((conflict) => (
-            <li key={conflict.path}>
-              ⚠ {conflict.path} ({conflict.hunks} conflict hunks)
-            </li>
-          ))}
-        </ul>
-      )}
-      {report.carried && (
-        <>
-          <h4>Tracked local work</h4>
-          <p>
-            {report.carried.status}: {report.carried.paths.join(', ')}
-          </p>
-          <p>{report.carried.reason}</p>
-          <p>
-            ⚠ Tracked edits are initially replayed as unstaged changes; the original staging
-            selection is not restored.
-          </p>
-          {report.carried.conflicts.map((path) => (
-            <p key={path}>⚠ Carried-work conflict: {path}</p>
-          ))}
-        </>
-      )}
-      <p>
-        Untracked files are not represented as carried work. Previews run in the retained sandbox.
-      </p>
-    </>
-  )
-}
 
 export default function RehearsalPanel(): React.JSX.Element | null {
   const [availability, setAvailability] = useState({
@@ -187,11 +22,13 @@ export default function RehearsalPanel(): React.JSX.Element | null {
   const applyTrigger = useRef<HTMLButtonElement>(null)
   const wasConfirming = useRef(false)
   const cancelApply = useRef<HTMLButtonElement>(null)
-  const [target, setTarget] = useState('')
+  const [draft, setDraft] = useState({ context: '', value: '' })
   const returnFocus = useRef<HTMLElement | null>(null)
   const wasOpen = useRef(false)
   const submit = useRef<HTMLButtonElement>(null)
-  const dialog = useRef<HTMLDialogElement>(null)
+  const panel = useRef<HTMLElement>(null)
+  const confirmation = useRef<HTMLDialogElement>(null)
+  const heading = useRef<HTMLHeadingElement>(null)
   const input = useRef<HTMLInputElement>(null)
   const status = useRef<HTMLDivElement>(null)
   const wasBlocked = useRef(false)
@@ -201,10 +38,33 @@ export default function RehearsalPanel(): React.JSX.Element | null {
   const open = useStore((s) => s.rehearsalOpen)
   const request = useStore((s) => s.rehearsalRequest)
   const selected = request?.repo === repo ? request : null
-  const action = selected?.action ?? 'merge'
-  const chosenTarget = selected?.target ?? target
   const busy = useStore((s) => s.rehearsalBusy)
   const result = useStore((s) => (repo ? s.rehearsalResults[repo] : undefined))
+  const report = result?.kind === 'report' ? result.report : null
+  const action =
+    (report?.command[0] as 'merge' | 'rebase' | 'cherry-pick' | undefined) ??
+    selected?.action ??
+    'merge'
+  const context = `${repo}:${selected ? `${selected.action}:${selected.target}` : (report?.id ?? 'merge')}`
+  const chosenTarget =
+    selected?.target ??
+    (draft.context === context
+      ? draft.value
+      : report?.plan
+        ? (report.plan.base ?? 'root')
+        : (report?.command.at(-1) ?? ''))
+  const branch = useStore((s) => s.workingStatus?.branch)
+  const executionRepo = useStore((s) => s.rehearsalExecutionRepo)
+  const stopping = useStore((s) => s.rehearsalStopping)
+  const stop = useStore((s) => s.stopRehearsal)
+  const inventory = useStore((s) => (repo ? s.rehearsalInventories[repo] : undefined))
+  const managementMessage = useStore((s) =>
+    repo ? s.rehearsalManagementMessages[repo] : undefined
+  )
+  const running = executionRepo === repo
+  const shownTarget = running ? chosenTarget : (report?.command.at(-1) ?? chosenTarget)
+  const interactive = !!(report?.plan || selected?.plan || report?.command.includes('-i'))
+  const missingPlan = interactive && !(selected?.plan ?? report?.plan)
   const confirming = result?.kind === 'report' && confirmApply === result.report
   const recovery = useStore((s) => (repo ? s.rehearsalRecovery[repo] : undefined))
   const application = useStore((s) =>
@@ -229,13 +89,14 @@ export default function RehearsalPanel(): React.JSX.Element | null {
     void checkRecovery()
   }, [repo, checkRecovery])
   useEffect(() => {
+    if (confirming && open) {
+      confirmation.current?.showModal()
+      cancelApply.current?.focus()
+    } else confirmation.current?.close()
     if (confirming) cancelApply.current?.focus()
     else if (wasConfirming.current) applyTrigger.current?.focus()
     wasConfirming.current = confirming
-  }, [confirming])
-  useEffect(() => {
-    if (application && !busy) status.current?.focus()
-  }, [application, busy])
+  }, [confirming, open])
   useEffect(() => {
     // There is no public entry point, even when a packaged app inherits the env var.
     if (!import.meta.env.DEV) return
@@ -255,30 +116,61 @@ export default function RehearsalPanel(): React.JSX.Element | null {
   }, [])
   useEffect(() => {
     if (open && configured && repo) {
-      if (!wasOpen.current) returnFocus.current = document.activeElement as HTMLElement | null
-      dialog.current?.showModal()
-      if (selected) submit.current?.focus()
-      else input.current?.focus()
+      if (!wasOpen.current) {
+        returnFocus.current = document.activeElement as HTMLElement | null
+        if (blocked || busy || result) heading.current?.focus()
+        else if (selected) submit.current?.focus()
+        else input.current?.focus()
+      }
       wasOpen.current = true
     } else {
-      dialog.current?.close()
       if (wasOpen.current) {
         if (returnFocus.current?.isConnected) returnFocus.current.focus()
         else trigger.current?.focus()
       }
       wasOpen.current = false
     }
-  }, [open, configured, repo, selected])
+  }, [open, configured, repo, selected, blocked, busy, result])
+  const previousStatus = useRef({ result, application })
   useEffect(() => {
-    if (result && open && !busy) status.current?.focus()
-  }, [result, open, busy])
+    // Announce new results without taking focus from the city or child workflows.
+    if (busy) return
+    const changed =
+      previousStatus.current.result !== result || previousStatus.current.application !== application
+    previousStatus.current = { result, application }
+    if (
+      changed &&
+      open &&
+      panel.current?.contains(document.activeElement) &&
+      !document.activeElement?.closest('[aria-label="Undo Apply"]')
+    )
+      status.current?.focus()
+  }, [result, application, open, busy])
+  const applyReason = busy
+    ? 'Wait for the current operation to finish.'
+    : blocked
+      ? 'Recovery is required before Apply.'
+      : !recovery
+        ? 'Checking recovery status…'
+        : application
+          ? 'This Apply attempt has finished. Inspect its result above before rehearsing again.'
+          : !report
+            ? 'Run a rehearsal to review its result before Apply.'
+            : report.outcome !== 'clean' || report.conflicted
+              ? 'Apply requires a completed, conflict-free result.'
+              : report.refs.length === 0
+                ? 'No branch changes to apply.'
+                : report.can_apply !== true
+                  ? 'This retained result is not eligible for Apply. Rehearse again against the current checkout.'
+                  : null
+  const stale = inventory?.entries.find((entry) => entry.id === report?.id)?.stale
 
   if (!repo) return null
   return (
     <>
       <RehearsalMode />
       {blocked && (
-        <section role="alert" aria-label="Mandatory recovery">
+        <section className="rehearsal-recovery" role="alert" aria-label="Mandatory recovery">
           <h2 ref={recoveryHeading} tabIndex={-1}>
             ⚠ Recovery required
           </h2>
@@ -308,6 +200,8 @@ export default function RehearsalPanel(): React.JSX.Element | null {
         <button
           ref={trigger}
           className="rehearsal-trigger"
+          aria-expanded={open}
+          aria-controls="rehearsal-panel"
           onClick={() => {
             setConfirmApply(null)
             openPanel()
@@ -316,139 +210,271 @@ export default function RehearsalPanel(): React.JSX.Element | null {
           Rehearse (internal)
         </button>
       )}
-      <dialog
-        ref={dialog}
-        className="rehearsal-dialog"
-        aria-labelledby="rehearsal-title"
-        onKeyDown={(event) => event.stopPropagation()}
-        onCancel={(event) => {
-          event.preventDefault()
-          if (confirming) setConfirmApply(null)
-          else close()
-        }}
-      >
-        <h2 id="rehearsal-title">Rehearse {action}</h2>
-        <p>
-          Internal development preview. Closing keeps the rehearsal; it does not stop a running
-          operation.
-        </p>
-        {!available && <p role="alert">⚠ {availability.message}</p>}
-        {open && configured && <RehearsalHistory key={repo} repo={repo} />}
-        {open && configured && (
-          <RehearsalUndo key={`undo:${repo}`} repo={repo} blocked={!!blocked} />
-        )}
-        <form
-          onSubmit={(event) => {
-            event.preventDefault()
-            if (available && !busy && !blocked) void rehearse(action, chosenTarget, selected?.plan)
+      {open && configured && (
+        <aside
+          ref={panel}
+          id="rehearsal-panel"
+          className="rehearsal-panel"
+          aria-labelledby="rehearsal-title"
+          onKeyDown={(event) => {
+            event.stopPropagation()
+            // Native confirmation dialogs own Escape and their cancel event.
+            if ((event.target as HTMLElement).closest('dialog[open]')) return
+            if (event.key === 'Escape' && !event.defaultPrevented) {
+              event.preventDefault()
+              if (confirming) setConfirmApply(null)
+              else close()
+            }
           }}
         >
-          <label htmlFor="rehearsal-target">
-            {selected?.plan
-              ? 'Interactive plan base (Root includes the root commit)'
-              : action === 'rebase'
-                ? 'Rebase current checkout onto selected branch'
-                : action === 'cherry-pick'
-                  ? 'Selected commit to cherry-pick'
-                  : 'Branch or commit to merge into the current checkout'}
-          </label>
-          <input
-            id="rehearsal-target"
-            ref={input}
-            value={chosenTarget}
-            readOnly={!!selected}
-            onChange={(event) => setTarget(event.target.value)}
-            disabled={busy || !!blocked || confirming || !available}
-            required
-          />
-          <button
-            ref={submit}
-            type="submit"
-            disabled={busy || !!blocked || confirming || !available || !chosenTarget.trim()}
-          >
-            {busy ? 'Working…' : 'Rehearse'}
-          </button>
-        </form>
-        <div ref={status} tabIndex={-1} aria-live="polite" aria-busy={busy}>
-          {application && <p role="status">{application.message}</p>}
-          {blocked && <p role="alert">⚠ {recovery.message} Close this panel to access recovery.</p>}
-          {result?.kind === 'report' ? (
-            <Report report={result.report} />
-          ) : (
-            result && (
-              <p role="alert">
-                ⚠{' '}
-                {result.kind === 'refused'
-                  ? 'Rehearsal refused'
-                  : result.kind === 'unavailable'
-                    ? 'Rehearse unavailable'
-                    : 'Rehearsal error'}
-                : {result.message}
-              </p>
-            )
-          )}
-        </div>
-        {open && result?.kind === 'report' && <RehearsalCityComparison report={result.report} />}
-        {result?.kind === 'report' && result.report.outcome === 'stopped' && (
-          <RehearsalConflicts
-            key={`${repo}:${result.report.id}`}
-            report={result.report}
-            blocked={!!blocked}
-          />
-        )}
-        {confirming && result?.kind === 'report' ? (
-          <section aria-label="Confirm Apply">
-            <h3>Apply rehearsal</h3>
-            <p>
-              Apply {result.report.command.join(' ')} to {result.report.origin_worktree}, checkout{' '}
-              {result.report.checkout.target}.
-            </p>
-            <p>Affected branches: {result.report.refs.map((ref) => ref.name).join(', ')}</p>
-            <p>
-              Tracked local work:{' '}
-              {result.report.carried
-                ? `${result.report.carried.status}: ${result.report.carried.paths.join(', ')}`
-                : 'None carried'}
-              . Untracked files are not carried.
-            </p>
-            <p>
-              Tracked edits are initially replayed as unstaged changes. The backend will check the
-              worktree, local work and branch occupancy again.
-            </p>
-            <button ref={cancelApply} onClick={() => setConfirmApply(null)}>
-              Cancel Apply
-            </button>
-            <button
-              disabled={busy || !!blocked}
-              onClick={() => {
-                setConfirmApply(null)
-                void apply(result.report)
-              }}
+          <header className="rehearsal-header">
+            <p className="rehearsal-eyebrow">Preview changes · internal</p>
+            <div className="rehearsal-title-row">
+              <h2 id="rehearsal-title" ref={heading} tabIndex={-1}>
+                Rehearse {interactive ? 'interactive rebase' : action}
+              </h2>
+              <button aria-label="Close rehearsal panel" onClick={close}>
+                ×
+              </button>
+            </div>
+            <dl className="rehearsal-direction">
+              <div>
+                <dt>
+                  {report
+                    ? report.checkout.kind === 'detached'
+                      ? 'Rehearsed checkout'
+                      : 'Rehearsed branch'
+                    : branch
+                      ? 'Current branch'
+                      : 'Current checkout'}
+                </dt>
+                <dd>{report?.checkout.target ?? branch ?? 'Detached HEAD'}</dd>
+              </div>
+              <span aria-hidden="true">→</span>
+              <div>
+                <dt>
+                  {interactive
+                    ? 'Plan base'
+                    : action === 'rebase'
+                      ? 'Rebase onto'
+                      : action === 'cherry-pick'
+                        ? 'Pick commit'
+                        : 'Merge from'}
+                </dt>
+                <dd>{shownTarget === '--root' ? 'Root' : shownTarget || 'Choose a target'}</dd>
+              </div>
+            </dl>
+          </header>
+          <div className="rehearsal-body">
+            {!available && <p role="alert">⚠ {availability.message}</p>}
+            <div ref={status} tabIndex={-1} aria-live="polite" aria-busy={busy}>
+              {busy && (
+                <>
+                  <h3>{running ? 'Rehearsal running' : 'Working…'}</h3>
+                  <p>
+                    {running
+                      ? 'Trying the operation in a separate sandbox. Your current checkout stays unchanged.'
+                      : 'Waiting for the current operation to finish.'}
+                  </p>
+                </>
+              )}
+              {executionRepo && !running && (
+                <p role="status">
+                  A rehearsal is running in {executionRepo}. Open that worktree to inspect it.
+                </p>
+              )}
+              {managementMessage && <p role="status">{managementMessage}</p>}
+              {stale && (
+                <p role="alert">
+                  ⚠ This rehearsal has an outdated checkout or ref basis. Apply will check the real
+                  state again; rehearse again if refused.
+                </p>
+              )}
+              {inventory?.lowSpace && (
+                <p role="alert">
+                  ⚠ Low disk space (less than 1 GiB available). Review saved rehearsals and discard
+                  unneeded work.
+                </p>
+              )}
+              {inventory?.warning && <p role="alert">⚠ {inventory.warning}</p>}
+              {application && <p role="status">{application.message}</p>}
+              {blocked && (
+                <p role="alert">
+                  ⚠ {recovery.message} Recovery controls remain available beside this panel.
+                </p>
+              )}
+              {!busy &&
+                (result?.kind === 'report' ? (
+                  <RehearsalReportView report={result.report} />
+                ) : (
+                  result && (
+                    <p role="alert">
+                      ⚠{' '}
+                      {result.kind === 'refused'
+                        ? 'Rehearsal refused'
+                        : result.kind === 'unavailable'
+                          ? 'Rehearse unavailable'
+                          : 'Rehearsal error'}
+                      : {result.message}
+                    </p>
+                  )
+                ))}
+            </div>
+            {open && result?.kind === 'report' && (
+              <RehearsalCityComparison report={result.report} />
+            )}
+            {result?.kind === 'report' && result.report.outcome === 'stopped' && (
+              <RehearsalConflicts
+                key={`${repo}:${result.report.id}`}
+                report={result.report}
+                blocked={!!blocked}
+              />
+            )}
+            <details
+              className="rehearsal-setup"
+              open={!report && !busy}
+              key={report?.id ?? 'setup'}
             >
-              Apply rehearsal
-            </button>
-          </section>
-        ) : (
-          <button
-            ref={applyTrigger}
-            disabled={
-              busy ||
-              !!blocked ||
-              !recovery ||
-              !!application ||
-              result?.kind !== 'report' ||
-              result.report.can_apply !== true ||
-              result.report.outcome !== 'clean' ||
-              result.report.conflicted ||
-              result.report.refs.length === 0
-            }
-            onClick={() => setConfirmApply(result?.kind === 'report' ? result.report : null)}
+              <summary>{report ? 'Rehearse again' : 'Choose rehearsal target'}</summary>
+              <form
+                id="rehearsal-form"
+                onSubmit={(event) => {
+                  event.preventDefault()
+                  if (available && !busy && !blocked && !missingPlan) {
+                    status.current?.focus()
+                    void rehearse(action, chosenTarget, selected?.plan ?? report?.plan)
+                  }
+                }}
+              >
+                <label htmlFor="rehearsal-target">
+                  {interactive
+                    ? 'Interactive plan base (Root includes the root commit)'
+                    : action === 'rebase'
+                      ? 'Rebase current checkout onto selected branch'
+                      : action === 'cherry-pick'
+                        ? 'Selected commit to cherry-pick'
+                        : 'Branch or commit to merge into the current checkout'}
+                </label>
+                {missingPlan && (
+                  <p role="alert">
+                    Open the interactive rebase editor to prepare a new plan. This retained report
+                    has no saved plan to replay.
+                  </p>
+                )}
+                <input
+                  id="rehearsal-target"
+                  ref={input}
+                  value={chosenTarget}
+                  readOnly={!!selected || interactive}
+                  onChange={(event) => setDraft({ context, value: event.target.value })}
+                  disabled={busy || !!blocked || confirming || !available}
+                  required
+                />
+                <button
+                  ref={submit}
+                  type="submit"
+                  disabled={
+                    busy ||
+                    !!blocked ||
+                    confirming ||
+                    !available ||
+                    missingPlan ||
+                    !chosenTarget.trim()
+                  }
+                >
+                  {busy ? 'Working…' : 'Rehearse'}
+                </button>
+              </form>
+            </details>
+            <details className="rehearsal-history">
+              <summary>Saved rehearsals{inventory ? ` · ${inventory.entries.length}` : ''}</summary>
+              <RehearsalHistory key={repo} repo={repo} />
+            </details>
+            <RehearsalUndo key={`undo:${repo}`} repo={repo} blocked={!!blocked} />
+            {report && <RehearsalDetails report={report} />}
+          </div>
+          <footer className="rehearsal-footer">
+            <p>
+              {running
+                ? 'Closing keeps this rehearsal running in the background. Stop ends execution and reloads its actual state; continuation may be unavailable.'
+                : (applyReason ??
+                  (report?.repository_hooks === 'disabled'
+                    ? 'Hooks were not run. Review changes before applying.'
+                    : 'Hook execution information unavailable. Review changes before applying.'))}
+            </p>
+            <div className="rehearsal-actions">
+              {running && (
+                <button
+                  disabled={stopping}
+                  onClick={() => {
+                    status.current?.focus()
+                    void stop()
+                  }}
+                >
+                  {stopping ? 'Stopping…' : 'Stop rehearsal'}
+                </button>
+              )}
+              <button onClick={close}>{running ? 'Keep and close' : 'Keep for later'}</button>
+              {!running && report && (
+                <button
+                  className="primary"
+                  ref={applyTrigger}
+                  disabled={!!applyReason}
+                  onClick={() => setConfirmApply(report)}
+                >
+                  Apply
+                </button>
+              )}
+            </div>
+          </footer>
+          <dialog
+            ref={confirmation}
+            className="rehearsal-dialog"
+            aria-label="Confirm Apply"
+            onCancel={(event) => {
+              event.preventDefault()
+              event.stopPropagation()
+              setConfirmApply(null)
+            }}
           >
-            Apply
-          </button>
-        )}{' '}
-        <button onClick={() => close()}>Keep and close</button>
-      </dialog>
+            {confirming && result?.kind === 'report' && (
+              <section aria-label="Confirm Apply">
+                <h3>Apply rehearsal</h3>
+                <p>
+                  Apply {result.report.command.join(' ')} to {result.report.origin_worktree},
+                  checkout {result.report.checkout.target}.
+                </p>
+                <p>Affected branches: {result.report.refs.map((ref) => ref.name).join(', ')}</p>
+                <p>
+                  Tracked local work:{' '}
+                  {result.report.carried
+                    ? `${result.report.carried.status}: ${result.report.carried.paths.join(', ')}`
+                    : 'None carried'}
+                  . Untracked files are not carried.
+                </p>
+                <p>
+                  Tracked edits are initially replayed as unstaged changes. The backend will check
+                  the worktree, local work and branch occupancy again.
+                </p>
+                <button ref={cancelApply} onClick={() => setConfirmApply(null)}>
+                  Cancel Apply
+                </button>
+                <button
+                  disabled={busy || !!blocked}
+                  onClick={() => {
+                    confirmation.current?.close()
+                    status.current?.focus()
+                    setConfirmApply(null)
+                    void apply(result.report)
+                  }}
+                >
+                  Apply rehearsal
+                </button>
+              </section>
+            )}
+          </dialog>
+        </aside>
+      )}
     </>
   )
 }

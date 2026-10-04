@@ -1,3 +1,4 @@
+import { expandRehearsal } from './rehearsal-ui'
 import { test, expect, _electron as electron } from '@playwright/test'
 import { execFileSync } from 'child_process'
 import { mkdtemp, readFile, rm, writeFile } from 'fs/promises'
@@ -46,7 +47,9 @@ test('interrupted real Apply survives restart and blocks IPC writes across workt
   try {
     let page = await open(root)
     await page.getByRole('button', { name: 'Rehearse (internal)' }).click()
+    await expandRehearsal(page, /Rehearse again|Choose rehearsal target/)
     await page.getByLabel('Branch or commit to merge into the current checkout').fill('topic')
+    await expandRehearsal(page, /Rehearse again|Choose rehearsal target/)
     await page.getByRole('button', { name: 'Rehearse', exact: true }).click()
     await expect(page.getByRole('heading', { name: 'Merge preview completed' })).toBeVisible()
     await page.getByRole('button', { name: 'Apply', exact: true }).click()

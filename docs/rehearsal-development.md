@@ -15,9 +15,14 @@ deleting retained data. It never searches PATH for this executable or falls back
 to a direct Git action. Separate tool installation is only for development.
 
 Open a repository, activate **Rehearse (internal)**, enter a branch or commit,
-and press **Rehearse**. Tab navigates the native modal, Enter submits the form,
-and Escape or **Keep and close** closes it. Focus moves to the result on completion
-and returns to the entry button on closing. Closing during execution does not
+and press **Rehearse**. The focused right-side panel keeps the city visible and usable,
+with the operation, current branch and target above the result. It has no backdrop
+or focus trap. Tab can leave the panel for the workspace; Enter submits the form.
+Escape while focus is in the panel, its close button, or **Keep for later** closes
+it. During execution the footer offers **Stop rehearsal** and **Keep and close**.
+Focus moves to the completed result only while you are working inside the panel;
+background completion does not pull focus away from the workspace. Closing returns
+focus to the entry button. Closing during execution does not
 stop it. Reopening reloads the current worktree’s retained history. A response arriving after
 switching repositories stays associated with its original worktree.
 
@@ -72,6 +77,16 @@ and confirm Apply to adopt exactly those commit objects. Escape returns focus to
 the plan entry. The plan summary is kept in the current app session; restart
 inspection through the CLI retains the actual sandbox Git state.
 
+**Review changes** expands the complete branch/commit and file report, including
+interactive plans. **Compare city** displays the frozen Before/After scene in the
+main workspace, with its controls in the panel. **Rehearse again** expands the
+submission controls. **Saved rehearsals** expands selection, storage and confirmed
+Discard. **Technical details** contains exact IDs, full paths, execution conditions,
+signing and rerere disclosures. Unexpected changes, stale results, carried-work
+warnings, low disk space and recovery requirements remain visible without opening
+these sections. The action footer stays available while long reports scroll; it
+explains why Apply is unavailable.
+
 The panel distinguishes conflicts, stopped/failed execution, no-op, refusal and
 technical errors. Failed Git commands include their bounded diagnostic output.
 An unavailable configured tool shows repair guidance immediately and disables
@@ -92,7 +107,7 @@ retained entry is selected. Each worktree has its own history and selection.
 
 ## History, Stop and storage
 
-**Retained rehearsals** lists every entry for the original worktree, including
+Expand **Saved rehearsals** to find **Retained rehearsals**, which lists every entry for the original worktree, including
 outdated results, conflicts and interrupted execution. **Open <ID>** switches the
 current result; the pressed/current label identifies it. **Refresh history** reloads
 changes made by other CLI processes. Changed checkout/ref bases are marked with a
@@ -209,10 +224,12 @@ warning. Packaged applications retain this presence guard without exposing Apply
 The internal panel reads **Undo Apply** availability from the backend on opening,
 after operations, on window focus and with **Refresh Undo availability**. It names
 the exact last Apply ID and original worktree even when that rehearsal is no longer
-selected. **Undo Apply** opens confirmation; focus starts on **Cancel Undo**.
+selected. Expand **Undo Apply · <ID>** for that exact applied result and its restrictions.
+The **Undo Apply** button opens confirmation; focus starts on **Cancel Undo**.
 Tab and Enter reach **Undo this Apply**; Escape cancels and returns focus.
 Completion focuses the textual result and refreshes repository views, history and
-scene analysis.
+scene analysis. Interrupted Undo gives focus to the mandatory recovery notice,
+which remains accessible beside the nonmodal panel.
 
 Undo rechecks the exact Apply and original worktree. Changed refs, branches checked
 out elsewhere and local changes (including carried uncommitted work) cause a textual
@@ -336,3 +353,24 @@ assumption beyond the JSON schema.
 
 This comparison remains inside the development-only rehearsal panel. Public
 screenshots and the released feature pitch are unchanged.
+
+## Side-panel screenshot
+
+The internal panel is captured from the real Electron app and repository data,
+using the normal media workflow with an opt-in development shot:
+
+```bash
+npm run build
+# Start the development renderer separately:
+npx vite -c vite.preview.config.ts
+# With GIT_CITY_REHEARSE_BIN already set to the compatible tool:
+ELECTRON_RENDERER_URL=http://localhost:5199 npm run media:app -- \
+  --only=app-rehearsal --repo=/path/to/repository --rehearsal-target=topic
+```
+
+This creates a retained merge preview; it never applies or discards it. Use an
+isolated checkout for capture and manage its retained history afterwards. The
+shot is excluded from the default production media run, so release gating stays
+unchanged. The screenshot below uses this repository's actual issue #172 change.
+
+![Internal Rehearse side panel beside the real Git City repository](media/app-rehearsal.png)

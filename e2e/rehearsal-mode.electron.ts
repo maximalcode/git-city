@@ -177,9 +177,16 @@ test('known repository choice, linked-worktree restart, missing tool and explici
       .filter({ has: page.getByText('topic', { exact: true }) })
       .getByRole('button', { name: 'Merge', exact: true })
       .click()
-    await expect(page.getByRole('dialog', { name: 'Rehearse merge', exact: true })).toContainText(
-      'Configure GIT_CITY_REHEARSE_BIN'
-    )
+    await expect(
+      page.getByRole('complementary', { name: 'Rehearse merge', exact: true })
+    ).toContainText(/configure GIT_CITY_REHEARSE_BIN/i)
+    expect(
+      await page.evaluate(
+        () =>
+          document.querySelector('.app-workspace')!.getBoundingClientRect().right <=
+          document.querySelector('.rehearsal-panel')!.getBoundingClientRect().left
+      )
+    ).toBe(true)
     expect(git('rev-parse', 'HEAD')).toBe(before)
     await page.keyboard.press('Escape')
     await page.getByLabel('Rehearse mode (internal)').selectOption('off')

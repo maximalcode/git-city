@@ -1,3 +1,4 @@
+import { expandRehearsal } from './rehearsal-ui'
 import { test, expect, _electron as electron } from '@playwright/test'
 import { execFileSync } from 'child_process'
 import { mkdtemp, readFile, rm, writeFile } from 'fs/promises'
@@ -39,10 +40,18 @@ test('keyboard city comparison stays with its frozen rehearsal when switching re
     }, repo)
     const page = await app.firstWindow()
     await page.getByRole('button', { name: 'Open a local repository…' }).click()
+    await page.getByRole('button', { name: 'Got it', exact: true }).click()
     await page.getByRole('button', { name: 'Rehearse (internal)' }).click()
     const create = async (target: string): Promise<void> => {
+      await expandRehearsal(page, /Rehearse again|Choose rehearsal target/)
       await page.getByLabel('Branch or commit to merge into the current checkout').fill(target)
+      await expandRehearsal(page, /Rehearse again|Choose rehearsal target/)
       await page.getByRole('button', { name: 'Rehearse', exact: true }).click()
+      await expect(page.locator('.rehearsal-panel [aria-busy]')).toHaveAttribute(
+        'aria-busy',
+        'false'
+      )
+      await expandRehearsal(page, /Rehearse again|Choose rehearsal target/)
       await expect(page.getByRole('button', { name: 'Rehearse', exact: true })).toBeEnabled()
     }
     await create('topic')
@@ -72,6 +81,7 @@ test('keyboard city comparison stays with its frozen rehearsal when switching re
     await page.keyboard.press('Space')
     await expect(comparison.getByText('file.txt: 100 lines', { exact: true })).toBeVisible()
     const inventory = await page.evaluate((repo) => window.gitCity.rehearsalList(repo), repo)
+    await expandRehearsal(page, /^Saved rehearsals/)
     const first = inventory.entries.find((entry) => entry.command[1] === 'topic')!
     await page.getByRole('button', { name: `Open ${first.id}`, exact: true }).focus()
     await page.keyboard.press('Enter')
@@ -86,7 +96,12 @@ test('keyboard city comparison stays with its frozen rehearsal when switching re
     await expect(comparison.getByText('file.txt: 200 lines', { exact: true })).toBeVisible()
     // Let the existing scene's height/color interpolation settle for visual QA.
     await page.waitForTimeout(2000)
-    await comparison.screenshot({ path: 'test-results/rehearsal-comparison.png' })
+    await page.screenshot({ path: 'test-results/rehearsal-comparison.png' })
+    await comparison.getByRole('button', { name: 'Return to live city', exact: true }).click()
+    await expect(
+      comparison.getByRole('button', { name: 'Compare city', exact: true })
+    ).toBeFocused()
+    await expect(page.locator('canvas:not(.minimap canvas)')).toHaveCount(1)
     expect(git('rev-parse', 'HEAD')).toBe(before.head)
     expect(await readFile(join(repo, '.git/index'))).toEqual(before.index)
     await page.keyboard.press('Escape')

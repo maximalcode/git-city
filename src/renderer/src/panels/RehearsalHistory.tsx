@@ -10,22 +10,17 @@ function bytes(value: number | null): string {
 
 export default function RehearsalHistory({ repo }: { repo: string }): React.JSX.Element {
   const inventory = useStore((s) => s.rehearsalInventories[repo])
-  const message = useStore((s) => s.rehearsalManagementMessages[repo])
   const current = useStore((s) => s.rehearsalCurrent[repo])
   const busy = useStore((s) => s.rehearsalBusy)
-  const executionRepo = useStore((s) => s.rehearsalExecutionRepo)
-  const stopping = useStore((s) => s.rehearsalStopping)
   const load = useStore((s) => s.loadRehearsals)
   const select = useStore((s) => s.selectRehearsal)
   const discard = useStore((s) => s.discardRehearsals)
-  const stop = useStore((s) => s.stopRehearsal)
   const [checked, setChecked] = useState<string[]>([])
   const [targets, setTargets] = useState<RehearsalEntry[] | null>(null)
   const confirmation = useRef<HTMLDialogElement>(null)
   const discardButton = useRef<HTMLButtonElement>(null)
   const cancel = useRef<HTMLButtonElement>(null)
   const heading = useRef<HTMLHeadingElement>(null)
-  const currentEntry = inventory?.entries.find((entry) => entry.id === current)
   const selected =
     inventory?.entries.filter((entry) => checked.includes(entry.id) && !entry.active) ?? []
 
@@ -46,24 +41,17 @@ export default function RehearsalHistory({ repo }: { repo: string }): React.JSX.
         Retained rehearsals
       </h3>
       <p>Worktree: {inventory?.repository ?? repo}</p>
-      <button disabled={busy || query.loading} onClick={query.reload}>
+      <button
+        disabled={busy || query.loading}
+        onClick={() => {
+          heading.current?.focus()
+          query.reload()
+        }}
+      >
         Refresh history
       </button>
-      {executionRepo && (
-        <p>
-          Running in {executionRepo}. Closing keeps this execution running.{' '}
-          <button disabled={stopping} onClick={() => void stop()}>
-            {stopping ? 'Stopping…' : 'Stop rehearsal'}
-          </button>
-        </p>
-      )}
-      <p>
-        Stop ends execution and reloads its actual state. It does not promise that Continue will be
-        possible.
-      </p>
       {query.loading && <p role="status">Refreshing retained history…</p>}
       {query.error && <p role="alert">{query.error}</p>}
-      {message && message !== query.error && <p role="status">{message}</p>}
       {inventory && (
         <>
           <p>
@@ -74,19 +62,6 @@ export default function RehearsalHistory({ repo }: { repo: string }): React.JSX.
             Size includes shared Git objects; discarding may free less space. No retained work is
             deleted automatically.
           </p>
-          {inventory.lowSpace && (
-            <p role="alert">
-              ⚠ Low disk space (less than 1 GiB available). Review retained work and explicitly
-              discard what you no longer need.
-            </p>
-          )}
-          {inventory.warning && <p role="alert">⚠ {inventory.warning}</p>}
-          {currentEntry?.stale && (
-            <p role="alert">
-              ⚠ This rehearsal has an outdated checkout or ref basis. It remains available for
-              reference; Apply will check the real state again.
-            </p>
-          )}
           {inventory.entries.length === 0 && <p>No retained rehearsals in this worktree.</p>}
           <ul>
             {inventory.entries.map((entry) => (
@@ -110,7 +85,10 @@ export default function RehearsalHistory({ repo }: { repo: string }): React.JSX.
                 <button
                   disabled={busy}
                   aria-pressed={current === entry.id}
-                  onClick={() => void select(repo, entry)}
+                  onClick={() => {
+                    heading.current?.focus()
+                    void select(repo, entry)
+                  }}
                 >
                   Open {entry.id}
                   {current === entry.id ? ' (current)' : ''}

@@ -48,6 +48,7 @@ test('nonmodal rehearsal panel keeps the city usable and explains retained state
       BrowserWindow.getAllWindows()[0].setContentSize(900, 680)
     )
     await page.getByRole('button', { name: 'Open a local repository…' }).click()
+    await page.getByRole('button', { name: 'Got it', exact: true }).click()
     await page.getByRole('button', { name: 'Rehearse (internal)' }).click()
 
     const panel = page.getByRole('complementary', { name: 'Rehearse merge', exact: true })

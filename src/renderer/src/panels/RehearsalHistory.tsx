@@ -41,7 +41,13 @@ export default function RehearsalHistory({ repo }: { repo: string }): React.JSX.
         Retained rehearsals
       </h3>
       <p>Worktree: {inventory?.repository ?? repo}</p>
-      <button disabled={busy || query.loading} onClick={query.reload}>
+      <button
+        disabled={busy || query.loading}
+        onClick={() => {
+          heading.current?.focus()
+          query.reload()
+        }}
+      >
         Refresh history
       </button>
       {query.loading && <p role="status">Refreshing retained history…</p>}
@@ -79,7 +85,10 @@ export default function RehearsalHistory({ repo }: { repo: string }): React.JSX.
                 <button
                   disabled={busy}
                   aria-pressed={current === entry.id}
-                  onClick={() => void select(repo, entry)}
+                  onClick={() => {
+                    heading.current?.focus()
+                    void select(repo, entry)
+                  }}
                 >
                   Open {entry.id}
                   {current === entry.id ? ' (current)' : ''}

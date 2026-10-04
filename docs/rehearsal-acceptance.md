@@ -85,10 +85,32 @@ The review fixed point is that commit; the original baseline above records the
 first blocked attempt. The candidate removes the internal renderer and packaged
 IPC gates together and preserves bundled integrity checks and explicit Apply.
 
-Full local and packaged activation validation is in progress. This document does
-not yet attest completion; no public activation PR has been opened. Final evidence
-must include the native packaged entry point on every shipped target and the full
-Electron suite. The [user guide](rehearse.md), feature inventory, troubleshooting,
+Activation validation completed on 2026-10-04 at commit
+`7511311b48268eefd717aaad5fc83754e1bda9ec` in
+[run 37215067427](https://github.com/maximalcode/git-city/actions/runs/37215067427):
+
+- Windows x64, Linux x64, macOS arm64 and macOS x64 package jobs all passed.
+  Each launched the actual packaged executable twice with one profile, used the
+  public keyboard controls to preview and explicitly Apply, checked exact adopted
+  commits, retained settings, metadata compatibility and damaged-tool refusal.
+- Apple Silicon passed the pinned real-tool suite: **912 passed, 2 skipped**.
+  The full Electron suite passed **25/25**, including concurrent worktrees, stale
+  refusal, repeated interactive conflicts, recovery, Undo, restart and focus flows.
+- Typecheck, lint and the standard test suite passed on all four targets. Local
+  typecheck, lint, build and standard tests also passed (**874 passed, 40 skipped**;
+  real-tool suites require the explicit tool environment). The complete local
+  recovery/Undo rerun passed **17/17**, and both interactive scenarios passed.
+- Separate Standards and Spec reviews found no blocking findings. The original
+  acceptance-gate finding is satisfied by the completed native run above.
+
+Earlier acceptance runs exposed two fixture errors, both corrected before the
+final run: Windows line-ending conversion changed expected file bytes, and the
+interactive test inspected the oldest retained preview after creating a new one.
+The latter now reads the reviewed identity from the panel and still checks exact
+commit adoption. Local recovery tests initially timed out under machine load;
+the isolated full-file rerun and the hosted full suite passed.
+
+The [user guide](rehearse.md), feature inventory, troubleshooting,
 keyboard reference and real repository screenshot accompany activation. The screenshot
 uses the production renderer and a clean temporary clone of this repository,
 rehearsing the activation branch onto `develop` without Apply; this avoids changing

@@ -179,7 +179,7 @@ test('known repository choice, linked-worktree restart, missing tool and explici
       .click()
     await expect(
       page.getByRole('complementary', { name: 'Rehearse merge', exact: true })
-    ).toContainText('Configure GIT_CITY_REHEARSE_BIN')
+    ).toContainText(/configure GIT_CITY_REHEARSE_BIN/i)
     expect(
       await page.evaluate(
         () =>

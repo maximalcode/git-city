@@ -120,7 +120,9 @@ test('nonmodal rehearsal panel keeps the city usable and explains retained state
     await expect(apply).toBeFocused()
 
     // Moving the real checkout makes the retained report stale; the UI keeps it inspectable.
-    git('commit', '--allow-empty', '-m', 'advance checkout basis')
+    // Advance the real ref without racing the app's status reader for index.lock.
+    const advanced = git('commit-tree', 'HEAD^{tree}', '-p', 'HEAD', '-m', 'advance checkout basis')
+    git('update-ref', 'HEAD', advanced)
     await expandRehearsal(page, /^Saved rehearsals/)
     await panel.getByRole('button', { name: 'Refresh history', exact: true }).click()
     await expect(

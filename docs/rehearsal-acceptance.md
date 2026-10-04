@@ -74,7 +74,8 @@ was fixed in upstream PR #114. The toolchain now pins artifact revision
 `0ecca205f38fb1bcd88ef2e6a62f6943e2ddc65d` from
 [run 37208097702](https://github.com/maximalcode/git-rehearse/actions/runs/37208097702).
 All four archive checksums were independently verified against their checksum
-files. Each upstream target passed concurrent worktree previews, Apply and
+files. The artifact, reviewed head and merged upstream commit all resolve to tree
+`a544b3784e89f40b733cd7d659c8b07ff74427b2`. Each upstream target passed concurrent worktree previews, Apply and
 retained-metadata migration. Git City's previously failing real Electron worktree
 regression now passes, including stale Apply refusal and retention.
 
@@ -88,7 +89,10 @@ Full local and packaged activation validation is in progress. This document does
 not yet attest completion; no public activation PR has been opened. Final evidence
 must include the native packaged entry point on every shipped target and the full
 Electron suite. The [user guide](rehearse.md), feature inventory, troubleshooting,
-keyboard reference and real repository screenshot accompany activation.
+keyboard reference and real repository screenshot accompany activation. The screenshot
+uses the production renderer and a clean temporary clone of this repository,
+rehearsing the activation branch onto `develop` without Apply; this avoids changing
+the working checkout's unrelated worktree registrations.
 
 Signature presence is not cryptographic verification or signer trust. Sandbox
 execution is not operating-system isolation. Tests do not establish control over

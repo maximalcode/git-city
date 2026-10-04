@@ -152,7 +152,7 @@ incompatible retained data must be preserved, not deleted to make an update work
 
 ## Keyboard and focus
 
-Tab moves through the panel's controls, including the target form, result
+Tab and Shift+Tab move through the panel's controls, including the target form, result
 sections, saved history, conflict controls, and footer actions. Enter activates
 the focused control. Escape closes the panel only when focus is inside it; it
 does not stop a running preview. Focus returns to the control that opened the
@@ -160,8 +160,7 @@ panel. Apply, Discard and first-time mode selection use modal confirmation or ch
 dialogs, where Escape cancels that dialog instead. Undo has an inline confirmation;
 Escape cancels it and returns focus to Undo Apply.
 
-Tab and Shift+Tab reach controls; Enter activates buttons and submits the preview.
-Space toggles checkboxes; arrow keys change the mode selector. Rehearsal completion
+Enter submits the preview form. Space toggles checkboxes; arrow keys change the mode selector. Rehearsal completion
 focuses the textual result. File selection focuses the editor heading; refresh and
 Continue return focus to the report. Compare city initially focuses Before.
 

@@ -89,6 +89,23 @@ across the city, so you see its blast radius at a glance.
 
 **[The complete feature list](docs/features.md)** has all of it.
 
+## Rehearse before changing your checkout
+
+Merge, Rebase (including interactive plans), and single Cherry-pick can run in a
+retained sandbox. Review changes beside the city, resolve conflicts there, compare
+Before/After, and explicitly confirm **Apply** to adopt the checked result.
+**Automatic / Ask / Off** is shared across linked worktrees. New repositories use
+Automatic; existing recent repositories receive a one-time choice.
+
+![Rehearse side panel beside the real repository city](docs/media/app-rehearsal.png)
+
+Keep results across restarts, stop previews, confirm discard, or use **Undo Apply**
+when the original worktree still permits it. Interrupted Apply/Undo blocks writes
+until checked recovery. Hooks are not run in rehearsal or Apply; signature presence
+is shown separately from verification. Git City bundles the compatible tool for
+Windows/Linux x64 and both macOS architectures. Read the [Rehearse guide](docs/rehearse.md)
+for local-work handling, limits, keyboard controls and recovery.
+
 ## Install
 
 Grab the latest build from
@@ -194,23 +211,6 @@ Development happens through GitHub issues. See
 [CONTRIBUTING.md](CONTRIBUTING.md) for setup and the branch and PR flow. Bug
 reports and feature requests are welcome, and there are issue templates for both.
 Taking part means agreeing to the [Code of Conduct](CODE_OF_CONDUCT.md).
-
-## Rehearse before changing your checkout
-
-Merge, Rebase (including interactive plans), and single Cherry-pick can run in a
-retained sandbox. Review changes beside the city, resolve conflicts there, compare
-Before/After, and explicitly confirm **Apply** to adopt the checked result.
-**Automatic / Ask / Off** is shared across linked worktrees. New repositories use
-Automatic; existing recent repositories receive a one-time choice.
-
-![Rehearse side panel beside the real repository city](docs/media/app-rehearsal.png)
-
-Keep results across restarts, stop previews, confirm discard, or use **Undo Apply**
-when the original worktree still permits it. Interrupted Apply/Undo blocks writes
-until checked recovery. Hooks are not run in rehearsal or Apply; signature presence
-is shown separately from verification. Git City bundles the compatible tool for
-Windows/Linux x64 and both macOS architectures. Read the [Rehearse guide](docs/rehearse.md)
-for local-work handling, limits, keyboard controls and recovery.
 
 ## License
 

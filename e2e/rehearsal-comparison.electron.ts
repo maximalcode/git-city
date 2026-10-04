@@ -40,6 +40,7 @@ test('keyboard city comparison stays with its frozen rehearsal when switching re
     }, repo)
     const page = await app.firstWindow()
     await page.getByRole('button', { name: 'Open a local repository…' }).click()
+    await page.getByRole('button', { name: 'Got it', exact: true }).click()
     await page.getByRole('button', { name: 'Rehearse (internal)' }).click()
     const create = async (target: string): Promise<void> => {
       await expandRehearsal(page, /Rehearse again|Choose rehearsal target/)

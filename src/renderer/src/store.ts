@@ -753,7 +753,11 @@ export const useStore = create<GitCityState>((set, get, api) => ({
     set({
       rehearsalResults: results,
       rehearsalOpen: true,
-      rehearsalRequest: request ? { ...request, repo } : null
+      rehearsalRequest: request
+        ? { ...request, repo }
+        : get().rehearsalBusy
+          ? get().rehearsalRequest
+          : null
     })
   },
   closeRehearsal: () => set({ rehearsalOpen: false }),

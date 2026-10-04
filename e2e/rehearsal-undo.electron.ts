@@ -1,3 +1,4 @@
+import { expandRehearsal } from './rehearsal-ui'
 import { test, expect, _electron as electron } from '@playwright/test'
 import { execFileSync } from 'child_process'
 import { mkdtemp, readFile, rm, writeFile } from 'fs/promises'
@@ -47,12 +48,17 @@ test('interrupted exact Undo survives restart and blocks writes across worktrees
   try {
     let page = await open(root)
     await page.getByRole('button', { name: 'Rehearse (internal)' }).click()
+    await expandRehearsal(page, /Rehearse again|Choose rehearsal target/)
     await page.getByLabel('Branch or commit to merge into the current checkout').fill('topic')
+    await expandRehearsal(page, /Rehearse again|Choose rehearsal target/)
     await page.getByRole('button', { name: 'Rehearse', exact: true }).click()
     await expect(page.getByRole('heading', { name: 'Merge preview completed' })).toBeVisible()
     await page.getByRole('button', { name: 'Apply', exact: true }).click()
     await page.getByRole('button', { name: 'Apply rehearsal', exact: true }).click()
-    await expect(page.getByText('The checked rehearsal was applied.')).toBeVisible({ timeout: 180_000 })
+    await expect(page.getByText('The checked rehearsal was applied.')).toBeVisible({
+      timeout: 180_000
+    })
+    await expandRehearsal(page, /^Undo Apply/)
     const undo = page.getByRole('button', { name: 'Undo Apply', exact: true })
     await expect(undo).toBeEnabled()
     await undo.focus()
@@ -65,8 +71,11 @@ test('interrupted exact Undo survives restart and blocks writes across worktrees
     await expect(page.getByRole('button', { name: 'Undo this Apply' })).toBeFocused()
     await page.keyboard.press('Enter')
     const outcome = page.getByText(/Undo response was lost or incomplete/)
-    await expect(outcome).toBeFocused()
-    await page.keyboard.press('Escape')
+    await expect(outcome).toBeVisible()
+    // A mandatory recovery notice now sits outside the nonmodal panel and takes priority.
+    await expect(page.getByRole('heading', { name: '⚠ Recovery required' })).toBeFocused()
+    await page.getByRole('button', { name: 'Close rehearsal panel' }).focus()
+    await page.keyboard.press('Enter')
     await expect(page.getByRole('heading', { name: '⚠ Recovery required' })).toBeVisible()
     await app.close()
 

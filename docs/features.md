@@ -160,7 +160,15 @@ fly-to.
 An explicitly configured git-rehearse development build enables an internal
 merge, normal rebase and single-commit cherry-pick preview with retained results,
 branch/commit and file consequences,
-conflicts and textual content warnings. Closing keeps the preview. Retained history and the current selection survive app restarts; each worktree has its own inventory. Stop ends app-owned preview/Continue execution and reloads its state without promising resumability. Confirmed single/batch Discard protects active and recovery data. Logical storage use and low-space warnings support deliberate cleanup, with no automatic deletion. Confirmed
+conflicts and textual content warnings. The nonmodal right-side panel keeps the city
+visible and usable, labels the current branch and operation target, and keeps Stop,
+Keep and Apply in a fixed footer. Expand Review changes, Saved rehearsals and
+Technical details for the full report, history/storage and execution metadata.
+Compare city shows frozen Before/After snapshots when a completed result supports
+it, and Undo Apply stays tied to the backend-reported Apply. Actionable warnings
+stay prominent; unavailable Apply has an explanation. See the [Rehearse panel
+guide](rehearse.md) for the workflow.
+Closing keeps the preview; **Rehearse (internal)** reopens it. Retained history and the current selection survive app restarts; each worktree has its own inventory. Stop ends app-owned preview/Continue execution and reloads its state without promising resumability. Confirmed single/batch Discard protects active and recovery data. Logical storage use and low-space warnings support deliberate cleanup, with no automatic deletion. Confirmed
 Apply adopts the checked result after backend revalidation. Interrupted Apply
 blocks repository writes across worktrees and offers backend-approved recovery.
 New previews and Continue wait for app-owned post-Apply recovery/Undo inspections;

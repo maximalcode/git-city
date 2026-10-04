@@ -202,7 +202,11 @@ Automatic routes supported actions to rehearsal without changing the real checko
 Development builds also offer [Undo Apply](docs/rehearsal-development.md#undo-apply) for the exact backend-reported Apply and original worktree, with safety refusals and interrupted-Undo recovery.
 New previews wait for app-owned post-Apply inspection to finish; Stop also cancels queued previews.
 Internal reports explain hooks and isolated rerere learning, and distinguish signature presence from verification.
-Retained rehearsal history survives restarts, with Stop, confirmed
+The internal Rehearse side panel keeps the city usable, with expandable history and
+technical details, frozen city comparison, and explicit Apply confirmation. Closing
+keeps a running preview in the background; **Rehearse (internal)** reopens it.
+See the [Rehearse panel guide](docs/rehearse.md). Retained rehearsal history
+survives restarts, with Stop, confirmed
 single/batch Discard and storage warnings. This preview is hidden in packaged applications.
 
 ## License

@@ -1,3 +1,4 @@
+import { expandRehearsal } from './rehearsal-ui'
 import { test, expect, _electron as electron } from '@playwright/test'
 import { execFileSync } from 'child_process'
 import { mkdtemp, readFile, rm, writeFile } from 'fs/promises'
@@ -65,6 +66,7 @@ for (const conflict of [false, true]) {
       await page.keyboard.press('Enter')
       const listing = () =>
         JSON.parse(execFileSync(tool, ['--json', 'list'], { cwd: root, encoding: 'utf8' }))
+      await expandRehearsal(page, /^Review changes$/)
       await expect(page.getByRole('region', { name: 'Rehearsed plan' })).toContainText('drop')
       if (conflict) {
         for (let stop = 0; stop < 2; stop++) {
@@ -82,12 +84,26 @@ for (const conflict of [false, true]) {
           await expect(editor.getByRole('button', { name: 'Continue rehearsal' })).toBeEnabled()
           await editor.getByRole('button', { name: 'Continue rehearsal' }).focus()
           await page.keyboard.press('Enter')
+          await expandRehearsal(page, /^Review changes$/)
           await expect(page.getByRole('region', { name: 'Rehearsed plan' })).toContainText('drop')
         }
       }
       await expect(page.getByRole('heading', { name: 'Rebase preview completed' })).toBeVisible()
       expect(git('rev-parse', 'HEAD')).toBe(before.head)
       expect(await readFile(join(root, '.git/index'))).toEqual(before.index)
+      if (!conflict) {
+        await page.keyboard.press('Escape')
+        await expect(entry).toBeFocused()
+        await page.getByRole('button', { name: 'Rehearse (internal)' }).click()
+        await expandRehearsal(page, /^Rehearse again$/)
+        await expect(
+          page.getByLabel('Interactive plan base (Root includes the root commit)')
+        ).toHaveValue('root')
+        await page.getByRole('button', { name: 'Rehearse', exact: true }).click()
+        await expect(page.getByRole('heading', { name: 'Rebase preview completed' })).toBeVisible()
+        await expandRehearsal(page, /^Review changes$/)
+        await expect(page.getByRole('region', { name: 'Rehearsed plan' })).toContainText('drop')
+      }
       const report = JSON.parse(
         execFileSync(tool, ['--json', 'show', listing().rehearsals[0].id], {
           cwd: root,
@@ -99,7 +115,9 @@ for (const conflict of [false, true]) {
         encoding: 'utf8'
       }).trim()
       await page.keyboard.press('Escape')
-      await expect(entry).toBeFocused()
+      await expect(
+        conflict ? entry : page.getByRole('button', { name: 'Rehearse (internal)' })
+      ).toBeFocused()
       await page.getByRole('button', { name: 'Rehearse (internal)' }).click()
       await page.getByRole('button', { name: 'Apply', exact: true }).focus()
       await page.keyboard.press('Enter')

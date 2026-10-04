@@ -1,3 +1,4 @@
+import { expandRehearsal } from './rehearsal-ui'
 import { test, expect, _electron as electron } from '@playwright/test'
 import { execFileSync } from 'child_process'
 import { mkdtemp, readFile, rm, writeFile } from 'fs/promises'
@@ -106,6 +107,7 @@ for (const [entryKind, conflict] of [
           })
         ).toBeVisible()
         expect(git('rev-parse', 'HEAD')).toBe(before)
+        await expandRehearsal(page, /^Technical details$/)
         await expect(page.getByText(/Repository hooks were not run/)).toBeVisible()
         await page.keyboard.press('Escape')
         await expect(entry).toBeFocused()

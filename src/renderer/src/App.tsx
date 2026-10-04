@@ -11,7 +11,9 @@ import UpdateBanner from './panels/UpdateBanner'
 import RehearsalPanel from './panels/RehearsalPanel'
 
 export default function App(): React.JSX.Element {
-  const rehearsalOpen = useStore((s) => s.rehearsalOpen && s.rehearsalConfigured && !!s.repoPath)
+  const rehearsalOpen = useStore(
+    (s) => s.rehearsalOpen && (s.rehearsalConfigured || !!s.rehearsalModeSetting) && !!s.repoPath
+  )
   const screen = useStore((s) => s.screen)
   // a repo with no commits opens, but there is no history to render as a scene
   const hasScene = useStore((s) => (s.analysis?.snapshots.length ?? 0) > 0)

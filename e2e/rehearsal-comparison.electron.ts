@@ -95,7 +95,12 @@ test('keyboard city comparison stays with its frozen rehearsal when switching re
     await expect(comparison.getByText('file.txt: 200 lines', { exact: true })).toBeVisible()
     // Let the existing scene's height/color interpolation settle for visual QA.
     await page.waitForTimeout(2000)
-    await comparison.screenshot({ path: 'test-results/rehearsal-comparison.png' })
+    await page.screenshot({ path: 'test-results/rehearsal-comparison.png' })
+    await comparison.getByRole('button', { name: 'Return to live city', exact: true }).click()
+    await expect(
+      comparison.getByRole('button', { name: 'Compare city', exact: true })
+    ).toBeFocused()
+    await expect(page.locator('canvas:not(.minimap canvas)')).toHaveCount(1)
     expect(git('rev-parse', 'HEAD')).toBe(before.head)
     expect(await readFile(join(repo, '.git/index'))).toEqual(before.index)
     await page.keyboard.press('Escape')

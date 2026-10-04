@@ -35,7 +35,13 @@ function useRehearsalSceneHost(): HTMLDivElement | null {
   )
 }
 
-function Comparison({ data }: { data: RehearsalComparison }): React.JSX.Element {
+function Comparison({
+  data,
+  onReturn
+}: {
+  data: RehearsalComparison
+  onReturn(): void
+}): React.JSX.Element {
   const [side, setSide] = useState(0)
   const before = useRef<HTMLButtonElement>(null)
   useEffect(() => {
@@ -45,7 +51,6 @@ function Comparison({ data }: { data: RehearsalComparison }): React.JSX.Element 
   const colorMode = useStore((s) => s.colorMode)
   const themeId = useStore((s) => s.themeId)
   const sceneHost = useRehearsalSceneHost()
-  const clearComparison = useStore((s) => s.clearRehearsalComparison)
   const mode = getMode(viewMode)
   const theme = getTheme(themeId)
   const snapshot = useMemo(() => materializeSnapshot(data.analysis, side), [data, side])
@@ -68,7 +73,7 @@ function Comparison({ data }: { data: RehearsalComparison }): React.JSX.Element 
         >
           After
         </button>
-        <button onClick={clearComparison}>Return to live city</button>
+        <button onClick={onReturn}>Return to live city</button>
       </div>
       <p role="status">
         {side === 0 ? 'Before' : 'After'} · Rehearsal {data.identity.id} · {snapshot.files.length}{' '}
@@ -128,11 +133,23 @@ export default function RehearsalCityComparison({
   const comparison = useStore((s) => s.rehearsalComparison)
   const busy = useStore((s) => s.rehearsalBusy)
   const compare = useStore((s) => s.compareRehearsal)
+  const clear = useStore((s) => s.clearRehearsalComparison)
+  const heading = useRef<HTMLHeadingElement>(null)
+  const trigger = useRef<HTMLButtonElement>(null)
   const current = !busy && comparison?.report === report ? comparison : null
   return (
     <section aria-label="Rehearsal city comparison">
-      <h3>City before / after</h3>
-      <button disabled={busy || current?.loading} onClick={() => void compare(report)}>
+      <h3 ref={heading} tabIndex={-1}>
+        City before / after
+      </h3>
+      <button
+        ref={trigger}
+        disabled={busy || current?.loading}
+        onClick={() => {
+          heading.current?.focus()
+          void compare(report)
+        }}
+      >
         {current?.loading
           ? 'Analyzing rehearsal…'
           : current?.data
@@ -144,6 +161,10 @@ export default function RehearsalCityComparison({
         <Comparison
           key={`${report.id}:${current.data.analysis.snapshots.map((s) => s.hash).join(':')}`}
           data={current.data}
+          onReturn={() => {
+            clear()
+            trigger.current?.focus()
+          }}
         />
       )}
     </section>

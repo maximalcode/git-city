@@ -180,6 +180,13 @@ test('known repository choice, linked-worktree restart, missing tool and explici
     await expect(
       page.getByRole('complementary', { name: 'Rehearse merge', exact: true })
     ).toContainText('Configure GIT_CITY_REHEARSE_BIN')
+    expect(
+      await page.evaluate(
+        () =>
+          document.querySelector('.app-workspace')!.getBoundingClientRect().right <=
+          document.querySelector('.rehearsal-panel')!.getBoundingClientRect().left
+      )
+    ).toBe(true)
     expect(git('rev-parse', 'HEAD')).toBe(before)
     await page.keyboard.press('Escape')
     await page.getByLabel('Rehearse mode (internal)').selectOption('off')

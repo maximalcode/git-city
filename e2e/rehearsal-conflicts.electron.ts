@@ -35,7 +35,7 @@ test('keyboard sandbox conflict resolution preserves the original until checked 
   try {
     const page = app.page
     await page.getByRole('button', { name: 'Open a local repository…' }).click()
-    const entry = page.getByRole('button', { name: 'Rehearse (internal)' })
+    const entry = page.getByRole('button', { name: 'Rehearse panel' })
     await entry.focus()
     await page.keyboard.press('Enter')
     const target = page.getByLabel('Branch or commit to merge into the current checkout')
@@ -168,7 +168,7 @@ for (const scenario of ['binary', 'delete', 'rename'] as const) {
       const page = app.page
       await page.getByRole('button', { name: 'Open a local repository…' }).focus()
       await page.keyboard.press('Enter')
-      await page.getByRole('button', { name: 'Rehearse (internal)' }).focus()
+      await page.getByRole('button', { name: 'Rehearse panel' }).focus()
       await page.keyboard.press('Enter')
       await expandRehearsal(page, /Rehearse again|Choose rehearsal target/)
       await page.getByLabel('Branch or commit to merge into the current checkout').fill('topic')

@@ -63,15 +63,15 @@ const QUALITY = 88
 
 /** @type {Shot[]} */
 const SHOTS = [
-  // Opt-in development-only shot. The CLI executes a real retained merge, never Apply.
+  // Opt-in real repository shot. The CLI executes a real retained merge, never Apply.
   {
     name: 'app-rehearsal',
     theme: 'realistic-day',
     png: true,
     setup: async (page) => {
-      if (!process.env.GIT_CITY_REHEARSE_BIN || !process.env.ELECTRON_RENDERER_URL)
-        throw new Error('app-rehearsal needs the development renderer and GIT_CITY_REHEARSE_BIN')
-      await page.getByRole('button', { name: 'Rehearse (internal)', exact: true }).click()
+      if (!process.env.GIT_CITY_REHEARSE_BIN)
+        throw new Error('app-rehearsal needs GIT_CITY_REHEARSE_BIN when launching from source')
+      await page.getByRole('button', { name: 'Rehearse panel', exact: true }).click()
       await page
         .getByLabel('Branch or commit to merge into the current checkout')
         .fill(flags['rehearsal-target'] ?? 'HEAD')

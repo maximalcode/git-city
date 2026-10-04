@@ -89,6 +89,23 @@ across the city, so you see its blast radius at a glance.
 
 **[The complete feature list](docs/features.md)** has all of it.
 
+## Rehearse before changing your checkout
+
+Merge, Rebase (including interactive plans), and single Cherry-pick can run in a
+retained sandbox. Review changes beside the city, resolve conflicts there, compare
+Before/After, and explicitly confirm **Apply** to adopt the checked result.
+**Automatic / Ask / Off** is shared across linked worktrees. New repositories use
+Automatic; existing recent repositories receive a one-time choice.
+
+![Rehearse side panel beside the real repository city](docs/media/app-rehearsal.png)
+
+Keep results across restarts, stop previews, confirm discard, or use **Undo Apply**
+when the original worktree still permits it. Interrupted Apply/Undo blocks writes
+until checked recovery. Hooks are not run in rehearsal or Apply; signature presence
+is shown separately from verification. Git City bundles the compatible tool for
+Windows/Linux x64 and both macOS architectures. Read the [Rehearse guide](docs/rehearse.md)
+for local-work handling, limits, keyboard controls and recovery.
+
 ## Install
 
 Grab the latest build from
@@ -194,20 +211,6 @@ Development happens through GitHub issues. See
 [CONTRIBUTING.md](CONTRIBUTING.md) for setup and the branch and PR flow. Bug
 reports and feature requests are welcome, and there are issue templates for both.
 Taking part means agreeing to the [Code of Conduct](CODE_OF_CONDUCT.md).
-
-Development builds also support interactive-rebase rehearsal of the existing plan and [internal sandbox conflict editing](docs/rehearsal-development.md#sandbox-text-conflicts)
-with Tab/Enter navigation, checked save-and-stage and repeated Continue before
-confirmed Apply. Internal Automatic / Ask / Off modes share one persistent setting across worktrees;
-Automatic routes supported actions to rehearsal without changing the real checkout.
-Development builds also offer [Undo Apply](docs/rehearsal-development.md#undo-apply) for the exact backend-reported Apply and original worktree, with safety refusals and interrupted-Undo recovery.
-New previews wait for app-owned post-Apply inspection to finish; Stop also cancels queued previews.
-Internal reports explain hooks and isolated rerere learning, and distinguish signature presence from verification.
-The internal Rehearse side panel keeps the city usable, with expandable history and
-technical details, frozen city comparison, and explicit Apply confirmation. Closing
-keeps a running preview in the background; **Rehearse (internal)** reopens it.
-See the [Rehearse panel guide](docs/rehearse.md). Retained rehearsal history
-survives restarts, with Stop, confirmed
-single/batch Discard and storage warnings. This preview is hidden in packaged applications.
 
 ## License
 

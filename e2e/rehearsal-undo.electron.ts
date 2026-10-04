@@ -47,7 +47,7 @@ test('interrupted exact Undo survives restart and blocks writes across worktrees
   }
   try {
     let page = await open(root)
-    await page.getByRole('button', { name: 'Rehearse (internal)' }).click()
+    await page.getByRole('button', { name: 'Rehearse panel' }).click()
     await expandRehearsal(page, /Rehearse again|Choose rehearsal target/)
     await page.getByLabel('Branch or commit to merge into the current checkout').fill('topic')
     await expandRehearsal(page, /Rehearse again|Choose rehearsal target/)

@@ -1,4 +1,5 @@
 import { app, ipcMain, shell } from 'electron'
+import { resolveRehearsalTool } from './rehearsalBundle'
 import { getRehearsalMode } from './rehearsalModeIpc'
 import type { WebContents } from 'electron'
 import { basename, resolve, sep } from 'path'
@@ -100,7 +101,7 @@ function gitDetail(err: unknown, repoPath: string): string | null {
 
 async function recoveryRefusal(repoPath: string): Promise<OpResult | null> {
   const recovery = await inspectRecovery(
-    app.isPackaged ? undefined : process.env.GIT_CITY_REHEARSE_BIN,
+    resolveRehearsalTool(app.isPackaged, process.resourcesPath),
     repoPath
   )
   return recovery.state === 'none' ? null : { ok: false, message: recovery.message }

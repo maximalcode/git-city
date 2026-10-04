@@ -1,17 +1,17 @@
-# Rehearse (internal)
+# Rehearse
 
-Rehearse is an internal development preview for merge, normal rebase,
-interactive rebase, and single-commit cherry-pick. It runs the operation in a
-retained sandbox so you can inspect its result before changing the real
-worktree. Packaged applications keep this entry hidden; public activation is
-still gated by the complete safety workflow.
+Rehearse runs Merge, normal or interactive Rebase, and a single Cherry-pick in a
+retained sandbox. Review the result, resolve conflicts there, then explicitly
+confirm **Apply** to adopt the reviewed result in the original worktree.
+A clean Git result is not proof that the resulting code is correct.
 
-See the [internal development guide](rehearsal-development.md) for tool setup,
-mode behavior, conflict editing, recovery, and the safety checks behind Apply.
+Git City includes the compatible tool; no separate installation is needed.
+Missing or damaged tools require repairing or reinstalling the app.
+See [acceptance evidence](rehearsal-acceptance.md) and [development setup](rehearsal-development.md).
 
 ## The side panel
 
-Choose **Rehearse (internal)**, or open a contextual Rehearse action beside a
+Choose **Rehearse panel**, or open a contextual Rehearse action beside a
 branch or commit. Git City opens a nonmodal panel on the right side of the
 workspace. The city remains visible beside it, there is no backdrop, and focus
 is not trapped inside the panel. The panel shows the operation in its header,
@@ -38,49 +38,133 @@ results explain when an After view is unavailable. While the comparison is
 open, the live scene is paused so the comparison is the only active 3D scene in
 the main workspace. **Return to live city** leaves the comparison.
 
-## Running and keeping a result
+![The Rehearse panel beside the city](media/app-rehearsal.png)
 
-While a preview or Continue is running, the footer offers **Stop rehearsal**
-and **Keep and close**. Stop ends execution and reloads the actual retained
-state; it is not a pause and does not promise that Continue or Apply will be
-available. Closing keeps execution running in the background. Reopen the
-panel with **Rehearse (internal)** to inspect it again.
+## Choose a mode
 
-After execution finishes, the footer offers **Keep for later**. An eligible,
-completed, conflict-free result with branch changes also offers **Apply**. Apply
-always opens a separate confirmation dialog showing the operation, worktree,
-checkout, affected branches, and carried tracked work. Confirming adopts the
-checked sandbox result after the backend rechecks the current repository state;
-it does not rerun the original Git action. If Apply is unavailable, the footer
-explains the reason, such as an active operation, required recovery, conflicts,
-no branch changes, or a stale/ineligible result.
+The **Rehearse mode** setting is shared by all linked worktrees of a repository.
+New repositories use **Automatic**. For repositories already in Git City's recent
+list, choose a mode once; Escape postpones the choice and blocks supported actions
+until you choose. Repositories previously removed from that list cannot be
+recognized as existing repositories.
 
-## Secondary sections
+- **Automatic** sends Merge, Rebase, interactive Rebase and single Cherry-pick
+  actions directly into a rehearsal. Apply still requires confirmation.
+- **Ask** keeps direct actions and offers explicit **Rehearse** entries beside
+  them. Choosing a manual entry opens its preview form.
+- **Off** uses direct Git actions. Retained work and required recovery remain
+  accessible; changing mode never deletes sandboxes or bypasses a recovery lock.
 
-The panel keeps supporting information available without displacing the current
-operation:
+Pull (including pull with rebase), Fetch and Push are outside this routing.
+A failed rehearsal never silently retries the original action directly. Repair
+the tool or consciously choose Off if direct execution is appropriate.
 
-- **Saved rehearsals** lists retained entries for the current worktree. Open a
-  retained entry, refresh history, inspect storage and low-space warnings, or
-  confirm single/batch discard. Active and recovery-protected entries remain
-  protected.
-- **Undo Apply** appears for the backend-reported last Apply and names the exact
-  rehearsal and original worktree. Its confirmation and refusal checks remain
-  tied to that Apply.
-- **Technical details** contains the retained ID, original worktree, checkout,
-  command, sandbox, hook and rerere disclosures, untracked-file caveats, signing
-  evidence, and the distinction between signature presence and verification.
+## Review and resolve
 
-Conflict editing, sandbox refresh, repeated Continue, mandatory recovery, and
-the Automatic / Ask / Off mode setting retain their existing behavior. The
-development guide documents those workflows in detail.
+Use **Rehearse** for a merge target, **Rehearse rebase** in Branches, or
+**Rehearse cherry-pick** on a selected commit in Graph or commit details.
+The interactive rebase editor supports its existing Pick, Squash, Drop and
+up/down controls. Review the submitted plan, including every repeated conflict
+stop, before Apply.
 
-## Keyboard behavior
+The report identifies the worktree, exact rehearsal, action, refs, commits,
+affected files, conflicts, unexpected content changes and carried tracked work.
+**Compare city** switches the same scene between the frozen **Before** and
+**After** states. The text inventory lists files and line counts. Incomplete
+results do not have a finished After. Comparing does not switch the real checkout.
 
-Tab moves through the panel's controls, including the target form, result
+For a text conflict, choose **Resolve**, then Ours, Theirs, Both, Edit, or
+**Edit whole file**. **Save and stage in sandbox** saves to the sandbox only.
+Binary conflicts offer a complete Ours/Theirs version. During rebase, these
+mean the destination and replayed commit respectively. For deletion or rename
+conflicts, follow the displayed sandbox path and external staging instructions.
+
+**Refresh sandbox** rereads external edits. Returning to the app also refreshes
+the file; stale editor contents cannot silently overwrite a changed file.
+Once all unmerged paths are resolved, **Continue rehearsal** runs the remaining
+operation. Resolve each new conflict stop until the report is complete.
+Save editor text before closing or selecting another rehearsal.
+
+## Apply and local work
+
+**Apply** opens a confirmation naming the original worktree, action, checkout,
+branch changes and tracked local work. Review it, then choose **Apply rehearsal**.
+The backend rechecks the checkout, refs, index, local files and other worktrees.
+It adopts the reviewed commit objects rather than rerunning the original action.
+
+Tracked local changes are replayed in the sandbox and can themselves conflict.
+After Apply, carried edits are unstaged: the original staging selection is not
+restored. Untracked files are not carried work. New collisions, changed local
+work, stale refs or branches checked out elsewhere cause refusal, preserving
+the retained result for inspection. Create a new rehearsal against the new basis.
+There is no force option. A no-op needs no Apply.
+
+## Keep, stop and discard
+
+**Keep for later** after completion, or **Keep and close** while running, leaves saved work intact. Closing during execution does not
+stop it. **Stop rehearsal** preserves an incomplete result, which is not
+automatically resumable or applicable. Apply and recovery cannot be stopped
+through this control.
+
+Retained history restores the current worktree's selection after restart.
+Use **Open** to switch results and **Refresh history** to discover external
+changes. Select entries and use **Discard selected**; confirmation names each
+exact result. Active work and recovery data cannot be discarded. No timed cleanup
+deletes retained work. Displayed logical size includes shared objects and is not
+an estimate of space freed. Low available space produces a textual warning;
+unknown measurements remain unknown.
+
+## Undo and recovery
+
+**Undo Apply** identifies the exact last Apply and its original worktree,
+independently of which rehearsal is selected. Confirm **Undo this Apply** only
+after reviewing that identity. Changed refs, foreign checkout occupancy or local
+changes—including carried uncommitted edits—can prevent Undo. It is not a general
+recovery mechanism for arbitrary file edits.
+
+After an interrupted Apply or Undo, **Recovery required** blocks ordinary writes
+across the repository's worktrees. Open the original worktree and use only the
+offered **Complete interrupted apply/undo** or **Roll back interrupted apply/undo**
+action. Unknown or externally changed states remain blocked. Do not delete journals
+or sandboxes to remove a warning. Lost responses trigger inspection, never blind
+retries. External Git tools are not locked by Git City; their changes can cause
+recovery to refuse.
+
+## Hooks, signatures and limits
+
+The report says **Repository hooks were not run**: hooks are disabled during
+rehearsal and Apply. Off keeps existing direct-action hook behavior. Existing
+rerere settings and solutions are copied into the sandbox; newly learned solutions
+are not written back to the original cache.
+
+Signing settings remain effective, and signing failures do not downgrade to
+unsigned commits. System signing dialogs may appear; terminal editors and prompts
+are disabled. **Signature present** reports presence only. **Verification: not
+checked** and **Signer trust: not checked** are separate facts. Git City stores
+no signing keys.
+
+The sandbox is not operating-system isolation: configured merge drivers and other
+programs can run. Existing git-rehearse restrictions, including unsupported
+submodule, LFS, shallow and empty repositories, still produce refusal.
+There is no range cherry-pick, force Apply/Undo, automatic Apply, hook opt-in or
+independent background tool update. App and tool versions are validated together;
+incompatible retained data must be preserved, not deleted to make an update work.
+
+## Keyboard and focus
+
+Tab and Shift+Tab move through the panel's controls, including the target form, result
 sections, saved history, conflict controls, and footer actions. Enter activates
 the focused control. Escape closes the panel only when focus is inside it; it
 does not stop a running preview. Focus returns to the control that opened the
 panel. Apply, Discard and first-time mode selection use modal confirmation or choice
 dialogs, where Escape cancels that dialog instead. Undo has an inline confirmation;
 Escape cancels it and returns focus to Undo Apply.
+
+Enter submits the preview form. Space toggles checkboxes; arrow keys change the mode selector. Rehearsal completion
+focuses the textual result. File selection focuses the editor heading; refresh and
+Continue return focus to the report. Compare city initially focuses Before.
+
+Apply, Undo and Discard confirmations initially focus Cancel. Escape cancels a
+confirmation or keeps and closes the panel, restoring the initiating control.
+Required recovery focuses its warning. Status and warning text accompanies color.
+No new global shortcut is required; see [keyboard reference](shortcuts.md).

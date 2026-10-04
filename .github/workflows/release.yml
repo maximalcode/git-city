@@ -85,6 +85,20 @@ jobs:
         run: npm run tool:prepare -- ${{ matrix.platform }}-${{ matrix.arch }}
       - run: npm run typecheck && npm run lint && npm test
       - run: npm run build
+      - name: Real-tool and Electron acceptance (Apple Silicon)
+        if: matrix.platform == 'darwin' && matrix.arch == 'arm64'
+        env:
+          GIT_CITY_REHEARSE_BIN: ${{ github.workspace }}/build/rehearse/darwin-arm64/git-rehearse
+        run: |
+          npm test
+          npx playwright test -c playwright.rehearsal.config.ts
+      - name: Preserve Electron failure evidence
+        if: failure() && matrix.platform == 'darwin' && matrix.arch == 'arm64'
+        uses: actions/upload-artifact@v4
+        with:
+          name: rehearsal-acceptance-failures
+          path: test-results/
+          if-no-files-found: ignore
       # Explicit targets override the dual-architecture local macOS default.
       - run: npx electron-builder --${{ matrix.build }} ${{ matrix.targets }} --${{ matrix.arch }} --publish never
       - name: Packaged application and upgrade smoke (Linux)

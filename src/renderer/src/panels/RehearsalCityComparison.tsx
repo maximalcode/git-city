@@ -1,5 +1,6 @@
+import { createPortal } from 'react-dom'
 import SceneEffects from '../city/SceneEffects'
-import { useMemo, useRef, useState, useEffect } from 'react'
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { Canvas } from '@react-three/fiber'
 import type { RehearsalComparison, RehearsalReport } from '../../../shared/types'
 import { materializeSnapshot } from '../../../shared/snapshots'
@@ -9,12 +10,42 @@ import { getTheme } from '../city/themes'
 import CameraRig from '../city/CameraRig'
 import SceneBoundary from '../lib/SceneBoundary'
 
+let rehearsalSceneHost: HTMLDivElement | null = null
+const rehearsalSceneHostSubscribers = new Set<() => void>()
+
+/**
+ * The comparison lives in the rehearsal panel, while its one WebGL canvas
+ * belongs in the workspace. Registering the host from SceneView avoids looking
+ * it up during render, when the scene may still be mounting or may be in the
+ * middle of unmounting.
+ */
+export function setRehearsalSceneHost(host: HTMLDivElement | null): void {
+  rehearsalSceneHost = host
+  for (const subscriber of rehearsalSceneHostSubscribers) subscriber()
+}
+
+function useRehearsalSceneHost(): HTMLDivElement | null {
+  return useSyncExternalStore(
+    (subscriber) => {
+      rehearsalSceneHostSubscribers.add(subscriber)
+      return () => rehearsalSceneHostSubscribers.delete(subscriber)
+    },
+    () => rehearsalSceneHost,
+    () => null
+  )
+}
+
 function Comparison({ data }: { data: RehearsalComparison }): React.JSX.Element {
   const [side, setSide] = useState(0)
   const before = useRef<HTMLButtonElement>(null)
+  useEffect(() => {
+    if (document.activeElement?.closest('.rehearsal-panel')) before.current?.focus()
+  }, [])
   const viewMode = useStore((s) => s.viewMode)
   const colorMode = useStore((s) => s.colorMode)
   const themeId = useStore((s) => s.themeId)
+  const sceneHost = useRehearsalSceneHost()
+  const clearComparison = useStore((s) => s.clearRehearsalComparison)
   const mode = getMode(viewMode)
   const theme = getTheme(themeId)
   const snapshot = useMemo(() => materializeSnapshot(data.analysis, side), [data, side])
@@ -24,9 +55,6 @@ function Comparison({ data }: { data: RehearsalComparison }): React.JSX.Element 
     [mode, data, snapshot, colorMode]
   )
   const resolveFocus = useMemo(() => (path: string) => scene.focus(path), [scene])
-  useEffect(() => {
-    before.current?.focus()
-  }, [])
   return (
     <>
       <div role="group" aria-label="Rehearsal city endpoint">
@@ -40,39 +68,44 @@ function Comparison({ data }: { data: RehearsalComparison }): React.JSX.Element 
         >
           After
         </button>
+        <button onClick={clearComparison}>Return to live city</button>
       </div>
       <p role="status">
         {side === 0 ? 'Before' : 'After'} · Rehearsal {data.identity.id} · {snapshot.files.length}{' '}
         files · {snapshot.files.reduce((sum, file) => sum + file.loc, 0)} lines
       </p>
       <p>{data.notice}</p>
-      <div
-        className="rehearsal-city"
-        aria-label={`${side === 0 ? 'Before' : 'After'} rehearsal city`}
-      >
-        <SceneBoundary>
-          <Canvas
-            shadows
-            onCreated={({ setEvents }) => setEvents({ enabled: false })}
-            dpr={[1, 1.5]}
-            camera={{
-              position: [
-                scene.worldSize * mode.cameraScale,
-                scene.worldSize * mode.cameraScale,
-                scene.worldSize * mode.cameraScale
-              ],
-              fov: 40,
-              near: 0.5,
-              far: scene.worldSize * 30
-            }}
+      {sceneHost &&
+        createPortal(
+          <div
+            className="rehearsal-city"
+            aria-label={`${side === 0 ? 'Before' : 'After'} rehearsal city`}
           >
-            <color attach="background" args={[theme.background]} />
-            {scene.render({ snapshot, hotspots: [], reviewPaths: [], liveWorktree: false })}
-            <CameraRig worldSize={scene.worldSize} resolveFocus={resolveFocus} />
-            <SceneEffects theme={theme} useAO={theme.ao && mode.ao} size={scene.worldSize} />
-          </Canvas>
-        </SceneBoundary>
-      </div>
+            <SceneBoundary>
+              <Canvas
+                shadows
+                onCreated={({ setEvents }) => setEvents({ enabled: false })}
+                dpr={[1, 1.5]}
+                camera={{
+                  position: [
+                    scene.worldSize * mode.cameraScale,
+                    scene.worldSize * mode.cameraScale,
+                    scene.worldSize * mode.cameraScale
+                  ],
+                  fov: 40,
+                  near: 0.5,
+                  far: scene.worldSize * 30
+                }}
+              >
+                <color attach="background" args={[theme.background]} />
+                {scene.render({ snapshot, hotspots: [], reviewPaths: [], liveWorktree: false })}
+                <CameraRig worldSize={scene.worldSize} resolveFocus={resolveFocus} />
+                <SceneEffects theme={theme} useAO={theme.ao && mode.ao} size={scene.worldSize} />
+              </Canvas>
+            </SceneBoundary>
+          </div>,
+          sceneHost
+        )}
       <details>
         <summary>Snapshot files and line counts</summary>
         <ul>

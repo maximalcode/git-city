@@ -1,3 +1,4 @@
+import { expandRehearsal } from './rehearsal-ui'
 import { test, expect, _electron as electron, type ElectronApplication } from '@playwright/test'
 import { execFileSync } from 'child_process'
 import { mkdtemp, readFile, rm, writeFile, chmod } from 'fs/promises'
@@ -52,10 +53,17 @@ test('retained history survives an Electron restart and keyboard discard/stop pr
     app = await launch()
     let page = await app.firstWindow()
     const create = async (): Promise<void> => {
+      await expandRehearsal(page, /Rehearse again|Choose rehearsal target/)
       await page.getByLabel('Branch or commit to merge into the current checkout').fill('topic')
+      await expandRehearsal(page, /Rehearse again|Choose rehearsal target/)
       await page.getByRole('button', { name: 'Rehearse', exact: true }).focus()
       await page.keyboard.press('Enter')
       await expect(page.getByRole('heading', { name: 'Merge preview completed' })).toBeVisible()
+      await expect(page.locator('.rehearsal-panel [aria-busy]')).toHaveAttribute(
+        'aria-busy',
+        'false'
+      )
+      await expandRehearsal(page, /Rehearse again|Choose rehearsal target/)
       await expect(page.getByRole('button', { name: 'Rehearse', exact: true })).toBeEnabled()
     }
     await create()
@@ -63,6 +71,7 @@ test('retained history survives an Electron restart and keyboard discard/stop pr
     const inventory = await page.evaluate((repo) => window.gitCity.rehearsalList(repo), repo)
     expect(inventory.entries).toHaveLength(2)
     const [second, first] = inventory.entries
+    await expandRehearsal(page, /^Saved rehearsals/)
     await page.getByRole('button', { name: `Open ${first.id}`, exact: true }).focus()
     await page.keyboard.press('Enter')
     await expect(
@@ -78,6 +87,7 @@ test('retained history survives an Electron restart and keyboard discard/stop pr
     // A real main/renderer process restart, with the same browser preference storage.
     app = await launch()
     page = await app.firstWindow()
+    await expandRehearsal(page, /^Saved rehearsals/)
     await expect(
       page.getByRole('button', { name: `Open ${first.id} (current)`, exact: true })
     ).toHaveAttribute('aria-pressed', 'true')
@@ -121,6 +131,7 @@ test('retained history survives an Electron restart and keyboard discard/stop pr
     // CLI-created retained work is also discovered, and batch discard is exact.
     for (let i = 0; i < 2; i++)
       execFileSync(tool, ['--json', '--keep', 'merge', 'topic'], { cwd: repo, env })
+    await expandRehearsal(page, /^Saved rehearsals/)
     await page.getByRole('button', { name: 'Refresh history' }).click()
     const many = await page.evaluate((repo) => window.gitCity.rehearsalList(repo), repo)
     for (const entry of many.entries.filter((entry) => entry.id !== first.id)) {
@@ -150,14 +161,20 @@ test('retained history survives an Electron restart and keyboard discard/stop pr
     await writeFile(join(repo, '.gitattributes'), 'file.txt merge=wait\n')
     git('add', '.')
     git('commit', '-m', 'diverge')
+    await page.getByRole('button', { name: 'Refresh history' }).click()
+    await expect(page.getByText(/This rehearsal has an outdated/)).toBeVisible()
+    await page.screenshot({ path: 'test-results/rehearsal-stale.png' })
     const driver = join(root, 'driver.sh')
     const sentinel = join(root, 'started')
     await writeFile(driver, `#!/bin/sh\ntouch '${sentinel}'\nsleep 60\nexit 1\n`)
     await chmod(driver, 0o700)
     git('config', 'merge.wait.driver', driver)
+    await expandRehearsal(page, /Rehearse again|Choose rehearsal target/)
     await page.getByLabel('Branch or commit to merge into the current checkout').fill('topic')
+    await expandRehearsal(page, /Rehearse again|Choose rehearsal target/)
     await page.getByRole('button', { name: 'Rehearse', exact: true }).click()
     await expect.poll(async () => readFile(sentinel, 'utf8').catch(() => null)).toBe('')
+    await page.screenshot({ path: 'test-results/rehearsal-running.png' })
     await page.getByRole('button', { name: 'Keep and close', exact: true }).focus()
     await page.keyboard.press('Enter')
     await expect(page.getByRole('button', { name: 'Rehearse (internal)' })).toBeFocused()
@@ -168,6 +185,7 @@ test('retained history survives an Electron restart and keyboard discard/stop pr
       page.getByRole('button', { name: 'Stop rehearsal', exact: true })
     ).not.toBeVisible()
     await expect(page.getByText(/Execution ended. Retained state/)).toBeVisible()
+    await expandRehearsal(page, /^Saved rehearsals/)
     await page.getByRole('button', { name: 'Refresh history' }).click()
     const stopped = (
       await page.evaluate((repo) => window.gitCity.rehearsalList(repo), repo)

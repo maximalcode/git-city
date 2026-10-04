@@ -1,3 +1,4 @@
+import { expandRehearsal } from './rehearsal-ui'
 import { test, expect } from '@playwright/test'
 import { launchNativeFocusApp } from './native-focus'
 import { execFileSync } from 'child_process'
@@ -169,6 +170,7 @@ for (const scenario of ['binary', 'delete', 'rename'] as const) {
       await page.keyboard.press('Enter')
       await page.getByRole('button', { name: 'Rehearse (internal)' }).focus()
       await page.keyboard.press('Enter')
+      await expandRehearsal(page, /Rehearse again|Choose rehearsal target/)
       await page.getByLabel('Branch or commit to merge into the current checkout').fill('topic')
       await page.keyboard.press('Enter')
       const editor = page.getByRole('region', { name: 'Sandbox conflict editor' })

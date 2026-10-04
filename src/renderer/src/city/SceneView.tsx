@@ -1,4 +1,5 @@
 import { hasRehearsalComparisonScene } from '../rehearsalComparison'
+import { setRehearsalSceneHost } from '../panels/RehearsalCityComparison'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Canvas } from '@react-three/fiber'
 import SceneEffects from './SceneEffects'
@@ -144,6 +145,7 @@ export default function SceneView(): React.JSX.Element {
 
   return (
     <div className="city-root">
+      <div id="rehearsal-scene" ref={setRehearsalSceneHost} />
       {!comparingRehearsal && (
         <SceneBoundary>
           <Canvas

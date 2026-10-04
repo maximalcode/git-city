@@ -74,7 +74,8 @@ test('interrupted exact Undo survives restart and blocks writes across worktrees
     await expect(outcome).toBeVisible()
     // A mandatory recovery notice now sits outside the nonmodal panel and takes priority.
     await expect(page.getByRole('heading', { name: '⚠ Recovery required' })).toBeFocused()
-    await page.getByRole('button', { name: 'Close rehearsal panel' }).click()
+    await page.getByRole('button', { name: 'Close rehearsal panel' }).focus()
+    await page.keyboard.press('Enter')
     await expect(page.getByRole('heading', { name: '⚠ Recovery required' })).toBeVisible()
     await app.close()
 

@@ -71,8 +71,10 @@ test('interrupted exact Undo survives restart and blocks writes across worktrees
     await expect(page.getByRole('button', { name: 'Undo this Apply' })).toBeFocused()
     await page.keyboard.press('Enter')
     const outcome = page.getByText(/Undo response was lost or incomplete/)
-    await expect(outcome).toBeFocused()
-    await page.keyboard.press('Escape')
+    await expect(outcome).toBeVisible()
+    // A mandatory recovery notice now sits outside the nonmodal panel and takes priority.
+    await expect(page.getByRole('heading', { name: '⚠ Recovery required' })).toBeFocused()
+    await page.getByRole('button', { name: 'Close rehearsal panel' }).click()
     await expect(page.getByRole('heading', { name: '⚠ Recovery required' })).toBeVisible()
     await app.close()
 

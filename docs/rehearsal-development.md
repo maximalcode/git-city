@@ -228,7 +228,8 @@ selected. Expand **Undo Apply · <ID>** for that exact applied result and its re
 The **Undo Apply** button opens confirmation; focus starts on **Cancel Undo**.
 Tab and Enter reach **Undo this Apply**; Escape cancels and returns focus.
 Completion focuses the textual result and refreshes repository views, history and
-scene analysis.
+scene analysis. Interrupted Undo gives focus to the mandatory recovery notice,
+which remains accessible beside the nonmodal panel.
 
 Undo rechecks the exact Apply and original worktree. Changed refs, branches checked
 out elsewhere and local changes (including carried uncommitted work) cause a textual

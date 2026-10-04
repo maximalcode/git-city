@@ -64,6 +64,7 @@ export default function RehearsalUndo({
       <summary>Undo Apply{lastApply?.rehearsal ? ` · ${lastApply.rehearsal}` : ''}</summary>
       <section
         ref={section}
+        tabIndex={-1}
         aria-label="Undo Apply"
         onKeyDown={(event) => {
           if (event.key === 'Escape' && confirmation) {
@@ -94,7 +95,13 @@ export default function RehearsalUndo({
             {message}
           </p>
         )}
-        <button disabled={busy || loading} onClick={reload}>
+        <button
+          disabled={busy || loading}
+          onClick={() => {
+            section.current?.focus()
+            reload()
+          }}
+        >
           Refresh Undo availability
         </button>{' '}
         {confirmation ? (
@@ -109,6 +116,7 @@ export default function RehearsalUndo({
             <button
               disabled={busy || blocked}
               onClick={async () => {
+                section.current?.focus()
                 setLastAttempt(confirmation)
                 setConfirmation(null)
                 setMessage('')

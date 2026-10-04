@@ -50,6 +50,7 @@ test('real Electron merge preview preserves the original and supports keyboard k
     }, root)
     const page = await app.firstWindow()
     await page.getByRole('button', { name: 'Open a local repository…' }).click()
+    await page.getByRole('button', { name: 'Got it', exact: true }).click()
     const entry = page.getByRole('button', { name: 'Rehearse (internal)' })
     await entry.focus()
     await page.keyboard.press('Enter')

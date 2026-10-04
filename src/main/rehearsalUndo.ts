@@ -1,7 +1,8 @@
 import { realpath } from 'fs/promises'
 import type { RehearsalUndoResult, RehearsalUndoStatus } from '../shared/types'
 import { rehearsalAvailability, runRehearsalTool } from './rehearsal'
-import { inspectRecovery, withRepositoryWrite } from './rehearsalRecovery'
+import { inspectRecovery } from './rehearsalRecovery'
+import { withRepositoryWrite } from './repositoryQueue'
 
 const object = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)

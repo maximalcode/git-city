@@ -163,6 +163,8 @@ branch/commit and file consequences,
 conflicts and textual content warnings. Closing keeps the preview. Retained history and the current selection survive app restarts; each worktree has its own inventory. Stop ends app-owned preview/Continue execution and reloads its state without promising resumability. Confirmed single/batch Discard protects active and recovery data. Logical storage use and low-space warnings support deliberate cleanup, with no automatic deletion. Confirmed
 Apply adopts the checked result after backend revalidation. Interrupted Apply
 blocks repository writes across worktrees and offers backend-approved recovery.
+New previews and Continue wait for app-owned post-Apply recovery/Undo inspections;
+linked-worktree previews can still run concurrently, and queued previews can be stopped.
 Public entry points remain unavailable pending the complete safety workflow.
 Rebase starts from the selected branch; cherry-pick starts from one commit in
 the graph or commit detail view. Both reuse the shared preview and confirmation.

@@ -8,12 +8,8 @@ import {
   saveRehearsalConflict,
   continueRehearsal
 } from './rehearsalConflicts'
-import {
-  applyRehearsal,
-  inspectRecovery,
-  recoverRehearsal,
-  withRepositoryWrite
-} from './rehearsalRecovery'
+import { applyRehearsal, inspectRecovery, recoverRehearsal } from './rehearsalRecovery'
+import { withRepositoryWrite } from './repositoryQueue'
 import { app, BrowserWindow, dialog, ipcMain } from 'electron'
 import { basename } from 'path'
 import { getRehearsalMode } from './rehearsalModeIpc'

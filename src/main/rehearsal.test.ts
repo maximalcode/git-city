@@ -31,6 +31,15 @@ it('requires an explicitly configured absolute executable', async () => {
 })
 
 const tool = process.env.GIT_CITY_REHEARSE_BIN
+it.each([undefined, 'git-rehearse'])(
+  'keeps disabled preview unavailable before Git lookup (%s)',
+  async (configuredTool) => {
+    const directory = await mkdtemp(join(tmpdir(), 'git-city-disabled-rehearse-'))
+    dirs.push(directory)
+    expect((await rehearseMerge(configuredTool, directory, 'main')).kind).toBe('unavailable')
+  }
+)
+
 describe.skipIf(!tool)('public JSON CLI integration (GIT_CITY_REHEARSE_BIN)', () => {
   it('keeps an exact merge preview and leaves original HEAD, index and files unchanged', async () => {
     const repo = await mkdtemp(join(tmpdir(), 'git-city-rehearse-'))

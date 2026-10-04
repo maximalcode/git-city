@@ -107,13 +107,16 @@ new picture side by side with a byte-size delta. File history follows renames,
 and blame is one click away.
 
 **Commit graph** with branch topology, ref chips, and checkout or cherry-pick
-from any row.
+from any row. Commit rows are keyboard-selectable: Tab to a commit, then Enter
+or Space reveals its actions.
 
-**Pull requests**, GitHub through the `gh` CLI and GitLab through `glab`. No
-token setup either way. List open PRs with rolled-up CI status, see the current
-branch's, check one out, open it in a browser, or create one. GitLab merge
-requests use the same model, and only the wording follows the host. A missing or
-logged-out CLI gets a clear hint.
+**Pull requests**, GitHub through the `gh` CLI, GitLab through `glab`, and Azure
+DevOps through `az`. Git City never handles credentials itself. List open PRs
+with rolled-up CI status, see the current branch's, check one out, open it in a
+browser, or create one. For Azure, pending can also mean that one CI source was
+unavailable; when both sources are unavailable, no CI state is shown. GitLab
+merge requests use the same model, and only the wording follows the host. A
+missing or logged-out CLI gets a clear hint.
 
 **Review a PR in the city.** Pick any pull request and its changed files light
 up with beacons across the scene, so you see its blast radius at a glance. Step
@@ -151,3 +154,53 @@ MediaRecorder, so it needs no extra dependency.
 
 **Recent repositories**, drag-and-drop a folder to open, and file search with
 fly-to.
+
+### Rehearse
+
+Git City bundles a compatible, integrity-checked git-rehearse tool for Windows x64,
+Linux x64, Intel macOS and Apple Silicon. Merge, normal Rebase, the existing
+interactive Pick/Squash/Drop/reorder plan, and single Cherry-pick from Graph or
+commit details run in retained sandboxes. There is no separate installation.
+
+The nonmodal **Rehearse panel** keeps the city usable and names the operation,
+original checkout and target. Review changes, Saved rehearsals and Technical
+details expose refs/commits, files, conflicts, unexpected content, tracked carried
+work, history/storage and execution conditions. Text warnings stay prominent.
+**Compare city** switches one scene between frozen Before/After snapshots with a
+shared layout and text inventory; unfinished results explain the missing After.
+
+Text conflicts support hunk choices, free editing, checked save-and-stage,
+external-edit refresh and repeated Continue. Binary conflicts support complete
+Ours/Theirs versions; deletion/rename conflicts have external sandbox instructions.
+Apply confirms origin and consequences, rechecks state, then adopts exact reviewed
+objects. Stale results and local-work/foreign-checkout collisions are refused and
+retained. Carried tracked edits become unstaged; untracked files are not carried.
+
+**Automatic / Ask / Off** persists across linked worktrees. New repositories use
+Automatic; existing recent repositories get a one-time choice. Automatic routes
+supported existing actions to rehearsal; Ask adds explicit manual entries; Off
+keeps direct actions. Pull, Fetch and Push are outside routing. Missing or damaged
+tools require repair, without a silent direct fallback. Recovery locks apply in all modes.
+
+Keep closes without deleting work or stopping execution. Saved selection and
+history survive restart, independently per worktree. Stop preserves incomplete
+work; confirmed single/batch Discard protects active and recovery data. Logical
+storage and low-space warnings never cause automatic deletion. Independent linked
+worktree previews can run concurrently; recovery/Undo inspection and writes wait
+for app-owned previews, and previews wait for those inspections and writes.
+
+**Undo Apply** names the exact last Apply and origin, refusing changed refs, local
+work or foreign checkout occupancy. Interrupted Apply/Undo blocks writes across
+the common repository and offers only backend-approved recovery. Unknown states
+remain blocked; external processes are not locked by Git City.
+
+Hooks are disabled in rehearsal and Apply; Off retains direct hook behavior.
+Existing rerere solutions are copied; new solutions stay in the sandbox. Signing
+failures never downgrade to unsigned commits. Signature presence is distinct from
+cryptographic verification and signer trust, which are not checked. The sandbox
+is not operating-system isolation. Existing tool restrictions still apply.
+
+All controls use native keyboard operation, deliberate focus restoration and
+textual warnings. See the [user guide](rehearse.md), [keyboard reference](shortcuts.md),
+[acceptance evidence](rehearsal-acceptance.md), and
+[development/update checks](rehearsal-development.md).

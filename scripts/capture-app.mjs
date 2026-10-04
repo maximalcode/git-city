@@ -63,6 +63,29 @@ const QUALITY = 88
 
 /** @type {Shot[]} */
 const SHOTS = [
+  // Opt-in real repository shot. The CLI executes a real retained merge, never Apply.
+  {
+    name: 'app-rehearsal',
+    theme: 'realistic-day',
+    png: true,
+    setup: async (page) => {
+      if (!process.env.GIT_CITY_REHEARSE_BIN)
+        throw new Error('app-rehearsal needs GIT_CITY_REHEARSE_BIN when launching from source')
+      await page.getByRole('button', { name: 'Rehearse panel', exact: true }).click()
+      await page
+        .getByLabel('Branch or commit to merge into the current checkout')
+        .fill(flags['rehearsal-target'] ?? 'HEAD')
+      await page.getByRole('button', { name: 'Rehearse', exact: true }).click()
+      await page
+        .locator('.rehearsal-panel [aria-busy="false"] h3')
+        .first()
+        .waitFor({ timeout: 180_000 })
+      await page
+        .locator('.rehearsal-history > summary')
+        .filter({ hasText: /Saved rehearsals · [1-9]/ })
+        .waitFor({ timeout: 180_000 })
+    }
+  },
   // ── Hero ─────────────────────────────────────────────────────────────────
   { name: 'app-hero', kind: 'hero', theme: 'realistic-night', color: 'language' },
 
@@ -116,7 +139,8 @@ const { values: flags } = parseArgs({
     only: { type: 'string' },
     repo: { type: 'string' },
     list: { type: 'boolean' },
-    out: { type: 'string' }
+    out: { type: 'string' },
+    'rehearsal-target': { type: 'string' }
   },
   allowPositionals: false
 })
@@ -129,7 +153,9 @@ if (flags.list) {
 const outDir = flags.out ? resolve(flags.out) : OUT
 const repo = resolve(flags.repo ?? ROOT)
 const wanted = flags.only ? new Set(flags.only.split(',').map((s) => s.trim())) : null
-const shots = wanted ? SHOTS.filter((s) => wanted.has(s.name)) : SHOTS
+const shots = wanted
+  ? SHOTS.filter((s) => wanted.has(s.name))
+  : SHOTS.filter((s) => s.name !== 'app-rehearsal')
 
 if (wanted) {
   const unknown = [...wanted].filter((n) => !SHOTS.some((s) => s.name === n))
@@ -281,7 +307,8 @@ async function reset(page) {
   }
 }
 
-const app = await electron.launch({ args: [MAIN] })
+const profile = mkdtempSync(join(tmpdir(), 'git-city-media-profile-'))
+const app = await electron.launch({ args: [MAIN, `--user-data-dir=${profile}`] })
 let failed = 0
 
 try {
@@ -298,17 +325,28 @@ try {
   // Seed preferences, then reload so the store reads them at construction.
   // gitcity.recent is what puts the repository on the welcome screen; clicking
   // that entry is the only way in without a native folder dialog.
-  await page.evaluate((r) => {
-    localStorage.setItem('gitcity.recent', JSON.stringify([r]))
-    localStorage.setItem('gitcity.onboarded', '1')
-    localStorage.setItem('gitcity.theme', 'realistic-night')
-    localStorage.setItem('gitcity.view', 'city')
-  }, repo)
+  await page.evaluate(
+    ({ r, rehearsal }) => {
+      if (!rehearsal) localStorage.setItem('gitcity.recent', JSON.stringify([r]))
+      localStorage.setItem('gitcity.onboarded', '1')
+      localStorage.setItem('gitcity.theme', 'realistic-night')
+      localStorage.setItem('gitcity.view', 'city')
+    },
+    { r: repo, rehearsal: wanted?.has('app-rehearsal') ?? false }
+  )
   await page.reload()
   await page.waitForLoadState('domcontentloaded')
 
   console.log(`opening ${repo} …`)
-  await page.locator('.recent-item').first().click()
+  if (wanted?.has('app-rehearsal')) {
+    await app.evaluate(({ dialog }, path) => {
+      dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] })
+    }, repo)
+    await page.getByRole('button', { name: 'Open a local repository…' }).click()
+    const chooser = page.getByRole('dialog', { name: 'Choose a Rehearse mode' })
+    if (await chooser.isVisible())
+      await chooser.getByRole('button', { name: 'Automatic', exact: true }).click()
+  } else await page.locator('.recent-item').first().click()
 
   // The history replay is the slow part; it scales with commits x files.
   // window.__gitCitySceneReadyMs would be the precise signal, but CameraRig
@@ -381,6 +419,7 @@ try {
   }
 } finally {
   await app.close()
+  rmSync(profile, { recursive: true, force: true })
 }
 
 for (const f of readdirSync(stage, { withFileTypes: true })) {

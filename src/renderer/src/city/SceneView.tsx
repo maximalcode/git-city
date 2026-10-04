@@ -1,6 +1,8 @@
+import { hasRehearsalComparisonScene } from '../rehearsalComparison'
+import { setRehearsalSceneHost } from '../panels/RehearsalCityComparison'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Canvas } from '@react-three/fiber'
-import { Bloom, EffectComposer, N8AO, Vignette } from '@react-three/postprocessing'
+import SceneEffects from './SceneEffects'
 import CameraRig from './CameraRig'
 import SceneBoundary from '../lib/SceneBoundary'
 import { useStore } from '../store'
@@ -38,6 +40,7 @@ const EMPTY_PATHS: string[] = []
  * no per-mode branching.
  */
 export default function SceneView(): React.JSX.Element {
+  const comparingRehearsal = useStore(hasRehearsalComparisonScene)
   const analysis = useStore((s) => s.analysis)!
   const snapshotIndex = useStore((s) => s.snapshotIndex)
   const colorMode = useStore((s) => s.colorMode)
@@ -60,6 +63,8 @@ export default function SceneView(): React.JSX.Element {
     gl.domElement.addEventListener(
       'webglcontextlost',
       (e) => {
+        // R3F deliberately loses the detached context when comparison takes over.
+        if (!gl.domElement.isConnected) return
         e.preventDefault() // allow restoration instead of a permanent loss
         console.error('[git-city] WebGL context lost — offering scene reload')
         setContextLost(true)
@@ -140,52 +145,47 @@ export default function SceneView(): React.JSX.Element {
 
   return (
     <div className="city-root">
-      <SceneBoundary>
-        <Canvas
-          key={canvasKey}
-          shadows
-          dpr={[1, 1.75]}
-          // cameraScale: the farm's detail is at ground level, so the city's
-          // framing left its herds and lit barns as specks (#22)
-          camera={{
-            position: [
-              size * 0.9 * mode.cameraScale,
-              size * 0.75 * mode.cameraScale,
-              size * 0.9 * mode.cameraScale
-            ],
-            fov: 40,
-            near: 0.5,
-            far: size * 30
-          }}
-          onCreated={onCanvasCreated}
-          onPointerMissed={() => useStore.getState().setSelected(null)}
-        >
-          <color attach="background" args={[bg]} />
-          <fog attach="fog" args={[bg, size * theme.fog.near, size * theme.fog.far]} />
+      <div id="rehearsal-scene" ref={setRehearsalSceneHost} />
+      {!comparingRehearsal && (
+        <SceneBoundary>
+          <Canvas
+            key={canvasKey}
+            shadows
+            dpr={[1, 1.75]}
+            // cameraScale: the farm's detail is at ground level, so the city's
+            // framing left its herds and lit barns as specks (#22)
+            camera={{
+              position: [
+                size * 0.9 * mode.cameraScale,
+                size * 0.75 * mode.cameraScale,
+                size * 0.9 * mode.cameraScale
+              ],
+              fov: 40,
+              near: 0.5,
+              far: size * 30
+            }}
+            onCreated={onCanvasCreated}
+            onPointerMissed={() => useStore.getState().setSelected(null)}
+          >
+            <color attach="background" args={[bg]} />
+            <fog attach="fog" args={[bg, size * theme.fog.near, size * theme.fog.far]} />
 
-          {scene.render({ snapshot, hotspots: hotspotPaths, reviewPaths })}
+            {scene.render({ snapshot, hotspots: hotspotPaths, reviewPaths })}
 
-          <CameraRig worldSize={size} resolveFocus={resolveFocus} maxPolarAngle={Math.PI * 0.47} />
+            <CameraRig
+              worldSize={size}
+              resolveFocus={resolveFocus}
+              maxPolarAngle={Math.PI * 0.47}
+            />
 
-          {/* Only some modes use AO; its presence changes the composer's child
+            {/* Only some modes use AO; its presence changes the composer's child
             set. Rebuilding that chain in place freezes the render loop, so key the
             composer on the exact combination that alters its children — the change
             becomes a clean remount instead of an in-place mutation. */}
-          <EffectComposer key={`fx-${useAO ? 'ao' : 'noao'}`} enableNormalPass={useAO}>
-            {useAO ? (
-              <N8AO aoRadius={size * 0.06} intensity={2.4} distanceFalloff={1} halfRes />
-            ) : (
-              <></>
-            )}
-            <Bloom
-              luminanceThreshold={theme.bloom.threshold}
-              intensity={theme.bloom.intensity}
-              mipmapBlur
-            />
-            <Vignette darkness={theme.vignette} />
-          </EffectComposer>
-        </Canvas>
-      </SceneBoundary>
+            <SceneEffects theme={theme} useAO={useAO} size={size} />
+          </Canvas>
+        </SceneBoundary>
+      )}
 
       <Hud snapshot={snapshot} model={scene.hud} />
       <Minimap dots={scene.dots()} worldSize={size} />

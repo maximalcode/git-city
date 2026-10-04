@@ -1,6 +1,7 @@
 import { app, BrowserWindow, shell } from 'electron'
 import { join } from 'path'
 import { pathToFileURL } from 'url'
+import { requireBundledRehearsal, resolveRehearsalTool } from './rehearsalBundle'
 import { registerIpc } from './ipc'
 import { isAppUrl } from './appUrl'
 
@@ -62,6 +63,7 @@ function createWindow(): void {
 }
 
 app.whenReady().then(() => {
+  if (app.isPackaged) requireBundledRehearsal(resolveRehearsalTool(true, process.resourcesPath)!)
   registerIpc()
   createWindow()
 

@@ -1,5 +1,25 @@
+import { compareRehearsal } from './rehearsalComparison'
+import { resolveRehearsalTool } from './rehearsalBundle'
+import { inspectUndo, undoRehearsal } from './rehearsalUndo'
+import { listRehearsals, discardRehearsals } from './rehearsalManagement'
+import { stopRehearsal } from './rehearsalProcess'
+import {
+  readRehearsalConflict,
+  saveRehearsalConflict,
+  continueRehearsal
+} from './rehearsalConflicts'
+import { applyRehearsal, inspectRecovery, recoverRehearsal } from './rehearsalRecovery'
+import { withRepositoryWrite } from './repositoryQueue'
 import { app, BrowserWindow, dialog, ipcMain } from 'electron'
 import { basename } from 'path'
+import { getRehearsalMode } from './rehearsalModeIpc'
+import { rehearsalAvailability, rehearse, rehearseMerge, rehearsalShow } from './rehearsal'
+import type {
+  RehearsalPlan,
+  RehearsalAction,
+  RehearsalIdentity,
+  RehearsalReport
+} from '../shared/types'
 import type { ProgressInfo } from '../shared/types'
 import { analyze, checkGitInstalled } from './git/analyze'
 import { cloneRepo } from './git/clone'
@@ -10,6 +30,63 @@ import { registerOpsIpc } from './ipcOps'
 
 export function registerIpc(): void {
   registerOpsIpc()
+  ipcMain.handle('git-city:rehearsal-mode', (_event, repo, known, choice) =>
+    getRehearsalMode(repo, known, choice)
+  )
+
+  // Deliberately outside the retrying mutation helper; never fall back to git merge.
+  const rehearsalTool = (): string | undefined =>
+    resolveRehearsalTool(app.isPackaged, process.resourcesPath)
+  ipcMain.handle('git-city:rehearsal-availability', () =>
+    rehearsalAvailability(resolveRehearsalTool(app.isPackaged, process.resourcesPath))
+  )
+  ipcMain.handle(
+    'git-city:rehearse',
+    (_event, repo: string, action: RehearsalAction, target: string, plan?: RehearsalPlan) =>
+      rehearse(rehearsalTool(), repo, action, target, plan)
+  )
+  ipcMain.handle('git-city:rehearse-merge', (_event, repo: string, target: string) =>
+    rehearseMerge(rehearsalTool(), repo, target)
+  )
+  ipcMain.handle('git-city:rehearsal-list', (_event, repo) => listRehearsals(rehearsalTool(), repo))
+  ipcMain.handle('git-city:rehearsal-discard', (_event, repo, identities) =>
+    discardRehearsals(rehearsalTool(), repo, identities)
+  )
+  ipcMain.handle('git-city:rehearsal-stop', (_event, repo) => stopRehearsal(repo))
+  ipcMain.handle('git-city:rehearsal-comparison', (_event, identity: RehearsalIdentity) =>
+    compareRehearsal(rehearsalTool(), identity)
+  )
+  ipcMain.handle('git-city:rehearsal-show', (_event, identity: RehearsalIdentity) =>
+    rehearsalShow(rehearsalTool(), identity)
+  )
+
+  ipcMain.handle('git-city:rehearsal-conflict-read', (_event, identity, path) =>
+    readRehearsalConflict(rehearsalTool(), identity, path)
+  )
+  ipcMain.handle('git-city:rehearsal-conflict-save', (_event, identity, path, revision, text) =>
+    saveRehearsalConflict(rehearsalTool(), identity, path, revision, text)
+  )
+  ipcMain.handle('git-city:rehearsal-continue', (_event, identity) =>
+    continueRehearsal(rehearsalTool(), identity)
+  )
+
+  ipcMain.handle('git-city:rehearsal-undo-status', (_event, repo: string) =>
+    withRepositoryWrite(repo, () => inspectUndo(rehearsalTool(), repo))
+  )
+  ipcMain.handle('git-city:rehearsal-undo', (_event, repo, identity) =>
+    undoRehearsal(rehearsalTool(), repo, identity)
+  )
+  ipcMain.handle('git-city:rehearsal-apply', (_event, identity: RehearsalReport) =>
+    applyRehearsal(rehearsalTool(), identity)
+  )
+  ipcMain.handle('git-city:rehearsal-recovery', (_event, repo: string) =>
+    withRepositoryWrite(repo, () => inspectRecovery(rehearsalTool(), repo))
+  )
+  ipcMain.handle(
+    'git-city:rehearsal-recover',
+    (_event, repo: string, id: string, action: 'complete' | 'rollback') =>
+      recoverRehearsal(rehearsalTool(), repo, id, action)
+  )
 
   ipcMain.handle('git-city:check-git', () => checkGitInstalled())
 

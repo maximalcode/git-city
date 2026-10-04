@@ -26,13 +26,15 @@ export default function CityScene({
   targets,
   snapshot,
   hotspots = [],
-  reviewPaths = []
+  reviewPaths = [],
+  liveWorktree = true
 }: {
   model: CityModel
   targets: Targets
   snapshot: Snapshot
   hotspots?: string[]
   reviewPaths?: string[]
+  liveWorktree?: boolean
 }): React.JSX.Element {
   const theme = getTheme(useStore((s) => s.themeId))
   const manualTimeOfDay = useStore((s) => s.timeOfDay)
@@ -105,13 +107,13 @@ export default function CityScene({
       <StreetLife model={model} />
       <Buildings model={model} targets={targets} />
       <RoofClutter model={model} targets={targets} />
-      <Highlight model={model} targets={targets} />
-      <StatusOverlay model={model} targets={targets} />
-      <ConstructionSites model={model} size={size} />
+      {liveWorktree && <Highlight model={model} targets={targets} />}
+      {liveWorktree && <StatusOverlay model={model} targets={targets} />}
+      {liveWorktree && <ConstructionSites model={model} size={size} />}
       <Traffic model={model} snapshot={snapshot} />
       <Hotspots anchors={beacons} />
       <Hotspots anchors={reviewBeacons} color="#6ec8ff" />
-      <Effects citySize={size} />
+      {liveWorktree && <Effects citySize={size} />}
     </group>
   )
 }

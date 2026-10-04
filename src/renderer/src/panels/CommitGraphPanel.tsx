@@ -1,3 +1,4 @@
+import { RehearseButton } from './RehearseButton'
 import { useMemo, useState } from 'react'
 import type { GraphCommit } from '../../../shared/types'
 import { useRepoQuery } from '../lib/repoQuery'
@@ -26,6 +27,7 @@ export default function CommitGraphPanel(): React.JSX.Element | null {
   const graphOpen = useStore((s) => s.graphOpen)
   const repoPath = useStore((s) => s.repoPath)
   const headHash = useStore((s) => s.workingStatus?.headHash)
+  const statusReady = useStore((s) => s.workingStatus !== null)
   const busy = useStore((s) => s.opInProgress !== null)
   const setGraphOpen = useStore((s) => s.setGraphOpen)
   const askConfirm = useStore((s) => s.askConfirm)
@@ -45,7 +47,9 @@ export default function CommitGraphPanel(): React.JSX.Element | null {
     error,
     reload
   } = useRepoQuery(
-    graphOpen && repoPath ? ([repoPath, headHash ?? null] as const) : null,
+    // Wait for the first status before mounting keyboard targets. Otherwise the
+    // initial HEAD query replaces the graph while the user is choosing an action.
+    graphOpen && repoPath && statusReady ? ([repoPath, headHash ?? null] as const) : null,
     (api, [repo]) => api.commitGraph(repo, 500)
   )
 
@@ -70,7 +74,7 @@ export default function CommitGraphPanel(): React.JSX.Element | null {
       </div>
 
       <div className="graph-scroll">
-        {loading && <div className="empty">Building graph…</div>}
+        {(!statusReady || loading) && <div className="empty">Building graph…</div>}
         {!loading && error && (
           <div className="panel-error">
             <span>{error}</span>
@@ -123,20 +127,29 @@ export default function CommitGraphPanel(): React.JSX.Element | null {
                 key={c.hash}
                 className={`graph-row ${active === c.hash ? 'active' : ''}`}
                 style={{ top: c.row * ROW_H, height: ROW_H, left: graphW }}
-                onClick={() => setActive(active === c.hash ? null : c.hash)}
               >
-                {c.refs.map((r) => (
-                  <span key={r.name} className={`ref-chip ref-${r.kind}`}>
-                    {r.kind === 'tag' ? '🏷 ' : ''}
-                    {r.name}
+                <button
+                  className="graph-select"
+                  aria-label={`Commit ${c.shortHash}: ${c.subject}`}
+                  aria-expanded={active === c.hash}
+                  onKeyDown={(event) => {
+                    if (event.key === ' ' || event.key === 'Enter') event.stopPropagation()
+                  }}
+                  onClick={() => setActive(active === c.hash ? null : c.hash)}
+                >
+                  {c.refs.map((r) => (
+                    <span key={r.name} className={`ref-chip ref-${r.kind}`}>
+                      {r.kind === 'tag' ? '🏷 ' : ''}
+                      {r.name}
+                    </span>
+                  ))}
+                  <span className="graph-subject">{c.subject}</span>
+                  <span className="graph-meta">
+                    {c.shortHash} · {c.author}
                   </span>
-                ))}
-                <span className="graph-subject">{c.subject}</span>
-                <span className="graph-meta">
-                  {c.shortHash} · {c.author}
-                </span>
+                </button>
                 {active === c.hash && (
-                  <span className="graph-actions" onClick={(e) => e.stopPropagation()}>
+                  <span className="graph-actions">
                     {c.refs
                       .filter((r) => r.kind === 'branch')
                       .map((r) => (
@@ -162,6 +175,7 @@ export default function CommitGraphPanel(): React.JSX.Element | null {
                     >
                       Cherry-pick
                     </button>
+                    <RehearseButton action="cherry-pick" target={c.hash} />
                   </span>
                 )}
               </div>

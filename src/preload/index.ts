@@ -2,6 +2,29 @@ import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import type { GitCityApi, ProgressInfo, RepoChangeReason } from '../shared/types'
 
 const api: GitCityApi = {
+  rehearsalMode: (repo, known, choice) =>
+    ipcRenderer.invoke('git-city:rehearsal-mode', repo, known, choice),
+  rehearsalList: (repo) => ipcRenderer.invoke('git-city:rehearsal-list', repo),
+  rehearsalDiscard: (repo, identities) =>
+    ipcRenderer.invoke('git-city:rehearsal-discard', repo, identities),
+  rehearsalStop: (repo) => ipcRenderer.invoke('git-city:rehearsal-stop', repo),
+  rehearsalAvailability: () => ipcRenderer.invoke('git-city:rehearsal-availability'),
+  rehearse: (repo, action, target, plan) =>
+    ipcRenderer.invoke('git-city:rehearse', repo, action, target, plan),
+  rehearseMerge: (repo, target) => ipcRenderer.invoke('git-city:rehearse-merge', repo, target),
+  rehearsalUndoStatus: (repo) => ipcRenderer.invoke('git-city:rehearsal-undo-status', repo),
+  rehearsalUndo: (repo, identity) => ipcRenderer.invoke('git-city:rehearsal-undo', repo, identity),
+  rehearsalApply: (identity) => ipcRenderer.invoke('git-city:rehearsal-apply', identity),
+  rehearsalRecovery: (repo) => ipcRenderer.invoke('git-city:rehearsal-recovery', repo),
+  rehearsalRecover: (repo, id, action) =>
+    ipcRenderer.invoke('git-city:rehearsal-recover', repo, id, action),
+  rehearsalConflictRead: (identity, path) =>
+    ipcRenderer.invoke('git-city:rehearsal-conflict-read', identity, path),
+  rehearsalConflictSave: (identity, path, revision, text) =>
+    ipcRenderer.invoke('git-city:rehearsal-conflict-save', identity, path, revision, text),
+  rehearsalContinue: (identity) => ipcRenderer.invoke('git-city:rehearsal-continue', identity),
+  rehearsalComparison: (identity) => ipcRenderer.invoke('git-city:rehearsal-comparison', identity),
+  rehearsalShow: (identity) => ipcRenderer.invoke('git-city:rehearsal-show', identity),
   checkGit: () => ipcRenderer.invoke('git-city:check-git'),
   selectFolder: () => ipcRenderer.invoke('git-city:select-folder'),
   // Electron 35 removed File.path; webUtils is the supported way to resolve a dropped folder

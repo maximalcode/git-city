@@ -1,4 +1,6 @@
 import { app, ipcMain, shell } from 'electron'
+import { resolveRehearsalTool } from './rehearsalBundle'
+import { getRehearsalMode } from './rehearsalModeIpc'
 import type { WebContents } from 'electron'
 import { basename, resolve, sep } from 'path'
 import type {
@@ -39,7 +41,8 @@ import { addWorktree, listWorktrees, removeWorktree } from './git/worktrees'
 import { checkForUpdate } from './updates'
 import { readConflictFile, resolveConflictFile, resolveWholeFile } from './git/conflicts'
 import { mergeAbort, mergeBranch, mergeContinue } from './git/merge'
-import { withRepoLock } from './git/queue'
+import { inspectRecovery } from './rehearsalRecovery'
+import { withRepositoryWrite } from './repositoryQueue'
 import { FriendlyError, failFromError, stripNoise } from './git/result'
 import { discardFiles, stageFiles, unstageFiles } from './git/stage'
 import { stashApply, stashDrop, stashList, stashPop, stashPush } from './git/stash'
@@ -96,6 +99,14 @@ function gitDetail(err: unknown, repoPath: string): string | null {
   return short.length > 200 ? `${short.slice(0, 199)}…` : short
 }
 
+async function recoveryRefusal(repoPath: string): Promise<OpResult | null> {
+  const recovery = await inspectRecovery(
+    resolveRehearsalTool(app.isPackaged, process.resourcesPath),
+    repoPath
+  )
+  return recovery.state === 'none' ? null : { ok: false, message: recovery.message }
+}
+
 /**
  * Every mutating op: serialized per repo, watcher muted while it runs (one
  * synthetic change event on unmute), thrown errors turned into OpResults,
@@ -106,12 +117,27 @@ function mutating(
   fn: (repoPath: string, ...args: never[]) => Promise<OpResult>
 ): void {
   ipcMain.handle(`git-city:${channel}`, (_event, repoPath: string, ...args: unknown[]) =>
-    withRepoLock(repoPath, async () => {
+    withRepositoryWrite(repoPath, async () => {
       watcher.mute()
       try {
+        const refusal = await recoveryRefusal(repoPath)
+        if (refusal) return refusal
+        if (['merge', 'rebase', 'cherry-pick', 'rebase-interactive'].includes(channel)) {
+          const setting = await getRehearsalMode(repoPath)
+          if (setting && (setting.mode === null || setting.mode === 'automatic'))
+            return {
+              ok: false,
+              message:
+                setting.mode === null
+                  ? 'Choose a Rehearse mode for this repository before continuing.'
+                  : 'Automatic mode requires a rehearsal. Retry from the action in Git City.'
+            }
+        }
         let result = await fn(repoPath, ...(args as never[]))
         if (!result.ok && result.gitOutput?.includes('index.lock')) {
           await sleep(300)
+          const retryRefusal = await recoveryRefusal(repoPath)
+          if (retryRefusal) return retryRefusal
           result = await fn(repoPath, ...(args as never[]))
         }
         return result
@@ -259,9 +285,11 @@ export function registerOpsIpc(): void {
     ) => Promise<OpResult>
   ): void => {
     ipcMain.handle(`git-city:${channel}`, (event, repoPath: string, ...args: unknown[]) =>
-      withRepoLock(repoPath, async () => {
+      withRepositoryWrite(repoPath, async () => {
         watcher.mute()
         try {
+          const refusal = await recoveryRefusal(repoPath)
+          if (refusal) return refusal
           return await fn(repoPath, progressTo(event.sender), ...(args as never[]))
         } catch (err) {
           return failFromError(err)

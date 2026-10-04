@@ -72,7 +72,7 @@ branches, stashes. Type `@` to search commits, `:` to grep code.
 ![The command palette](docs/media/app-palette.png)
 
 The commit graph draws real branch topology, with ref chips and checkout or
-cherry-pick from any row.
+cherry-pick from any row. Tab to a commit and press Enter or Space to reveal its actions.
 
 ![The commit graph](docs/media/app-graph.png)
 
@@ -84,10 +84,27 @@ only, and it never force-pushes.
 
 Also here: merge, rebase, cherry-pick, stash, tags, submodules, worktrees, signed
 commits, an interactive rebase editor, and an in-app conflict resolver. Pull
-requests come through `gh` or `glab`. Pick one and its changed files light up
+requests come through `gh`, `glab`, or `az` (Azure DevOps). Pick one and its changed files light up
 across the city, so you see its blast radius at a glance.
 
 **[The complete feature list](docs/features.md)** has all of it.
+
+## Rehearse before changing your checkout
+
+Merge, Rebase (including interactive plans), and single Cherry-pick can run in a
+retained sandbox. Review changes beside the city, resolve conflicts there, compare
+Before/After, and explicitly confirm **Apply** to adopt the checked result.
+**Automatic / Ask / Off** is shared across linked worktrees. New repositories use
+Automatic; existing recent repositories receive a one-time choice.
+
+![Rehearse side panel beside the real repository city](docs/media/app-rehearsal.png)
+
+Keep results across restarts, stop previews, confirm discard, or use **Undo Apply**
+when the original worktree still permits it. Interrupted Apply/Undo blocks writes
+until checked recovery. Hooks are not run in rehearsal or Apply; signature presence
+is shown separately from verification. Git City bundles the compatible tool for
+Windows/Linux x64 and both macOS architectures. Read the [Rehearse guide](docs/rehearse.md)
+for local-work handling, limits, keyboard controls and recovery.
 
 ## Install
 
@@ -97,8 +114,8 @@ a Windows installer, DMGs for Apple Silicon and Intel Macs, and an AppImage plus
 `.deb` for Linux. The AppImage needs `chmod +x` and no install.
 
 You also need **git on your PATH**, because the app drives the real thing. It
-never asks for a token and stores nothing. Pull requests go through the `gh` or
-`glab` CLI, signing stays with gpg-agent or ssh-agent, and there is no telemetry.
+never asks for a token and stores nothing. Pull requests go through the `gh`,
+`glab`, or `az` CLI, signing stays with gpg-agent or ssh-agent, and there is no telemetry.
 
 > **The installers are unsigned.** Windows SmartScreen says "unknown publisher":
 > choose _More info → Run anyway_. macOS is blunter and calls the app
@@ -111,15 +128,16 @@ Anything else that goes wrong on first run is in
 
 ## Shortcuts
 
-| Key              | Does                         |
-| ---------------- | ---------------------------- |
-| `Ctrl`/`Cmd`+`K` | Command palette              |
-| `V`              | Switch between city and farm |
-| `Space`          | Play or pause the timeline   |
-| `/`              | Find a file and fly to it    |
-| `,`              | Settings                     |
+| Key                                 | Does                         |
+| ----------------------------------- | ---------------------------- |
+| `Ctrl`/`Cmd`+`K`                    | Command palette              |
+| `V`                                 | Switch between city and farm |
+| `Space`                             | Play or pause the timeline   |
+| `Enter` / `Space` on a graph commit | Show or hide commit actions  |
+| `/`                                 | Find a file and fly to it    |
+| `,`                                 | Settings                     |
 
-The other nine are on [the shortcuts page](docs/shortcuts.md), and the command
+More shortcuts are on [the shortcuts page](docs/shortcuts.md), and the command
 palette lists every one of them without leaving the app.
 
 ## How it works

@@ -566,3 +566,40 @@ async function spliceFromCache(
   onProgress({ phase: 'reading-history', done: commitCount, total: commitCount })
   return analysis
 }
+
+/** Frozen comparison endpoints reuse history replay without the live HEAD cache. */
+export async function analyzeComparison(
+  repoPath: string,
+  commits: string[]
+): Promise<RepoAnalysis> {
+  const interner = createInterner()
+  const snapshots: CompactSnapshot[] = []
+  for (const hash of commits) {
+    if (!/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(hash))
+      throw new Error('Comparison requires immutable commit IDs.')
+    const count = Number(
+      (await runGit(repoPath, ['rev-list', '--count', '--first-parent', hash])).trim()
+    )
+    const [snapshot] = await replayRange(
+      repoPath,
+      hash,
+      new Map(),
+      interner,
+      0,
+      (i) => i === count - 1
+    )
+    if (!snapshot) throw new Error('Comparison commit could not be analyzed.')
+    snapshots.push({ ...snapshot, index: snapshots.length })
+  }
+  return {
+    info: {
+      path: repoPath,
+      name: 'Rehearsal',
+      branch: 'Frozen comparison',
+      commitCount: snapshots.length
+    },
+    paths: interner.paths,
+    authors: interner.authors,
+    snapshots
+  }
+}

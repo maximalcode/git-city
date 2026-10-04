@@ -372,11 +372,12 @@ export interface ReflogEntry {
 export type ResetMode = 'soft' | 'mixed' | 'keep' | 'hard'
 
 /** Which forge a repository's `origin` points at. */
-export type HostKind = 'github' | 'gitlab' | 'unknown'
+export type HostKind = 'github' | 'gitlab' | 'azure' | 'unknown'
 
 /**
  * Forge CLI availability + auth state for this repo — `gh` for GitHub, `glab`
- * for GitLab. Merge requests are surfaced as pull requests throughout; only the
+ * for GitLab, and `az` for Azure DevOps. Merge requests are surfaced as pull
+ * requests throughout; only the
  * panel's wording follows the host.
  */
 /**
@@ -511,8 +512,192 @@ export interface GitVersion {
   supported: boolean
 }
 
+export interface RehearsalPlan {
+  base: string | null
+  entries: RebaseEntry[]
+}
+
+export type RehearsalAction = 'merge' | 'rebase' | 'cherry-pick'
+
+/** Exact CLI identity; never substitute the implicitly latest rehearsal. */
+export interface RehearsalIdentity {
+  id: string
+  repository: string
+  origin_worktree: string
+  repository_id: string
+}
+
+/** Validated subset of the public git-rehearse schema, never private metadata. */
+export interface RehearsalReport extends RehearsalIdentity {
+  schema: 1
+  repository_hooks?: 'disabled'
+  rerere_resolution_transfer?: 'sandbox_only'
+  /** Presence is object metadata, not cryptographic verification or trust. */
+  signatures?: {
+    sha: string
+    present: boolean
+    verification: 'not_checked'
+    trust: 'not_checked'
+  }[]
+  /** App-session snapshot of the submitted interactive plan, bound to this report ID. */
+  plan?: RehearsalPlan
+  sandbox?: string
+  can_apply?: boolean
+  command: string[]
+  checkout: { kind: 'branch' | 'detached'; target: string }
+  pre_state: Record<string, string>
+  lifecycle: 'kept'
+  /** Bounded process diagnostics for a failed or stopped Git command, not persisted metadata. */
+  diagnostics?: string
+  outcome: 'clean' | 'stopped' | 'failed' | 'incomplete'
+  conflicted: boolean
+  refs: { name: string; before?: string; after?: string }[]
+  conflicts: { path: string; hunks: number }[]
+  drift: {
+    reference: string
+    files: { status: string; path: string }[]
+    commits_before: number
+    commits_after: number
+    replay: { changed: string[]; dropped: string[]; added: string[]; compared: boolean }
+  }[]
+  drift_unexpected: boolean
+  carried?: { paths: string[]; status: string; conflicts: string[]; reason?: string }
+}
+
+/** Two immutable endpoints sharing one layout and string table. */
+export interface RehearsalComparison {
+  reportKey: string
+  identity: RehearsalIdentity
+  analysis: RepoAnalysis
+  afterAvailable: boolean
+  notice: string
+}
+
+/** Inventory belongs to one canonical original worktree. Byte counts are logical,
+ * including shared Git objects; they are not a prediction of freed disk space. */
+export interface RehearsalEntry extends RehearsalIdentity {
+  command: string[]
+  checkout: RehearsalReport['checkout']
+  pre_state: Record<string, string>
+  created_unix: number
+  execution: RehearsalReport['outcome']
+  lifecycle: 'kept' | 'fresh'
+  active: boolean
+  stale: boolean
+  bytes: number | null
+  freeBytes: number | null
+}
+
+export interface RehearsalInventory {
+  repository: string
+  entries: RehearsalEntry[]
+  bytes: number | null
+  freeBytes: number | null
+  lowSpace: boolean
+  protected: boolean
+  warning?: string
+}
+
+export interface RehearsalDiscardResult {
+  discarded: string[]
+  failures: { id: string; message: string }[]
+}
+
+export interface RehearsalConflict {
+  file: ConflictFile
+  external?: boolean
+  revision: string
+}
+
+export type RehearsalResult =
+  | { kind: 'report'; report: RehearsalReport }
+  | { kind: 'unavailable' | 'refused' | 'error'; message: string }
+
+/** Recovery permissions are issued by the CLI, never inferred from the phase. */
+export interface RehearsalRecovery {
+  state:
+    | 'none'
+    | 'before_ref_change'
+    | 'after_ref_change'
+    | 'complete'
+    | 'rolling_back'
+    | 'ambiguous'
+    | 'unknown'
+  repository: string
+  rehearsal?: string
+  operation?: 'apply' | 'undo'
+  can_complete: boolean
+  can_rollback: boolean
+  message: string
+}
+
+export interface RehearsalUndoStatus {
+  repository: string
+  rehearsal: string | null
+  worktree: string | null
+  applied_at_unix: number | null
+  available: boolean
+  reason: string | null
+}
+
+export interface RehearsalUndoResult {
+  kind: 'undone' | 'refused' | 'uncertain'
+  message: string
+  recovery: RehearsalRecovery
+}
+
+export interface RehearsalApplyResult {
+  kind: 'applied' | 'refused' | 'uncertain'
+  message: string
+  recovery: RehearsalRecovery
+}
+
 /** API exposed to the renderer via the preload bridge. */
+export type RehearsalMode = 'automatic' | 'ask' | 'off'
+export interface RehearsalModeSetting {
+  repository: string
+  /** Existing repositories require an explicit one-time choice. */
+  mode: RehearsalMode | null
+}
+
 export interface GitCityApi {
+  rehearsalMode(
+    repo: string,
+    known: string[],
+    choice?: RehearsalMode
+  ): Promise<RehearsalModeSetting | null>
+  rehearsalAvailability(): Promise<{ available: boolean; configured: boolean; message: string }>
+  rehearse(
+    repoPath: string,
+    action: RehearsalAction,
+    target: string,
+    plan?: RehearsalPlan
+  ): Promise<RehearsalResult>
+  rehearseMerge(repoPath: string, target: string): Promise<RehearsalResult>
+  rehearsalUndoStatus(repo: string): Promise<RehearsalUndoStatus>
+  rehearsalUndo(repo: string, identity: RehearsalUndoStatus): Promise<RehearsalUndoResult>
+  rehearsalApply(identity: RehearsalReport): Promise<RehearsalApplyResult>
+  rehearsalRecovery(repo: string): Promise<RehearsalRecovery>
+  rehearsalRecover(
+    repo: string,
+    id: string,
+    action: 'complete' | 'rollback'
+  ): Promise<RehearsalRecovery>
+  rehearsalConflictRead(identity: RehearsalIdentity, path: string): Promise<RehearsalConflict>
+  rehearsalConflictSave(
+    identity: RehearsalIdentity,
+    path: string,
+    revision: string,
+    text: string | { side: 'ours' | 'theirs' }
+  ): Promise<void>
+  rehearsalContinue(identity: RehearsalIdentity): Promise<RehearsalResult>
+  rehearsalComparison(identity: RehearsalIdentity): Promise<RehearsalComparison>
+  rehearsalShow(identity: RehearsalIdentity): Promise<RehearsalResult>
+  rehearsalList(repo: string): Promise<RehearsalInventory>
+  rehearsalDiscard(repo: string, identities: RehearsalIdentity[]): Promise<RehearsalDiscardResult>
+  /** Stops only the app-owned preview/Continue process for this exact worktree. */
+  rehearsalStop(repo: string): Promise<OpResult>
+
   /** The installed git, or null if there isn't one on PATH. */
   checkGit(): Promise<GitVersion | null>
   selectFolder(): Promise<string | null>
@@ -599,7 +784,7 @@ export interface GitCityApi {
   /** Commit + file counts without replaying history, to warn before a slow open. */
   repoSize(repoPath: string): Promise<RepoSize>
 
-  // --- Pull/merge requests (GitHub via gh, GitLab via glab) ---
+  // --- Pull/merge requests (GitHub via gh, GitLab via glab, Azure via az) ---
   hostStatus(repoPath: string): Promise<HostAuth>
   listPullRequests(repoPath: string): Promise<PrListResult>
   currentBranchPr(repoPath: string): Promise<PullRequestInfo | null>

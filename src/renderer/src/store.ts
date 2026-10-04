@@ -1,5 +1,21 @@
+import { createRehearsalComparison, type RehearsalComparisonState } from './rehearsalComparison'
+import type { RehearsalUndoStatus, RehearsalUndoResult } from '../../shared/types'
+import {
+  createRehearsalManagement,
+  rememberRehearsal,
+  reconcileRehearsal,
+  type RehearsalManagementState
+} from './rehearsalManagement'
 import { create } from 'zustand'
 import type {
+  RehearsalMode,
+  RehearsalModeSetting,
+  RehearsalPlan,
+  RehearsalAction,
+  RehearsalResult,
+  RehearsalRecovery,
+  RehearsalApplyResult,
+  RehearsalReport,
   BranchInfo,
   GitCityApi,
   GitVersion,
@@ -182,6 +198,8 @@ function loadRecent(): string[] {
     return []
   }
 }
+// Snapshot before this session adds new repositories to the recent list.
+const legacyRehearsalRepos = loadRecent()
 function saveRecent(paths: string[]): void {
   try {
     localStorage.setItem(RECENT_KEY, JSON.stringify(paths.slice(0, RECENT_MAX)))
@@ -282,7 +300,7 @@ export function statusFingerprint(s: WorkingStatus | null): string {
   }|${s.files.map((f) => `${f.path}:${f.index}${f.worktree}${f.conflicted ? 'C' : ''}`).join(',')}`
 }
 
-interface GitCityState {
+export interface GitCityState extends RehearsalManagementState, RehearsalComparisonState {
   screen: 'welcome' | 'loading' | 'city'
   /** a repo big enough to be worth warning about, awaiting the user's go-ahead */
   pendingRepo: { path: string; warning: RepoWarning } | null
@@ -302,6 +320,42 @@ interface GitCityState {
   pendingProbe: string | null
   recentRepos: string[]
   searchOpen: boolean
+
+  rehearsalRecovery: Record<string, RehearsalRecovery>
+  rehearsalApplications: Record<string, Record<string, RehearsalApplyResult>>
+  checkRehearsalRecovery(): Promise<void>
+  saveRehearsalConflict(
+    identity: RehearsalReport,
+    path: string,
+    revision: string,
+    text: string | { side: 'ours' | 'theirs' }
+  ): Promise<OpResult>
+  refreshRehearsal(
+    identity: RehearsalReport,
+    resume?: boolean
+  ): Promise<RehearsalResult | undefined>
+  undoRehearsal(identity: RehearsalUndoStatus): Promise<RehearsalUndoResult | undefined>
+  applyRehearsal(identity: RehearsalReport): Promise<void>
+  recoverRehearsal(id: string, action: 'complete' | 'rollback'): Promise<void>
+  rehearsalOpen: boolean
+  rehearsalBusy: boolean
+  rehearsalResults: Record<string, RehearsalResult>
+  rehearsalModeSetting: RehearsalModeSetting | null
+  rehearsalModeError: string | null
+  refreshRehearsalMode(choice?: RehearsalMode): Promise<void>
+  rehearsalRouting: boolean
+  routeRehearsal(action: RehearsalAction, target: string, plan?: RehearsalPlan): Promise<boolean>
+  rehearsalConfigured: boolean
+  rehearsalRequest: {
+    repo: string
+    action: RehearsalAction
+    target: string
+    plan?: RehearsalPlan
+  } | null
+  openRehearsal(request?: { action: RehearsalAction; target: string; plan?: RehearsalPlan }): void
+  rehearse(action: RehearsalAction, target: string, plan?: RehearsalPlan): Promise<void>
+  closeRehearsal(): void
+  rehearseMerge(target: string): Promise<void>
 
   // --- live repo state ---
   repoPath: string | null
@@ -483,9 +537,263 @@ interface GitCityState {
   continueOp(): Promise<OpResult>
 }
 
+async function readRehearsalRecovery(api: GitCityApi, repo: string): Promise<RehearsalRecovery> {
+  try {
+    return await api.rehearsalRecovery(repo)
+  } catch (error) {
+    return {
+      state: 'unknown',
+      repository: repo,
+      can_complete: false,
+      can_rollback: false,
+      message: `Repository writes are blocked. ${cleanError(error)}`
+    }
+  }
+}
+
 let lastFingerprint = ''
 
-export const useStore = create<GitCityState>((set, get) => ({
+export const useStore = create<GitCityState>((set, get, api) => ({
+  ...createRehearsalManagement(set, get, api),
+  ...createRehearsalComparison(set, get, api),
+  rehearsalRecovery: {},
+  rehearsalApplications: {},
+  checkRehearsalRecovery: async () => {
+    const api = bridge()
+    const repo = get().repoPath
+    if (!api?.rehearsalRecovery || !repo) return
+    const recovery = await readRehearsalRecovery(api, repo)
+    set((state) => ({ rehearsalRecovery: { ...state.rehearsalRecovery, [repo]: recovery } }))
+  },
+  saveRehearsalConflict: async (identity, path, revision, text) => {
+    const api = bridge()
+    if (!api || get().rehearsalBusy)
+      return { ok: false, message: 'Rehearsal is busy or unavailable.' }
+    get().clearRehearsalComparison()
+    set({ rehearsalBusy: true })
+    try {
+      await api.rehearsalConflictSave(identity, path, revision, text)
+    } catch (error) {
+      return { ok: false, message: cleanError(error) }
+    } finally {
+      set({ rehearsalBusy: false })
+    }
+    const refreshed = await get().refreshRehearsal(identity)
+    return {
+      ok: true,
+      message:
+        refreshed && refreshed.kind !== 'report'
+          ? `Saved and staged in the sandbox. Refresh the report: ${refreshed.message}`
+          : 'Saved and staged in the sandbox. Continue to finish the rehearsal.'
+    }
+  },
+  refreshRehearsal: async (identity, resume = false) => {
+    const api = bridge()
+    if (!api || get().rehearsalBusy) return
+    get().clearRehearsalComparison()
+    set({ rehearsalBusy: true, rehearsalExecutionRepo: resume ? identity.origin_worktree : null })
+    try {
+      const result = await (resume ? api.rehearsalContinue(identity) : api.rehearsalShow(identity))
+      if (result.kind === 'report')
+        set((state) => {
+          const repo = identity.origin_worktree
+          // A late response cannot replace a newer selected rehearsal.
+          const entry = Object.entries(state.rehearsalResults).find(
+            ([key, value]) =>
+              (key === repo ||
+                (value?.kind === 'report' && value.report.origin_worktree === repo)) &&
+              value?.kind === 'report' &&
+              value.report.id === identity.id
+          )
+          return entry
+            ? {
+                rehearsalResults: {
+                  ...state.rehearsalResults,
+                  [entry[0]]: reconcileRehearsal(result, entry[1])
+                }
+              }
+            : {}
+        })
+      return result
+    } catch (error) {
+      return { kind: 'error', message: cleanError(error) }
+    } finally {
+      set({ rehearsalBusy: false, rehearsalExecutionRepo: null })
+      await get()
+        .loadRehearsals(get().repoPath ?? identity.origin_worktree, resume)
+        .catch(() => undefined)
+    }
+  },
+  undoRehearsal: async (identity) => {
+    const api = bridge()
+    const repo = get().repoPath
+    if (!api || !repo || get().rehearsalBusy) return
+    get().clearRehearsalComparison()
+    set({ rehearsalBusy: true })
+    let result: RehearsalUndoResult
+    try {
+      result = await api.rehearsalUndo(repo, identity)
+    } catch (error) {
+      result = {
+        kind: 'uncertain',
+        message: `Undo response lost; status queried without retry. ${cleanError(error)}`,
+        recovery: await readRehearsalRecovery(api, repo)
+      }
+    }
+    set((state) => ({
+      rehearsalBusy: false,
+      rehearsalRecovery: { ...state.rehearsalRecovery, [repo]: result.recovery }
+    }))
+    if (get().repoPath === repo) {
+      await get().resync()
+      if (get().repoPath === repo && result.recovery.state === 'none') await get().refreshAnalysis()
+      await get().loadRehearsals(repo, true)
+    }
+    return result
+  },
+  applyRehearsal: async (identity) => {
+    const api = bridge()
+    const repo = get().repoPath
+    if (!api || !repo || get().rehearsalBusy || get().rehearsalApplications[repo]?.[identity.id])
+      return
+    get().clearRehearsalComparison()
+    set({ rehearsalBusy: true })
+    let result: RehearsalApplyResult
+    try {
+      result = await api.rehearsalApply(identity)
+    } catch (error) {
+      const recovery = await readRehearsalRecovery(api, repo)
+      result = {
+        kind: 'uncertain',
+        message: `Apply response lost; status queried without retry. ${cleanError(error)}`,
+        recovery
+      }
+    }
+    set((state) => ({
+      rehearsalBusy: false,
+      rehearsalApplications: {
+        ...state.rehearsalApplications,
+        [repo]: { ...state.rehearsalApplications[repo], [identity.id]: result }
+      },
+      rehearsalRecovery: { ...state.rehearsalRecovery, [repo]: result.recovery }
+    }))
+    if (get().repoPath === repo) {
+      await get().resync()
+      if (get().repoPath === repo && result.recovery.state === 'none') await get().refreshAnalysis()
+    }
+  },
+  recoverRehearsal: async (id, action) => {
+    const api = bridge()
+    const repo = get().repoPath
+    if (!api || !repo || get().rehearsalBusy) return
+    get().clearRehearsalComparison()
+    set({ rehearsalBusy: true })
+    try {
+      const recovery = await api.rehearsalRecover(repo, id, action)
+      set((state) => ({ rehearsalRecovery: { ...state.rehearsalRecovery, [repo]: recovery } }))
+    } catch {
+      const recovery = await readRehearsalRecovery(api, repo)
+      set((state) => ({ rehearsalRecovery: { ...state.rehearsalRecovery, [repo]: recovery } }))
+    } finally {
+      set({ rehearsalBusy: false })
+    }
+    if (get().repoPath === repo) {
+      await get().resync()
+      if (get().repoPath === repo && get().rehearsalRecovery[repo]?.state === 'none')
+        await get().refreshAnalysis()
+    }
+  },
+  rehearsalOpen: false,
+  rehearsalBusy: false,
+  rehearsalResults: {},
+  rehearsalModeSetting: null,
+  rehearsalModeError: null,
+  rehearsalRouting: false,
+  refreshRehearsalMode: async (choice) => {
+    const api = bridge()
+    const repo = get().repoPath
+    if (!api?.rehearsalMode || !repo) return
+    try {
+      const setting = await api.rehearsalMode(repo, legacyRehearsalRepos, choice)
+      if (get().repoPath === repo) set({ rehearsalModeSetting: setting, rehearsalModeError: null })
+    } catch (error) {
+      if (get().repoPath === repo)
+        set({ rehearsalModeSetting: null, rehearsalModeError: cleanError(error) })
+    }
+  },
+  routeRehearsal: async (action, target, plan) => {
+    const api = bridge()
+    const repo = get().repoPath
+    if (!api?.rehearsalMode || !repo) return false
+    if (get().rehearsalRouting || get().rehearsalBusy || get().opInProgress) return true
+    set({ rehearsalRouting: true })
+    try {
+      const setting = await api.rehearsalMode(repo, legacyRehearsalRepos)
+      if (get().repoPath !== repo) return true
+      set({ rehearsalModeSetting: setting, rehearsalModeError: null })
+      if (setting?.mode === null) return true
+      if (setting?.mode !== 'automatic') return false
+      get().openRehearsal({ action, target, plan })
+      await get().rehearse(action, target, plan)
+      return true
+    } catch (error) {
+      if (get().repoPath === repo) set({ rehearsalModeError: cleanError(error) })
+      return true
+    } finally {
+      set({ rehearsalRouting: false })
+    }
+  },
+  rehearsalConfigured: false,
+  rehearsalRequest: null,
+  openRehearsal: (request) => {
+    const repo = get().repoPath
+    if (!repo || (request && get().rehearsalBusy)) return
+    const results = { ...get().rehearsalResults }
+    if (request) delete results[repo]
+    set({
+      rehearsalResults: results,
+      rehearsalOpen: true,
+      rehearsalRequest: request
+        ? { ...request, repo }
+        : get().rehearsalBusy
+          ? get().rehearsalRequest
+          : null
+    })
+  },
+  closeRehearsal: () => set({ rehearsalOpen: false }),
+  rehearseMerge: (target) => get().rehearse('merge', target),
+  rehearse: async (action, target, plan) => {
+    const api = bridge()
+    const repo = get().repoPath
+    if (!api || !repo || get().rehearsalBusy) return
+    get().clearRehearsalComparison()
+    set({ rehearsalBusy: true, rehearsalExecutionRepo: repo })
+    let result: RehearsalResult
+    try {
+      result =
+        action === 'merge'
+          ? await api.rehearseMerge(repo, target)
+          : plan
+            ? await api.rehearse(repo, action, target, plan)
+            : await api.rehearse(repo, action, target)
+    } catch (error) {
+      result = { kind: 'error', message: cleanError(error) }
+    }
+    // Keep ownership even if the user switched repositories while the CLI ran.
+    set((state) => ({
+      rehearsalBusy: false,
+      rehearsalResults: { ...state.rehearsalResults, [repo]: result },
+      rehearsalExecutionRepo: null,
+      rehearsalCurrent:
+        result.kind === 'report'
+          ? { ...state.rehearsalCurrent, [repo]: result.report.id }
+          : state.rehearsalCurrent
+    }))
+    if (result.kind === 'report') rememberRehearsal(result.report.origin_worktree, result.report.id)
+    await get()
+      .loadRehearsals(repo, false)
+      .catch(() => undefined)
+  },
   screen: 'welcome',
   pendingRepo: null,
   analysis: null,
@@ -932,6 +1240,8 @@ export const useStore = create<GitCityState>((set, get) => ({
   // existed only because runOp returned void and this had to report an
   // outcome (#107).
   runInteractiveRebase: async (base, entries) => {
+    if (await get().routeRehearsal('rebase', base ?? 'root', { base, entries }))
+      return { ok: false, message: 'Action routed to Rehearse.' }
     const result = await runOp(
       set,
       get,
@@ -1066,21 +1376,30 @@ export const useStore = create<GitCityState>((set, get) => ({
     }),
   deleteBranch: (name, force) =>
     runOp(set, get, 'Deleting branch…', (api, repo) => api.deleteBranch(repo, name, force)),
-  merge: (name) =>
-    runOp(set, get, `Merging ${name}…`, (api, repo) => api.merge(repo, name), {
+  merge: async (name) => {
+    if (await get().routeRehearsal('merge', name))
+      return { ok: false, message: 'Action routed to Rehearse.' }
+    return runOp(set, get, `Merging ${name}…`, (api, repo) => api.merge(repo, name), {
       reanalyze: true,
       conflictsOpenMerge: true
-    }),
-  rebaseOnto: (name) =>
-    runOp(set, get, `Rebasing onto ${name}…`, (api, repo) => api.rebase(repo, name), {
+    })
+  },
+  rebaseOnto: async (name) => {
+    if (await get().routeRehearsal('rebase', name))
+      return { ok: false, message: 'Action routed to Rehearse.' }
+    return runOp(set, get, `Rebasing onto ${name}…`, (api, repo) => api.rebase(repo, name), {
       reanalyze: true,
       conflictsOpenMerge: true
-    }),
-  cherryPick: (hash) =>
-    runOp(set, get, 'Cherry-picking…', (api, repo) => api.cherryPick(repo, hash), {
+    })
+  },
+  cherryPick: async (hash) => {
+    if (await get().routeRehearsal('cherry-pick', hash))
+      return { ok: false, message: 'Action routed to Rehearse.' }
+    return runOp(set, get, 'Cherry-picking…', (api, repo) => api.cherryPick(repo, hash), {
       reanalyze: true,
       conflictsOpenMerge: true
-    }),
+    })
+  },
   stashPush: (message, includeUntracked) =>
     runOp(set, get, 'Stashing…', (api, repo) => api.stashPush(repo, message, includeUntracked)),
   stashPop: (index) =>
@@ -1244,11 +1563,12 @@ async function runOp(
     result = await fn(api, repoPath)
   } catch (err) {
     const failure: OpResult = { ok: false, message: cleanError(err) }
-set({ opInProgress: null, opError: { message: failure.message ?? '', code: failure.code } })
+    set({ opInProgress: null, opError: { message: failure.message ?? '', code: failure.code } })
     return failure
   }
   set({ opInProgress: null })
 
+  await get().checkRehearsalRecovery()
   await resync(set, get)
 
   if (!result.ok) {
@@ -1260,7 +1580,9 @@ set({ opInProgress: null, opError: { message: failure.message ?? '', code: failu
       // opMessage, not result.message: for the codes we recognise, git's own
       // first line is written for someone mid-task in a terminal and reads
       // badly in a toast with no context (#26).
-      set({ opError: { message: opMessage(result), code: result.code, gitOutput: result.gitOutput } })
+      set({
+        opError: { message: opMessage(result), code: result.code, gitOutput: result.gitOutput }
+      })
     }
     return result
   }
@@ -1297,6 +1619,8 @@ async function loadRepo(
       recentRepos: recent,
       analysis,
       repoPath: path,
+      rehearsalModeSetting: null,
+      rehearsalModeError: null,
       snapshotIndex: Math.max(0, analysis.snapshots.length - 1),
       // a commit-less repo lands on the Changes panel — the only useful next step
       panel: analysis.snapshots.length === 0 ? 'changes' : 'none',

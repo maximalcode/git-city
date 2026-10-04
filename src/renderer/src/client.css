@@ -1081,6 +1081,23 @@
   cursor: pointer;
   border-radius: 7px;
 }
+.graph-select {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+.graph-select:focus-visible {
+  outline: 2px solid var(--accent-2);
+  outline-offset: 2px;
+}
 .graph-row:hover {
   background: rgba(255, 255, 255, 0.05);
 }
@@ -2382,9 +2399,36 @@
   color: var(--text-dim);
   font-size: 11px;
 }
-.settings-row select,
 .settings-row input[type='range'] {
   max-width: 160px;
+}
+.settings-row select {
+  max-width: 160px;
+  appearance: none;
+  -webkit-appearance: none;
+  font: inherit;
+  color: var(--text);
+  background-color: var(--panel);
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--text-dim) 50%),
+    linear-gradient(135deg, var(--text-dim) 50%, transparent 50%);
+  background-position:
+    calc(100% - 13px) 50%,
+    calc(100% - 9px) 50%;
+  background-repeat: no-repeat;
+  background-size:
+    5px 5px,
+    5px 5px;
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  padding: 6px 30px 6px 10px;
+  cursor: pointer;
+  outline: none;
+}
+.settings-row select:focus-visible {
+  border-color: var(--accent-2);
+  outline: 2px solid var(--accent-2);
+  outline-offset: 1px;
 }
 .settings-row.toggle input[type='checkbox'] {
   width: 16px;
@@ -2669,4 +2713,346 @@
 }
 .hunk-lines .diff-line.picked .diff-gutter {
   color: var(--accent-2);
+}
+
+.rehearsal-trigger {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 70;
+}
+.rehearsal-dialog {
+  margin: auto;
+  font-size: 14px;
+  line-height: 1.5;
+  width: min(720px, 90vw);
+  max-height: 85vh;
+  overflow: auto;
+  padding: 24px;
+  color: var(--text, #eee);
+  background: var(--panel-bg, #20242c);
+  border: 1px solid #727986;
+  border-radius: 12px;
+  overflow-wrap: anywhere;
+}
+.rehearsal-dialog::backdrop {
+  background: #0009;
+}
+.rehearsal-dialog input:not([type='checkbox']) {
+  display: block;
+  width: 100%;
+  margin: 8px 0;
+}
+.rehearsal-dialog :focus-visible {
+  outline: 2px solid #77c9ff;
+  outline-offset: 3px;
+}
+.rehearsal-dialog h2 {
+  margin-bottom: 12px;
+}
+.rehearsal-dialog h3,
+.rehearsal-dialog h4 {
+  margin-top: 16px;
+  margin-bottom: 6px;
+}
+.rehearsal-dialog p {
+  margin: 8px 0;
+}
+.rehearsal-dialog ul {
+  padding-left: 20px;
+}
+.rehearsal-dialog form {
+  margin: 16px 0;
+}
+.rehearsal-dialog input:not([type='checkbox']) {
+  padding: 8px 10px;
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  background: var(--panel-bg, #20242c);
+  color: inherit;
+  font: inherit;
+}
+
+.rehearsal-dialog input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
+  margin-right: 8px;
+  vertical-align: middle;
+}
+
+.rehearsal-mode {
+  position: fixed;
+  right: 16px;
+  bottom: 52px;
+  z-index: 70;
+  max-width: 330px;
+  padding: 8px 12px;
+  color: var(--text, #eee);
+  background: var(--panel-bg, #20242c);
+  border: 1px solid #727986;
+  border-radius: 8px;
+  font-size: 12px;
+}
+.rehearsal-mode select {
+  margin-left: 8px;
+}
+.rehearsal-mode :focus-visible {
+  outline: 2px solid var(--accent, #88baff);
+  outline-offset: 2px;
+}
+
+.rehearsal-city {
+  height: 360px;
+  position: relative;
+  margin-block: 12px;
+}
+
+/* Rehearsal stays alongside the real workspace; only confirmations are modal. */
+:root {
+  --rehearsal-width: clamp(360px, 34vw, 440px);
+}
+.app-workspace {
+  height: 100%;
+  min-width: 0;
+}
+.app-workspace.with-rehearsal {
+  margin-right: var(--rehearsal-width);
+}
+body:has(.rehearsal-panel) .rehearsal-trigger,
+body:has(.rehearsal-panel) .rehearsal-mode {
+  right: calc(var(--rehearsal-width) + 16px);
+}
+.rehearsal-panel {
+  position: fixed;
+  inset: 0 0 0 auto;
+  z-index: 80;
+  width: var(--rehearsal-width);
+  display: flex;
+  flex-direction: column;
+  background: #171c24;
+  border-left: 1px solid var(--panel-border);
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+.rehearsal-header,
+.rehearsal-footer {
+  flex: none;
+  padding: 20px 24px;
+}
+.rehearsal-header {
+  border-bottom: 1px solid var(--panel-border);
+}
+.rehearsal-eyebrow {
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 11px;
+  font-weight: 600;
+}
+.rehearsal-title-row {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 10px 0 20px;
+}
+.rehearsal-title-row h2 {
+  font-size: 20px;
+  line-height: 1.3;
+}
+.rehearsal-title-row button {
+  padding: 0 8px;
+  font-size: 22px;
+  background: transparent;
+  border: 0;
+}
+.rehearsal-direction {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+}
+.rehearsal-direction dt {
+  color: var(--text-dim);
+  font-size: 11px;
+  margin-bottom: 6px;
+}
+.rehearsal-direction dd {
+  padding: 5px 8px;
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  background: #ffffff06;
+  font-weight: 600;
+  max-height: 100px;
+  overflow: auto;
+}
+.rehearsal-direction > span {
+  color: var(--text-dim);
+}
+.rehearsal-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 20px 24px;
+  scrollbar-gutter: stable;
+}
+.rehearsal-panel h3 {
+  font-size: 15px;
+  margin: 8px 0;
+}
+.rehearsal-panel h4 {
+  margin: 14px 0 6px;
+}
+.rehearsal-panel p {
+  margin: 8px 0;
+}
+.rehearsal-panel ul,
+.rehearsal-panel ol {
+  padding-left: 20px;
+}
+.rehearsal-panel li {
+  margin-block: 6px;
+}
+.rehearsal-panel details {
+  border-top: 1px solid var(--panel-border);
+  padding-block: 14px;
+}
+.rehearsal-panel summary {
+  cursor: pointer;
+  color: var(--text-dim);
+  font-weight: 600;
+}
+.rehearsal-panel details[open] > summary {
+  color: var(--text);
+  margin-bottom: 12px;
+}
+.rehearsal-panel .rehearsal-setup {
+  border-top: 0;
+  padding-top: 0;
+}
+.rehearsal-panel [role='alert'] {
+  color: #ffca85;
+  border-left: 2px solid var(--accent);
+  padding-left: 10px;
+}
+.rehearsal-panel input:not([type='checkbox']) {
+  display: block;
+  width: 100%;
+  margin: 8px 0;
+  padding: 8px 10px;
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  background: #ffffff06;
+  color: inherit;
+  font: inherit;
+}
+.rehearsal-panel input[type='checkbox'] {
+  margin-right: 8px;
+}
+.rehearsal-panel :focus-visible {
+  outline: 2px solid var(--accent-2);
+  outline-offset: 3px;
+}
+.rehearsal-panel pre {
+  overflow-x: auto;
+  max-width: 100%;
+}
+.rehearsal-panel fieldset {
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--panel-border);
+}
+.rehearsal-footer {
+  border-top: 1px solid var(--panel-border);
+  background: #1b2029;
+  max-height: 40%;
+  overflow-y: auto;
+}
+.rehearsal-footer p {
+  color: var(--text-dim);
+  font-size: 11px;
+  margin: 0 0 12px;
+}
+.rehearsal-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+.rehearsal-actions button {
+  padding: 8px 12px;
+}
+.rehearsal-recovery {
+  position: fixed;
+  z-index: 90;
+  left: 16px;
+  top: 80px;
+  max-width: min(500px, calc(100vw - var(--rehearsal-width) - 32px));
+  max-height: 70vh;
+  overflow: auto;
+  padding: 16px;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  background: #252019;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.rehearsal-recovery p {
+  margin: 8px 0;
+}
+#rehearsal-scene {
+  position: absolute;
+  inset: 0;
+}
+#rehearsal-scene .rehearsal-city {
+  height: 100%;
+  margin: 0;
+}
+@media (max-width: 900px) {
+  :root {
+    --rehearsal-width: 360px;
+  }
+  .rehearsal-header,
+  .rehearsal-body,
+  .rehearsal-footer {
+    padding: 16px;
+  }
+  .rehearsal-panel {
+    font-size: 12px;
+  }
+}
+@media (max-width: 600px) {
+  :root {
+    --rehearsal-width: 65vw;
+  }
+  .rehearsal-direction {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+  .rehearsal-direction > span {
+    display: none;
+  }
+}
+.rehearsal-panel .rehearsal-movements {
+  list-style: none;
+  padding: 0;
+  margin: 16px 0;
+}
+.rehearsal-movements li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: space-between;
+  border-top: 1px solid var(--panel-border);
+  padding: 10px 0;
+}
+.rehearsal-movements code {
+  color: var(--text-dim);
+  font-size: 11px;
+}
+body:not(:has(.rehearsal-panel)) .rehearsal-recovery {
+  max-width: min(500px, calc(100vw - 32px));
 }

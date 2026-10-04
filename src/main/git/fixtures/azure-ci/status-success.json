@@ -1,0 +1,6 @@
+{
+  "code": 0,
+  "stdout": "[{\"context\":{\"genre\":\"build\",\"name\":\"ci\"},\"state\":\"succeeded\"}]",
+  "stderr": "",
+  "missing": false
+}

@@ -57,6 +57,9 @@ whatever login you already have:
 - **GitHub** — install [`gh`](https://cli.github.com), then `gh auth login`
 - **GitLab** — install [`glab`](https://gitlab.com/gitlab-org/cli), then
   `glab auth login`
+- **Azure DevOps** — install the [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli),
+  add its `azure-devops` extension with `az extension add --name azure-devops`,
+  then run `az devops login` (or `az login` for Microsoft Entra authentication)
 
 If you installed the CLI while Git City was open, press **↻** in the panel.
 
@@ -122,3 +125,15 @@ like a game does.
 Nowhere but your machine. Git City has no telemetry and no accounts. Its only
 outbound request is a version check against GitHub's public releases API at
 launch — see [SECURITY.md](../SECURITY.md) for exactly what it sends.
+
+## Rehearse mode
+
+If Automatic reports a missing, broken or incompatible tool, repair or reinstall Git City with its compatible bundled tool. For source development,
+repair the configured `GIT_CITY_REHEARSE_BIN` executable. Failed rehearsals never retry as
+direct Git actions. You can explicitly select Off to restore direct supported
+actions, but mandatory recovery blocks still apply across all worktrees. Pull is
+not part of rehearsal routing. See the [Rehearse guide](rehearse.md#choose-a-mode).
+
+Modes are stored in `rehearsal-modes.json` under Electron's app user-data directory.
+If that file is corrupt or from an incompatible version, preserve it before
+repairing the installation; the app will not overwrite it with defaults.

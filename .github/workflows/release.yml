@@ -86,7 +86,24 @@ jobs:
           GIT_CITY_SMOKE_RESTARTS: 6
           GIT_CITY_APPLY_PROBE: 1
         if: runner.os != 'Linux'
-        run: node scripts/smoke-package.mjs "${{ matrix.executable }}"
+        shell: pwsh
+        run: |
+          $loadScript = Join-Path $env:RUNNER_TEMP 'git-city-179-load.cjs'
+          @'
+          const { Worker } = require('node:worker_threads')
+          const count = Math.max(1, Math.floor(require('node:os').availableParallelism() / 2))
+          console.log('[apply-load-probe] busy workers:', count)
+          for (let i = 0; i < count; i++) new Worker('while (true) {}', { eval: true })
+          setTimeout(() => process.exit(0), 600_000)
+          '@ | Set-Content $loadScript
+          $loadProcess = Start-Process node -ArgumentList $loadScript -NoNewWindow -PassThru
+          try {
+            node scripts/smoke-package.mjs "${{ matrix.executable }}"
+            $smokeExit = $LASTEXITCODE
+          } finally {
+            Stop-Process -Id $loadProcess.Id -ErrorAction SilentlyContinue
+          }
+          exit $smokeExit
       - name: Preserve packaged smoke evidence
         if: always()
         uses: actions/upload-artifact@v4

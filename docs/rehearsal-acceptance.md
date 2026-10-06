@@ -10,9 +10,9 @@ real-tool integration, Electron keyboard flows, and all four packaged targets.
 
 The acceptance branch starts at `30d6415984b62ebc52639b585b73a79eff8ee3c4`
 on `develop`. Git City #143–#154 and git-rehearse #86–#94, #105, #108 and
-#110 are closed. The exact upstream build is pinned in
-[`rehearse-toolchain.json`](../rehearse-toolchain.json); version 1.2.0 alone
-does not identify the compatible tool.
+#110 are closed. The current upstream release is pinned in
+[`rehearse-toolchain.json`](../rehearse-toolchain.json). The original activation
+used a pre-release artifact; the v0.9.1 update uses published git-rehearse v1.3.0.
 
 ## Story coverage
 
@@ -70,7 +70,7 @@ Electron suites use the real bridge, Git repositories and executable.
 ## Acceptance runs
 
 The original concurrency blocker, [git-rehearse #113](https://github.com/maximalcode/git-rehearse/issues/113),
-was fixed in upstream PR #114. The toolchain now pins artifact revision
+was fixed in upstream PR #114. The original activation pinned artifact revision
 `0ecca205f38fb1bcd88ef2e6a62f6943e2ddc65d` from
 [run 37208097702](https://github.com/maximalcode/git-rehearse/actions/runs/37208097702).
 All four archive checksums were independently verified against their checksum
@@ -119,3 +119,19 @@ the working checkout's unrelated worktree registrations.
 Signature presence is not cryptographic verification or signer trust. Sandbox
 execution is not operating-system isolation. Tests do not establish control over
 external Git processes; safety relies on renewed state checks and refusal.
+
+## Published v1.3.0 integration
+
+Git City v0.9.1 replaces the activation artifact with published
+[git-rehearse v1.3.0](https://github.com/maximalcode/git-rehearse/releases/tag/v1.3.0),
+tagged at `81a0621b4089749dfa899233a2a3ee06eacad44e`. On 2026-10-06 all four
+archives were downloaded and their SHA-256 hashes matched both the published
+checksum files and GitHub release asset digests. The manifest also pins the
+extracted executable and license hashes. Published upstream smoke records report
+Apply, metadata migration and concurrent worktree previews passing on each target.
+
+Git City integration validation is tracked in [#182](https://github.com/maximalcode/git-city/issues/182),
+linked to [release tracking #175](https://github.com/maximalcode/git-city/issues/175).
+The older activation results above describe their original revision; the v1.3.0
+update requires a fresh real-tool suite, Electron acceptance and all four native
+package jobs before release.

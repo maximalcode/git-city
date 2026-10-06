@@ -5,12 +5,16 @@ see the [Rehearse guide](rehearse.md). Packaged applications expose the same
 workflow and include their compatible tool. Source builds require an explicit
 absolute `GIT_CITY_REHEARSE_BIN`; they never search PATH or download a tool.
 Both the development renderer and `npm start` support these source builds.
+Git City v0.9.1 requires git-rehearse v1.3.0; re-run preparation and update any
+explicit development override when upgrading from the earlier test build.
 
 ## Pinned toolchain
 
-`rehearse-toolchain.json` records version, source revision, workflow run, archive,
-executable and license checksums for Windows/Linux x64 and Intel/Apple Silicon
-macOS. Version 1.2.0 alone does not identify a compatible build. Prepare a target
+`rehearse-toolchain.json` records the published v1.3.0 release tag, source revision,
+archive, executable and license checksums for Windows/Linux x64 and Intel/Apple
+Silicon macOS. Preparation downloads exact release assets, checks the archive before
+extraction, and checks the executable and license before installing them locally.
+It does not depend on expiring Actions artifacts. Prepare a target
 with `npm run tool:prepare -- darwin-arm64` (or another manifest key), then set
 `GIT_CITY_REHEARSE_BIN` to its absolute path under `build/rehearse/<target>`.
 
@@ -32,6 +36,10 @@ remain outside that queue, so authoritative CLI checks still determine safety.
 Run `npm run typecheck && npm run lint && npm test`. Export
 `GIT_CITY_REHEARSE_BIN` for the test command to include real-tool integration;
 without it those suites are explicitly skipped and do not count as acceptance.
+Preparation regressions run with Python 3.10+ using
+`python3 -m unittest discover -s scripts -p 'test_*.py'` (also run by CI and each
+native package job). They cover release selection, checksum failures, destination
+preservation and safe extraction.
 Tests use disposable real repositories and verify HEAD, refs, raw index bytes,
 files, exact retained IDs and resulting action availability.
 
@@ -50,6 +58,26 @@ restart. Corrupted bundled files must give repair guidance without mutation or
 changing Automatic. The extracted CLI also runs Apply and metadata migration
 checks through `scripts/smoke-rehearse.py`. PR/manual runs produce artifacts only;
 public releases still require the normal tag/release process.
+
+Confirmed Apply has a dedicated five-minute smoke assertion; ordinary UI checks
+retain their 90-second timeout. In the Windows [#179 reproduction](https://github.com/maximalcode/git-city/actions/runs/37508936206),
+temporary CPU contention made one Apply take 222 seconds: the old assertion failed
+at 90 seconds, but the same CLI process exited successfully and IPC returned
+`applied` with no recovery required. The timeout covers that observed completion
+with headroom. The smoke still requires the exact success message, target HEAD,
+and expected file contents; it never retries Apply to obtain a passing result.
+
+Packaged smoke runs retain diagnostic artifacts under
+`test-results/package-smoke/<platform>-<restart>/`, uploaded by the Release workflow.
+They record Apply request and subprocess timing, exact repository/file hashes, and
+recovery state. On failure the smoke captures the page and retained metadata, then
+observes an outstanding Apply for up to another 180 seconds before closing the app.
+Late completion does not turn the original failed assertion into a pass. Set
+`GIT_CITY_SMOKE_DIAGNOSTICS_GRACE_MS=0` to skip that extra observation locally.
+Diagnostic inspection does not retry Apply or perform recovery. Initial/final
+capture and closing the test app have separate bounded allowances. Set
+`GIT_CITY_SMOKE_RESTARTS` between 2 and 10 to repeat the complete smoke sequence
+with the same profile (default: 2).
 
 The [44-story acceptance inventory](rehearsal-acceptance.md) identifies evidence
 and its revision. Run the complete suite whenever the toolchain pin changes;

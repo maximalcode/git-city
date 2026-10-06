@@ -134,6 +134,9 @@ def migration_smoke(preview, rehearse):
 
 if __name__ == "__main__":
     binary = Path(sys.argv[1]).resolve()
+    toolchain = json.loads(
+        (Path(__file__).resolve().parent.parent / "rehearse-toolchain.json").read_text()
+    )
     with tempfile.TemporaryDirectory(prefix="git-city-package-smoke-") as directory:
-        evidence = smoke(binary, "1.2.0", Path(directory))
+        evidence = smoke(binary, toolchain["version"], Path(directory))
         print(json.dumps(evidence, indent=2))

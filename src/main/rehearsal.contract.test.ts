@@ -29,11 +29,14 @@ beforeEach(() => {
     })
 })
 
-it('blocks an incompatible executable before a merge is started', async () => {
-  replies.push({ code: 0, stdout: 'git-rehearse 9.0.0' })
-  expect((await rehearsalAvailability('/configured/tool')).available).toBe(false)
-  expect(spawn).toHaveBeenCalledTimes(1)
-})
+it.each(['1.2.0', '9.0.0'])(
+  'blocks incompatible version %s before a merge is started',
+  async (version) => {
+    replies.push({ code: 0, stdout: `git-rehearse ${version}` })
+    expect((await rehearsalAvailability('/configured/tool')).available).toBe(false)
+    expect(spawn).toHaveBeenCalledTimes(1)
+  }
+)
 
 it.each([
   [{ schema: 1, kind: 'refused', message: 'Shallow repository', exit_code: 3 }, 'refused'],
@@ -42,7 +45,7 @@ it.each([
   [{ schema: 1, outcome: 'clean' }, 'error']
 ])('classifies CLI documents without falling back to git (%j)', async (document, kind) => {
   replies.push(
-    { code: 0, stdout: 'git-rehearse 1.2.0' },
+    { code: 0, stdout: 'git-rehearse 1.3.0' },
     { code: 3, stdout: JSON.stringify(document) }
   )
   const result = await rehearseMerge('/configured/tool', process.cwd(), 'topic with spaces')
@@ -130,7 +133,7 @@ it.each([
     ...fields
   }
   replies.push(
-    { code: 0, stdout: 'git-rehearse 1.2.0' },
+    { code: 0, stdout: 'git-rehearse 1.3.0' },
     { code: 0, stdout: JSON.stringify(document) }
   )
   expect((await rehearseMerge('/configured/tool', process.cwd(), 'topic')).kind).toBe('error')
@@ -138,7 +141,7 @@ it.each([
 
 it('allows system signing environment while disabling terminal prompts and editors', async () => {
   vi.stubEnv('SSH_AUTH_SOCK', '/test/signing-agent')
-  replies.push({ code: 0, stdout: 'git-rehearse 1.2.0' })
+  replies.push({ code: 0, stdout: 'git-rehearse 1.3.0' })
   await rehearsalAvailability('/configured/tool')
   vi.unstubAllEnvs()
   expect(vi.mocked(spawn).mock.calls[0][2]).toMatchObject({

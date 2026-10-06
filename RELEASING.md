@@ -1,14 +1,15 @@
 # Releasing Git City
 
 Installers are built in CI by the [`Release`](.github/workflows/release.yml) workflow: an NSIS
-`.exe` on `windows-latest`, two DMGs on `macos-latest` (arm64 and a cross-built x64, since
-Intel Macs are still common), and an AppImage + `.deb` on `ubuntu-latest`.
+`.exe` on `windows-latest`, native DMGs on `macos-latest` (arm64) and
+`macos-15-intel` (x64), and an AppImage + `.deb` on `ubuntu-latest`.
 
 ## Cut a release
 
-1. **Bump the version** in [`package.json`](package.json) (e.g. `0.1.0` -> `1.0.0`). This is the
-   single source of truth; the installers are named after it.
-2. Commit it: `git commit -am "release: v1.0.0"` and push to `main` (via PR as usual).
+1. **Bump the version** in [`package.json`](package.json) and both root version fields in
+   `package-lock.json` together. The installers are named after `package.json`.
+2. Open the preparation PR against `develop`, then promote `develop` to `main` through a
+   release PR after checks pass. Tag the accepted `main` commit, never the preparation branch.
 3. **Tag and push the tag:**
 
    ```bash
@@ -17,7 +18,7 @@ Intel Macs are still common), and an AppImage + `.deb` on `ubuntu-latest`.
    ```
 
 Each build job verifies the tag matches `package.json`, runs the tests and builds its installer.
-A third job then collects every artifact into one **GitHub Release** at
+The publish job then collects every artifact into one **GitHub Release** at
 `https://github.com/maximalcode/git-city/releases` with auto-generated notes. The build jobs
 never create the Release themselves, so the platforms cannot race each other for it.
 
@@ -117,12 +118,23 @@ repository secrets and reference them from the macOS build step.
 ### Pinned Rehearse packages
 
 Before a local `dist:*` build, run `npm run tool:prepare` (requires authenticated
-`gh` and Python 3). Pass a target such as `-- darwin-arm64` to prepare one target.
+`gh` and Python 3.10+). Pass a target such as `-- darwin-arm64` to prepare one target.
 The build fails if any selected architecture lacks the exact executable and MIT
 license checksums in `rehearse-toolchain.json`. No PATH tool or latest release is
-accepted. The pin currently uses a tested upstream Actions artifact, not the older
-public v1.2.0 release. If that artifact expires, packaging fails closed: obtain a
-reviewed replacement and update the pin in a PR; never bypass checksum checks.
+accepted. Git City v0.9.1 pins the published
+[git-rehearse v1.3.0 release](https://github.com/maximalcode/git-rehearse/releases/tag/v1.3.0),
+including its tag, source revision and exact archive names. Preparation downloads those
+release assets and verifies each archive before extracting files, then verifies the
+executable and license. Missing assets or checksum mismatches fail the build; update
+the reviewed pin in a PR rather than bypassing checks.
+
+When updating the pin, download all four archives and their published `.sha256`
+files. Compare each computed archive hash with both the checksum file and GitHub
+release asset digest, then record the extracted executable and license hashes.
+Run the preparation tests, real-tool acceptance and all four native package jobs.
+The [v0.9.1 integration issue](https://github.com/maximalcode/git-city/issues/182) is
+linked to [release tracking #175](https://github.com/maximalcode/git-city/issues/175);
+merging preparation does not publish or tag a release.
 
 The release workflow also runs on PRs without publishing. Each of Windows x64,
 Linux x64, macOS arm64 and macOS x64 builds on its native runner and launches the

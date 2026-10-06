@@ -23,3 +23,6 @@ docs/media/.frames/
 
 # Pinned tool archives are prepared explicitly before packaging
 build/rehearse/
+
+# Python preparation-test bytecode
+scripts/__pycache__/

@@ -5,12 +5,16 @@ see the [Rehearse guide](rehearse.md). Packaged applications expose the same
 workflow and include their compatible tool. Source builds require an explicit
 absolute `GIT_CITY_REHEARSE_BIN`; they never search PATH or download a tool.
 Both the development renderer and `npm start` support these source builds.
+Git City v0.9.1 requires git-rehearse v1.3.0; re-run preparation and update any
+explicit development override when upgrading from the earlier test build.
 
 ## Pinned toolchain
 
-`rehearse-toolchain.json` records version, source revision, workflow run, archive,
-executable and license checksums for Windows/Linux x64 and Intel/Apple Silicon
-macOS. Version 1.2.0 alone does not identify a compatible build. Prepare a target
+`rehearse-toolchain.json` records the published v1.3.0 release tag, source revision,
+archive, executable and license checksums for Windows/Linux x64 and Intel/Apple
+Silicon macOS. Preparation downloads exact release assets, checks the archive before
+extraction, and checks the executable and license before installing them locally.
+It does not depend on expiring Actions artifacts. Prepare a target
 with `npm run tool:prepare -- darwin-arm64` (or another manifest key), then set
 `GIT_CITY_REHEARSE_BIN` to its absolute path under `build/rehearse/<target>`.
 
@@ -32,6 +36,10 @@ remain outside that queue, so authoritative CLI checks still determine safety.
 Run `npm run typecheck && npm run lint && npm test`. Export
 `GIT_CITY_REHEARSE_BIN` for the test command to include real-tool integration;
 without it those suites are explicitly skipped and do not count as acceptance.
+Preparation regressions run with Python 3.10+ using
+`python3 -m unittest discover -s scripts -p 'test_*.py'` (also run by CI and each
+native package job). They cover release selection, checksum failures, destination
+preservation and safe extraction.
 Tests use disposable real repositories and verify HEAD, refs, raw index bytes,
 files, exact retained IDs and resulting action availability.
 

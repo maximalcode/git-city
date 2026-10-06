@@ -77,7 +77,7 @@ it.each(['same worktree', 'linked worktree'])(
       stderr: '',
       stdout:
         args[0] === '--version'
-          ? 'git-rehearse 1.2.0'
+          ? 'git-rehearse 1.3.0'
           : JSON.stringify(
               ownsJournal
                 ? {

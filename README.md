@@ -102,7 +102,7 @@ Automatic; existing recent repositories receive a one-time choice.
 Keep results across restarts, stop previews, confirm discard, or use **Undo Apply**
 when the original worktree still permits it. Interrupted Apply/Undo blocks writes
 until checked recovery. Hooks are not run in rehearsal or Apply; signature presence
-is shown separately from verification. Git City bundles the compatible tool for
+is shown separately from verification. Git City bundles git-rehearse v1.3.0 for
 Windows/Linux x64 and both macOS architectures. Read the [Rehearse guide](docs/rehearse.md)
 for local-work handling, limits, keyboard controls and recovery.
 

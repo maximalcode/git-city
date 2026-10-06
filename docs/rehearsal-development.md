@@ -51,6 +51,15 @@ changing Automatic. The extracted CLI also runs Apply and metadata migration
 checks through `scripts/smoke-rehearse.py`. PR/manual runs produce artifacts only;
 public releases still require the normal tag/release process.
 
+Packaged smoke runs retain diagnostic artifacts under
+`test-results/package-smoke/<platform>-<restart>/`, uploaded by the Release workflow.
+They record Apply request and subprocess timing, exact repository/file hashes, and
+recovery state. On failure the smoke captures the page and retained metadata, then
+observes an outstanding Apply for up to another 180 seconds before closing the app.
+Late completion does not turn the original failed assertion into a pass. Set
+`GIT_CITY_SMOKE_DIAGNOSTICS_GRACE_MS=0` to skip that extra observation locally.
+Diagnostic inspection does not retry Apply or perform recovery.
+
 The [44-story acceptance inventory](rehearsal-acceptance.md) identifies evidence
 and its revision. Run the complete suite whenever the toolchain pin changes;
 unit doubles do not prove Git safety or concurrent CLI behavior.

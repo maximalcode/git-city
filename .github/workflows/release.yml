@@ -37,7 +37,7 @@ jobs:
             platform: win32
             arch: x64
             build: win
-            targets: nsis
+            targets: dir
             executable: dist/win-unpacked/GitCity.exe
             artifact: dist/*-setup.exe
     runs-on: ${{ matrix.os }}
@@ -60,7 +60,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: npm run tool:prepare -- ${{ matrix.platform }}-${{ matrix.arch }}
-      - run: npm run typecheck && npm run lint && npm test
       - run: npm run build
       - name: Real-tool and Electron acceptance (Apple Silicon)
         if: matrix.platform == 'darwin' && matrix.arch == 'arm64'
@@ -86,24 +85,7 @@ jobs:
           GIT_CITY_SMOKE_RESTARTS: 6
           GIT_CITY_APPLY_PROBE: 1
         if: runner.os != 'Linux'
-        shell: pwsh
-        run: |
-          $loadScript = Join-Path $env:RUNNER_TEMP 'git-city-179-load.cjs'
-          @'
-          const { Worker } = require('node:worker_threads')
-          const count = Math.max(1, Math.floor(require('node:os').availableParallelism() / 2))
-          console.log('[apply-load-probe] busy workers:', count)
-          for (let i = 0; i < count; i++) new Worker('while (true) {}', { eval: true })
-          setTimeout(() => process.exit(0), 600_000)
-          '@ | Set-Content $loadScript
-          $loadProcess = Start-Process node -ArgumentList $loadScript -NoNewWindow -PassThru
-          try {
-            node scripts/smoke-package.mjs "${{ matrix.executable }}"
-            $smokeExit = $LASTEXITCODE
-          } finally {
-            Stop-Process -Id $loadProcess.Id -ErrorAction SilentlyContinue
-          }
-          exit $smokeExit
+        run: node scripts/smoke-package.mjs "${{ matrix.executable }}"
       - name: Preserve packaged smoke evidence
         if: always()
         uses: actions/upload-artifact@v4

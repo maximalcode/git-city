@@ -51,6 +51,14 @@ changing Automatic. The extracted CLI also runs Apply and metadata migration
 checks through `scripts/smoke-rehearse.py`. PR/manual runs produce artifacts only;
 public releases still require the normal tag/release process.
 
+Confirmed Apply has a dedicated five-minute smoke assertion; ordinary UI checks
+retain their 90-second timeout. In the Windows [#179 reproduction](https://github.com/maximalcode/git-city/actions/runs/37508936206),
+temporary CPU contention made one Apply take 222 seconds: the old assertion failed
+at 90 seconds, but the same CLI process exited successfully and IPC returned
+`applied` with no recovery required. The timeout covers that observed completion
+with headroom. The smoke still requires the exact success message, target HEAD,
+and expected file contents; it never retries Apply to obtain a passing result.
+
 Packaged smoke runs retain diagnostic artifacts under
 `test-results/package-smoke/<platform>-<restart>/`, uploaded by the Release workflow.
 They record Apply request and subprocess timing, exact repository/file hashes, and
@@ -58,7 +66,10 @@ recovery state. On failure the smoke captures the page and retained metadata, th
 observes an outstanding Apply for up to another 180 seconds before closing the app.
 Late completion does not turn the original failed assertion into a pass. Set
 `GIT_CITY_SMOKE_DIAGNOSTICS_GRACE_MS=0` to skip that extra observation locally.
-Diagnostic inspection does not retry Apply or perform recovery.
+Diagnostic inspection does not retry Apply or perform recovery. Initial/final
+capture and closing the test app have separate bounded allowances. Set
+`GIT_CITY_SMOKE_RESTARTS` between 2 and 10 to repeat the complete smoke sequence
+with the same profile (default: 2).
 
 The [44-story acceptance inventory](rehearsal-acceptance.md) identifies evidence
 and its revision. Run the complete suite whenever the toolchain pin changes;

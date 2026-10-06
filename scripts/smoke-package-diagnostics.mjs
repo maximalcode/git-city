@@ -37,7 +37,7 @@ export async function bestEffort(
   }
 }
 
-export function diagnosticDeadlines(
+function diagnosticDeadlines(
   startedAt,
   graceMs,
   initialAllowanceMs = 5_000,
@@ -49,6 +49,98 @@ export function diagnosticDeadlines(
     observationDeadline,
     finalDeadline: observationDeadline + Math.max(0, finalAllowanceMs)
   }
+}
+
+const emptyMainDiagnostics = {
+  installed: false,
+  installError: 'Diagnostics were unavailable.',
+  records: [],
+  ipcRecords: []
+}
+
+/** Collect failure evidence without ever becoming the smoke failure. The
+ * observation budget starts at entry; a separate final allowance captures the
+ * latest IPC state before slower page/filesystem evidence. */
+export async function collectFailureDiagnostics({
+  app,
+  page,
+  repo,
+  profile,
+  directory,
+  error,
+  graceMs,
+  applyRequested = false
+}) {
+  const deadlines = diagnosticDeadlines(Date.now(), graceMs)
+  const initialSafe = (operation, fallback) =>
+    bestEffort(operation, fallback, deadlines.initialDeadline)
+  const observeSafe = (operation, fallback) =>
+    bestEffort(operation, fallback, deadlines.observationDeadline)
+  const finalSafe = (operation, fallback) =>
+    bestEffort(operation, fallback, deadlines.finalDeadline)
+  const save = (name, read, deadline) =>
+    bestEffort(
+      async () => writeDiagnostics(join(directory, name), await read()),
+      undefined,
+      deadline
+    )
+  const captureState = (phase, deadline) =>
+    Promise.all([
+      save(`${phase}-repo.json`, () => snapshotRepo(repo, phase), deadline),
+      save(
+        `${phase}-retained-metadata.json`,
+        () => snapshotRetainedMetadata(profile, repo, phase),
+        deadline
+      ),
+      bestEffort(() => capturePageEvidence(page, directory, phase, deadline), undefined, deadline)
+    ])
+
+  await save(
+    'original-error.json',
+    () => ({
+      name: error?.name,
+      message: error?.message,
+      stack: error?.stack,
+      graceMs
+    }),
+    deadlines.initialDeadline
+  )
+
+  let mainDiagnostics = await initialSafe(
+    () => readMainSpawnDiagnostics(app, deadlines.initialDeadline),
+    emptyMainDiagnostics
+  )
+  await save(
+    'original-timeout-apply-ipc.json',
+    () => ({ main: mainDiagnostics }),
+    deadlines.initialDeadline
+  )
+  await captureState('original-timeout', deadlines.initialDeadline)
+
+  if (applyRequested || applyHasStarted(mainDiagnostics)) {
+    while (Date.now() < deadlines.observationDeadline && !applyHasReturned(mainDiagnostics)) {
+      await new Promise((resolve) =>
+        setTimeout(resolve, Math.min(1_000, deadlines.observationDeadline - Date.now()))
+      )
+      mainDiagnostics = await observeSafe(
+        () =>
+          readMainSpawnDiagnostics(
+            app,
+            Math.min(deadlines.observationDeadline, Date.now() + 2_000)
+          ),
+        mainDiagnostics
+      )
+    }
+  }
+
+  // Read and persist the latest main/IPC state before any slower final reads.
+  mainDiagnostics = await finalSafe(
+    () => readMainSpawnDiagnostics(app, deadlines.finalDeadline),
+    mainDiagnostics
+  )
+  await save('after-grace-apply-ipc.json', () => mainDiagnostics, deadlines.finalDeadline)
+  await captureState('after-grace', deadlines.finalDeadline)
+  return { failure: error, mainDiagnostics, deadlines }
 }
 
 export async function writeDiagnostics(path, value) {
@@ -380,53 +472,6 @@ export async function capturePageEvidence(
       deadlineMs
     )
   }
-}
-
-/** Recovery/list/show are deliberately called only after the Apply bridge has
- * returned. They are public read paths and their result is reduced to safe
- * state labels before being persisted. */
-export async function capturePostApplyPublicState(
-  page,
-  repo,
-  deadlineMs = Date.now() + DEFAULT_DIAGNOSTICS_DEADLINE_MS
-) {
-  return bestEffort(
-    () =>
-      page.evaluate(async (repository) => {
-        const api = window.gitCity
-        const recovery = await api.rehearsalRecovery(repository)
-        const inventory = await api.rehearsalList(repository)
-        const entries = inventory.entries.map((entry) => ({
-          id: entry.id,
-          execution: entry.execution,
-          lifecycle: entry.lifecycle,
-          active: entry.active,
-          stale: entry.stale
-        }))
-        const shown = []
-        for (const entry of inventory.entries) {
-          const value = await api.rehearsalShow(entry)
-          shown.push({
-            id: entry.id,
-            kind: value?.kind,
-            outcome: value?.kind === 'report' ? value.report.outcome : undefined,
-            message: value?.kind === 'report' ? undefined : value?.message
-          })
-        }
-        return {
-          recovery: {
-            state: recovery.state,
-            operation: recovery.operation,
-            canComplete: recovery.can_complete,
-            canRollback: recovery.can_rollback
-          },
-          inventory: { entries, protected: inventory.protected, lowSpace: inventory.lowSpace },
-          shown
-        }
-      }, repo),
-    { diagnosticError: 'Public Apply state capture timed out.' },
-    deadlineMs
-  )
 }
 
 export function applyHasReturned(mainDiagnostics) {

@@ -40,6 +40,29 @@ jobs:
             targets: nsis
             executable: dist/win-unpacked/GitCity.exe
             artifact: dist/*-setup.exe
+          - os: macos-latest
+            platform: darwin
+            arch: arm64
+            build: mac
+            targets: dmg
+            executable: dist/mac-arm64/Git City.app/Contents/MacOS/Git City
+            artifact: dist/*.dmg
+          - os: macos-15-intel
+            platform: darwin
+            arch: x64
+            build: mac
+            targets: dmg
+            executable: dist/mac/Git City.app/Contents/MacOS/Git City
+            artifact: dist/*.dmg
+          - os: ubuntu-latest
+            platform: linux
+            arch: x64
+            build: linux
+            targets: AppImage deb
+            executable: dist/linux-unpacked/git-city
+            artifact: |
+              dist/*.AppImage
+              dist/*.deb
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -82,9 +105,6 @@ jobs:
         if: runner.os == 'Linux'
         run: xvfb-run -a node scripts/smoke-package.mjs "${{ matrix.executable }}"
       - name: Packaged application and upgrade smoke
-        env:
-          GIT_CITY_SMOKE_RESTARTS: 6
-          GIT_CITY_APPLY_PROBE: 1
         if: runner.os != 'Linux'
         run: node scripts/smoke-package.mjs "${{ matrix.executable }}"
       - name: Preserve packaged smoke evidence
@@ -113,6 +133,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: artifacts
+          pattern: installer-*
 
       - name: Publish GitHub Release
         env:

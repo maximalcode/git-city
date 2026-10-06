@@ -5,18 +5,14 @@ import { mkdtemp, rm, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import assert from 'node:assert/strict'
+import { waitForPackagedApply } from './smoke-package-apply.mjs'
 import {
-  applyHasReturned,
-  applyHasStarted,
   bestEffort,
-  capturePageEvidence,
-  capturePostApplyPublicState,
-  diagnosticDeadlines,
+  collectFailureDiagnostics,
   installMainSpawnDiagnostics,
   printProcessDiagnostics,
   readMainSpawnDiagnostics,
   snapshotRepo,
-  snapshotRetainedMetadata,
   writeDiagnostics
 } from './smoke-package-diagnostics.mjs'
 
@@ -41,7 +37,7 @@ git('commit', '-m', 'base')
 git('branch', 'topic')
 const expect = baseExpect.configure({ timeout: 90_000 })
 try {
-  // Start the actual packaged executable, twice with the same user profile.
+  // Restart the actual packaged executable with the same user profile.
   for (let restart = 0; restart < restarts; restart++) {
     git('checkout', 'topic')
     await writeFile(join(repo, 'file.txt'), `preview ${restart}\n`)
@@ -71,7 +67,7 @@ try {
     let app
     let page
     let failure
-    let diagnosticDeadline
+    let applyRequested = false
     let finalDiagnosticDeadline
     try {
       app = await electron.launch({
@@ -125,34 +121,25 @@ try {
       await expect(page.getByRole('button', { name: 'Cancel Apply', exact: true })).toBeFocused()
       await page.keyboard.press('Tab')
       await expect(page.getByRole('button', { name: 'Apply rehearsal', exact: true })).toBeFocused()
+      applyRequested = true
       await page.keyboard.press('Enter')
-      await expect(page.getByText('The checked rehearsal was applied.')).toBeVisible()
+      await waitForPackagedApply(page)
+      applyRequested = false
       assert.equal(git('rev-parse', 'HEAD'), target)
       assert.equal(await readFile(join(repo, 'file.txt'), 'utf8'), expectedFile)
       await writeDiagnostics(
         join(diagnosticsDir, 'post-apply-repo.json'),
         await snapshotRepo(repo, 'post-apply')
       )
-      try {
-        await writeDiagnostics(
-          join(diagnosticsDir, 'post-apply-public.json'),
-          await capturePostApplyPublicState(page, repo)
-        )
-      } catch (error) {
-        await writeDiagnostics(join(diagnosticsDir, 'post-apply-public-error.json'), {
-          error: error instanceof Error ? error.message : String(error)
-        })
-      }
       const binary = join(
         context.resources,
         'rehearse',
         context.platform === 'win32' ? 'git-rehearse.exe' : 'git-rehearse'
       )
-      if (!process.env.GIT_CITY_APPLY_PROBE)
-        execFileSync('python3', ['scripts/smoke-rehearse.py', binary], {
-          stdio: 'inherit',
-          timeout: 180_000
-        })
+      execFileSync('python3', ['scripts/smoke-rehearse.py', binary], {
+        stdio: 'inherit',
+        timeout: 180_000
+      })
       const license = join(context.resources, 'rehearse', 'LICENSE')
       const original = await readFile(license)
       try {
@@ -180,108 +167,17 @@ try {
       console.log(JSON.stringify({ ...context, restart, smoke: 'passed' }))
     } catch (error) {
       failure = error
-      const deadlines = diagnosticDeadlines(Date.now(), diagnosticsGraceMs)
-      const initialDeadline = deadlines.initialDeadline
-      diagnosticDeadline = deadlines.observationDeadline
-      finalDiagnosticDeadline = deadlines.finalDeadline
-      const errorDeadline = initialDeadline
-      const initialSafe = (operation, fallback) => bestEffort(operation, fallback, initialDeadline)
-      const safe = (operation, fallback) => bestEffort(operation, fallback, diagnosticDeadline)
-      const finalSafe = (operation, fallback) =>
-        bestEffort(operation, fallback, finalDiagnosticDeadline)
-      const emptyMainDiagnostics = {
-        installed: false,
-        installError: 'Diagnostics were unavailable.',
-        records: [],
-        ipcRecords: []
-      }
-      await bestEffort(
-        () =>
-          writeDiagnostics(join(diagnosticsDir, 'original-error.json'), {
-            name: error?.name,
-            message: error?.message,
-            stack: error?.stack,
-            graceMs: diagnosticsGraceMs
-          }),
-        undefined,
-        errorDeadline
-      )
-      let mainDiagnostics = await initialSafe(
-        () => readMainSpawnDiagnostics(app, initialDeadline),
-        emptyMainDiagnostics
-      )
-      await initialSafe(
-        () =>
-          writeDiagnostics(join(diagnosticsDir, 'original-timeout-apply-ipc.json'), {
-            main: mainDiagnostics
-          }),
-        undefined
-      )
-      await initialSafe(
-        async () =>
-          writeDiagnostics(
-            join(diagnosticsDir, 'original-timeout-repo.json'),
-            await snapshotRepo(repo, 'original-timeout')
-          ),
-        undefined
-      )
-      await initialSafe(
-        async () =>
-          writeDiagnostics(
-            join(diagnosticsDir, 'original-timeout-retained-metadata.json'),
-            await snapshotRetainedMetadata(profile, repo, 'original-timeout')
-          ),
-        undefined
-      )
-      await initialSafe(
-        () => capturePageEvidence(page, diagnosticsDir, 'original-timeout', initialDeadline),
-        undefined
-      )
-      if (applyHasStarted(mainDiagnostics)) {
-        while (Date.now() < diagnosticDeadline && !applyHasReturned(mainDiagnostics)) {
-          await new Promise((resolve) =>
-            setTimeout(resolve, Math.min(1_000, diagnosticDeadline - Date.now()))
-          )
-          mainDiagnostics = await safe(
-            () => readMainSpawnDiagnostics(app, diagnosticDeadline),
-            emptyMainDiagnostics
-          )
-        }
-      }
-      await finalSafe(
-        () => capturePageEvidence(page, diagnosticsDir, 'after-grace', finalDiagnosticDeadline),
-        undefined
-      )
-      await finalSafe(
-        async () =>
-          writeDiagnostics(
-            join(diagnosticsDir, 'after-grace-repo.json'),
-            await snapshotRepo(repo, 'after-grace')
-          ),
-        undefined
-      )
-      await finalSafe(
-        async () =>
-          writeDiagnostics(
-            join(diagnosticsDir, 'after-grace-retained-metadata.json'),
-            await snapshotRetainedMetadata(profile, repo, 'after-grace')
-          ),
-        undefined
-      )
-      await finalSafe(
-        () => writeDiagnostics(join(diagnosticsDir, 'after-grace-apply-ipc.json'), mainDiagnostics),
-        undefined
-      )
-      if (applyHasReturned(mainDiagnostics)) {
-        await finalSafe(
-          async () =>
-            writeDiagnostics(
-              join(diagnosticsDir, 'after-grace-public.json'),
-              await capturePostApplyPublicState(page, repo, finalDiagnosticDeadline)
-            ),
-          undefined
-        )
-      }
+      const diagnostics = await collectFailureDiagnostics({
+        app,
+        page,
+        repo,
+        profile,
+        directory: diagnosticsDir,
+        error,
+        graceMs: diagnosticsGraceMs,
+        applyRequested
+      })
+      finalDiagnosticDeadline = diagnostics.deadlines.finalDeadline
     } finally {
       if (app) {
         const finalDeadline = finalDiagnosticDeadline ?? Date.now() + 10_000

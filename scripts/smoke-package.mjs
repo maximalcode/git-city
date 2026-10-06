@@ -5,6 +5,7 @@ import { mkdtemp, rm, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import assert from 'node:assert/strict'
+import { waitForPackagedApply } from './smoke-package-apply.mjs'
 import {
   bestEffort,
   collectFailureDiagnostics,
@@ -130,7 +131,7 @@ try {
         for (let i = 0; i < count; i++) new Worker('while (true) {}', { eval: true })
         setTimeout(() => process.exit(0), 120_000)
       `], { stdio: 'inherit' })
-      await expect(page.getByText('The checked rehearsal was applied.')).toBeVisible()
+      await waitForPackagedApply(page)
       applyRequested = false
       assert.equal(git('rev-parse', 'HEAD'), target)
       assert.equal(await readFile(join(repo, 'file.txt'), 'utf8'), expectedFile)

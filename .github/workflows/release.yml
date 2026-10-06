@@ -84,6 +84,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: npm run tool:prepare -- ${{ matrix.platform }}-${{ matrix.arch }}
       - run: npm run typecheck && npm run lint && npm test
+      - name: Test rehearsal tool preparation
+        run: python3 -m unittest discover -s scripts -p 'test_*.py'
       - run: npm run build
       - name: Real-tool and Electron acceptance (Apple Silicon)
         if: matrix.platform == 'darwin' && matrix.arch == 'arm64'

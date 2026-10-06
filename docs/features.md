@@ -157,7 +157,7 @@ fly-to.
 
 ### Rehearse
 
-Git City bundles a compatible, integrity-checked git-rehearse tool for Windows x64,
+Git City v0.9.1 bundles published, integrity-checked git-rehearse v1.3.0 for Windows x64,
 Linux x64, Intel macOS and Apple Silicon. Merge, normal Rebase, the existing
 interactive Pick/Squash/Drop/reorder plan, and single Cherry-pick from Graph or
 commit details run in retained sandboxes. There is no separate installation.

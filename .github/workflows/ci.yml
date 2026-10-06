@@ -24,6 +24,10 @@ jobs:
           node-version: 22
           cache: npm
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
       - name: Install dependencies
         run: npm ci
 
@@ -35,6 +39,9 @@ jobs:
 
       - name: Test
         run: npm test
+
+      - name: Test rehearsal tool preparation
+        run: python3 -m unittest discover -s scripts -p 'test_*.py'
 
   # Windows is a shipped target, and its filesystem rules are different enough
   # (no `"` in a name, 260-character paths) that the suite can fail there while

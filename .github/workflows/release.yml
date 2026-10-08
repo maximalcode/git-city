@@ -62,6 +62,7 @@ jobs:
           GIT_CITY_185_TRACE: ${{ runner.temp }}/git-city-185-foreground-${{ matrix.replicate }}.jsonl
           GIT_CITY_185_STRESS_WORKERS: 2
           GIT_CITY_185_SCENARIO: open-repo
+          GIT_CITY_185_STOP_WATCH: 1
         run: node scripts/diagnostics/185/stress-packaged-harness.mjs "dist/win-unpacked/GitCity.exe"
 
       - name: 'Run bundled CLI baseline after packaged smoke'

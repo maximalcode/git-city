@@ -3,7 +3,7 @@
 // or Apply in the UI. This isolates the open-repository plus CLI path; it is
 // not a replacement for scripts/smoke-package.mjs or release coverage.
 import { expect as baseExpect, _electron as electron } from '@playwright/test'
-import { execFileSync } from 'node:child_process'
+import { execFileSync, spawn } from 'node:child_process'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { dirname, join, resolve } from 'node:path'
@@ -21,6 +21,34 @@ import {
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
 const executableArgument = process.argv[2]
+
+const runAsyncCli = (binary) =>
+  new Promise((resolveRun, rejectRun) => {
+    const child = spawn('python3', ['scripts/smoke-rehearse.py', binary], {
+      stdio: 'inherit',
+      timeout: 180_000
+    })
+    let settled = false
+    child.once('error', (error) => {
+      if (settled) return
+      settled = true
+      rejectRun(error)
+    })
+    child.once('close', (status, signal) => {
+      if (settled) return
+      settled = true
+      if (status === 0) {
+        resolveRun()
+        return
+      }
+      const error = new Error(
+        `python3 smoke-rehearse exited with status ${status ?? 'null'} and signal ${signal ?? 'null'}`
+      )
+      error.status = status
+      error.signal = signal
+      rejectRun(error)
+    })
+  })
 
 if (!executableArgument) {
   console.error('[DEBUG-185] usage: node scripts/diagnostics/185/open-repo-harness.mjs <binary>')
@@ -97,17 +125,33 @@ if (!executableArgument) {
     await expect(page.getByRole('combobox', { name: /Rehearse mode/ })).toHaveValue('automatic')
     const done = page.getByRole('button', { name: 'Done', exact: true })
     if (await done.isVisible()) await done.click()
+    if (process.env.GIT_CITY_185_STOP_WATCH === '1') {
+      await page.evaluate(() => window.gitCity.watchStop())
+      console.error('[DEBUG-185] repository watcher stopped before Python smoke')
+    }
 
     const binary = join(
       appContext.resources,
       'rehearse',
       appContext.platform === 'win32' ? 'git-rehearse.exe' : 'git-rehearse'
     )
-    execFileSync('python3', ['scripts/smoke-rehearse.py', binary], {
-      stdio: 'inherit',
-      timeout: 180_000
-    })
-    console.log(JSON.stringify({ ...appContext, mode: 'open-repo', smoke: 'passed' }))
+    const useAsyncCli = process.env.GIT_CITY_185_ASYNC_CLI === '1'
+    if (useAsyncCli) {
+      await runAsyncCli(binary)
+    } else {
+      execFileSync('python3', ['scripts/smoke-rehearse.py', binary], {
+        stdio: 'inherit',
+        timeout: 180_000
+      })
+    }
+    console.log(
+      JSON.stringify({
+        ...appContext,
+        mode: 'open-repo',
+        smoke: 'passed',
+        cliDriver: useAsyncCli ? 'async-spawn' : 'sync-execFileSync'
+      })
+    )
   } catch (error) {
     failure = error
     const diagnosticsDeadline = Date.now() + diagnosticsGraceMs + 10_000

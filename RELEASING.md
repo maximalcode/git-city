@@ -4,6 +4,16 @@ Installers are built in CI by the [`Release`](.github/workflows/release.yml) wor
 `.exe` on `windows-latest`, native DMGs on `macos-latest` (arm64) and
 `macos-15-intel` (x64), and an AppImage + `.deb` on `ubuntu-latest`.
 
+## v0.9.2 preparation
+
+This preparation tracks [#187](https://github.com/maximalcode/git-city/issues/187). It includes
+the watcher fix from [#186](https://github.com/maximalcode/git-city/pull/186), which fixed
+[#185](https://github.com/maximalcode/git-city/issues/185): a transient top-level
+`.git/index.lock` created during a background status read was treated as a refs change and could
+start an endless repository refresh loop. Lock-file events are now ignored while real `HEAD`,
+index, refs and worktree changes still refresh the UI. The version metadata is prepared here;
+publishing and tagging happen only after the release is promoted to `main`.
+
 ## Cut a release
 
 1. **Bump the version** in [`package.json`](package.json) and both root version fields in
@@ -121,7 +131,7 @@ Before a local `dist:*` build, run `npm run tool:prepare` (requires authenticate
 `gh` and Python 3.10+). Pass a target such as `-- darwin-arm64` to prepare one target.
 The build fails if any selected architecture lacks the exact executable and MIT
 license checksums in `rehearse-toolchain.json`. No PATH tool or latest release is
-accepted. Git City v0.9.1 pins the published
+accepted. Git City v0.9.2 pins the published
 [git-rehearse v1.3.0 release](https://github.com/maximalcode/git-rehearse/releases/tag/v1.3.0),
 including its tag, source revision and exact archive names. Preparation downloads those
 release assets and verifies each archive before extracting files, then verifies the

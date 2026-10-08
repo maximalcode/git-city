@@ -44,6 +44,9 @@ export class RepoWatcher {
     add(
       watch(gitDir, (_e, filename) => {
         const name = filename == null ? '' : String(filename)
+        // Background `git status` can refresh the index through a transient
+        // `index.lock`; reporting it as refs starts a status-refresh loop.
+        if (name.endsWith('.lock')) return
         if (name === 'HEAD') this.queue('head')
         else if (name === 'index') this.queue('index')
         else this.queue('refs') // MERGE_HEAD, packed-refs, ORIG_HEAD, rebase dirs, …

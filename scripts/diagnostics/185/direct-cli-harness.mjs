@@ -28,7 +28,9 @@ if (!binaryArgument) {
         debug: '185',
         status: 'failed',
         durationMs,
-        timedOut: error?.code === 'ETIMEDOUT' || error?.signal === 'SIGTERM',
+        code: error?.code ?? null,
+        signal: error?.signal ?? null,
+        timedOut: error?.code === 'ETIMEDOUT',
         exitCode: error?.status ?? null
       })
     )

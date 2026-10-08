@@ -1,144 +1,62 @@
-name: Release
+name: 'Windows smoke diagnostics #185'
 
-# Builds the installers for every supported platform: an NSIS .exe on
-# windows-latest, native Intel/Apple Silicon macOS DMGs, and AppImage + deb
-# on ubuntu-latest. PRs build and smoke-test without publishing.
-#   - Push a tag  v*  ->  builds AND publishes a GitHub Release with every
-#     installer attached.
-#   - "Run workflow" button (workflow_dispatch)  ->  builds only, uploads the
-#     installers as run artifacts so you can grab them without cutting a
-#     release (a dry run).
-#
-# To cut a real release:  bump "version" in package.json, commit, then:
-#     git tag v1.0.0 && git push origin v1.0.0
-# The build jobs refuse to run if the tag (v1.0.0) and package.json version
-# (1.0.0) disagree.
-#
-# The build jobs never touch the Release themselves — they only publish
-# artifacts, and a final job collects those into one Release. That way the
-# platforms cannot race each other to create it.
+# Temporary diagnostic workflow for Git City #185. This branch intentionally
+# runs only the native Windows packaged smoke twice and never publishes a
+# release. Restore the normal release workflow after the timing evidence is
+# collected.
 
 on:
-  push:
-    tags:
-      - 'v*'
-  pull_request:
-    branches: [develop, main]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
-  package:
-    name: package (${{ matrix.platform }}-${{ matrix.arch }})
+  windows-smoke:
+    name: 'windows smoke (replicate ${{ matrix.replicate }})'
+    runs-on: windows-latest
+    timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: windows-latest
-            platform: win32
-            arch: x64
-            build: win
-            targets: nsis
-            executable: dist/win-unpacked/GitCity.exe
-            artifact: dist/*-setup.exe
-          - os: macos-latest
-            platform: darwin
-            arch: arm64
-            build: mac
-            targets: dmg
-            executable: dist/mac-arm64/Git City.app/Contents/MacOS/Git City
-            artifact: dist/*.dmg
-          - os: macos-15-intel
-            platform: darwin
-            arch: x64
-            build: mac
-            targets: dmg
-            executable: dist/mac/Git City.app/Contents/MacOS/Git City
-            artifact: dist/*.dmg
-          - os: ubuntu-latest
-            platform: linux
-            arch: x64
-            build: linux
-            targets: AppImage deb
-            executable: dist/linux-unpacked/git-city
-            artifact: |
-              dist/*.AppImage
-              dist/*.deb
-    runs-on: ${{ matrix.os }}
+        replicate: [1, 2]
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
+
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+
       - run: npm ci
-      - name: Verify tag matches package.json version
-        if: startsWith(github.ref, 'refs/tags/v')
-        shell: bash
-        run: |
-          test "${GITHUB_REF_NAME#v}" = "$(node -p "require('./package.json').version")"
-      - name: Prepare pinned and checksummed tool
+
+      - name: Prepare pinned Rehearse tool
         env:
           GH_TOKEN: ${{ github.token }}
-        run: npm run tool:prepare -- ${{ matrix.platform }}-${{ matrix.arch }}
-      - run: npm run typecheck && npm run lint && npm test
-      - name: Test rehearsal tool preparation
-        run: python3 -m unittest discover -s scripts -p 'test_*.py'
+        run: npm run tool:prepare -- win32-x64
+
       - run: npm run build
-      - name: Real-tool and Electron acceptance (Apple Silicon)
-        if: matrix.platform == 'darwin' && matrix.arch == 'arm64'
+
+      - name: Build unpacked Windows package
+        run: npx electron-builder --win --x64 --dir --publish never
+
+      - name: 'Run original packaged smoke with #185 Python trace'
         env:
-          GIT_CITY_REHEARSE_BIN: ${{ github.workspace }}/build/rehearse/darwin-arm64/git-rehearse
-        run: |
-          npm test
-          npx playwright test -c playwright.rehearsal.config.ts
-      - name: Preserve Electron failure evidence
-        if: failure() && matrix.platform == 'darwin' && matrix.arch == 'arm64'
-        uses: actions/upload-artifact@v4
-        with:
-          name: rehearsal-acceptance-failures
-          path: test-results/
-          if-no-files-found: ignore
-      # Explicit targets override the dual-architecture local macOS default.
-      - run: npx electron-builder --${{ matrix.build }} ${{ matrix.targets }} --${{ matrix.arch }} --publish never
-      - name: Packaged application and upgrade smoke (Linux)
-        if: runner.os == 'Linux'
-        run: xvfb-run -a node scripts/smoke-package.mjs "${{ matrix.executable }}"
-      - name: Packaged application and upgrade smoke
-        if: runner.os != 'Linux'
-        run: node scripts/smoke-package.mjs "${{ matrix.executable }}"
-      - name: Preserve packaged smoke evidence
+          PYTHONPATH: ${{ github.workspace }}/scripts/diagnostics/185
+          GIT_CITY_185_TRACE: ${{ runner.temp }}/git-city-185-${{ matrix.replicate }}.jsonl
+          GIT_CITY_SMOKE_RESTARTS: 3
+        run: node scripts/smoke-package.mjs "dist/win-unpacked/GitCity.exe"
+
+      - name: 'Upload #185 trace and packaged smoke evidence'
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: package-smoke-${{ matrix.platform }}-${{ matrix.arch }}
-          path: test-results/package-smoke/
+          name: windows-smoke-185-${{ matrix.replicate }}
+          path: |
+            ${{ runner.temp }}/git-city-185-${{ matrix.replicate }}.jsonl
+            test-results/package-smoke/
           if-no-files-found: ignore
-      - uses: actions/upload-artifact@v4
-        with:
-          name: installer-${{ matrix.platform }}-${{ matrix.arch }}
-          path: ${{ matrix.artifact }}
-          if-no-files-found: error
-
-  # Only on a version tag: collect every platform's artifact into a single
-  # Release with auto-generated notes.
-  publish:
-    needs: package
-    if: startsWith(github.ref, 'refs/tags/v')
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - name: Download installers
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-          pattern: installer-*
-
-      - name: Publish GitHub Release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-        run: gh release create "$GITHUB_REF_NAME" artifacts/*/* --title "$GITHUB_REF_NAME" --generate-notes

@@ -46,6 +46,7 @@ jobs:
       # Match the release workflow's NSIS target; the unpacked output is used
       # for launch while preserving the normal packaging path.
       - name: Build unpacked Windows package
+        id: package
         run: npx electron-builder --win nsis --x64 --publish never
 
       - name: 'Run bundled CLI baseline before packaged smoke'
@@ -54,12 +55,13 @@ jobs:
           GIT_CITY_185_TRACE: ${{ runner.temp }}/git-city-185-pre-${{ matrix.replicate }}.jsonl
         run: node scripts/diagnostics/185/direct-cli-harness.mjs "dist/win-unpacked/resources/rehearse/git-rehearse.exe"
 
-      - name: 'Run original packaged smoke with #185 Python trace'
+      - name: 'Run stressed packaged smoke with #185 Python trace'
+        if: ${{ !cancelled() && steps.package.outcome == 'success' }}
         env:
           PYTHONPATH: ${{ github.workspace }}/scripts/diagnostics/185
-          GIT_CITY_185_TRACE: ${{ runner.temp }}/git-city-185-packaged-${{ matrix.replicate }}.jsonl
-          GIT_CITY_SMOKE_RESTARTS: 3
-        run: node scripts/smoke-package.mjs "dist/win-unpacked/GitCity.exe"
+          GIT_CITY_185_TRACE: ${{ runner.temp }}/git-city-185-foreground-${{ matrix.replicate }}.jsonl
+          GIT_CITY_SMOKE_RESTARTS: 1
+        run: node scripts/diagnostics/185/stress-packaged-harness.mjs "dist/win-unpacked/GitCity.exe"
 
       - name: 'Run bundled CLI baseline after packaged smoke'
         if: always() && matrix.scenario == 'packaged'
@@ -83,7 +85,7 @@ jobs:
           name: windows-smoke-185-${{ matrix.scenario }}-${{ matrix.replicate }}
           path: |
             ${{ runner.temp }}/git-city-185-pre-${{ matrix.replicate }}.jsonl
-            ${{ runner.temp }}/git-city-185-packaged-${{ matrix.replicate }}.jsonl
+            ${{ runner.temp }}/git-city-185-foreground-${{ matrix.replicate }}.jsonl
             ${{ runner.temp }}/git-city-185-post-${{ matrix.replicate }}.jsonl
             test-results/package-smoke/
           if-no-files-found: ignore

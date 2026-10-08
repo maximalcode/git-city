@@ -59,17 +59,33 @@ def _command_label(args):
     return executable or 'unknown'
 
 
+def _stderr(message):
+    for stream in (sys.stderr, getattr(sys, '__stderr__', None)):
+        if stream is None:
+            continue
+        try:
+            stream.write(message + '\n')
+            stream.flush()
+            return
+        except Exception:
+            continue
+
+
 def _emit(event):
     trace = os.environ.get('GIT_CITY_185_TRACE')
     if not trace:
         return
-    line = json.dumps(event, separators=(',', ':'))
-    path = Path(trace)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open('a', encoding='utf-8') as output:
-        output.write(line + '\n')
-        output.flush()
-    print(f'[DEBUG-185] {line}', file=sys.stderr, flush=True)
+    try:
+        line = json.dumps(event, separators=(',', ':'))
+        path = Path(trace)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open('a', encoding='utf-8') as output:
+            output.write(line + '\n')
+            output.flush()
+    except Exception as error:
+        _stderr(f'[DEBUG-185] trace incomplete: file write {type(error).__name__}')
+        return
+    _stderr(f'[DEBUG-185] {line}')
 
 
 def _traced_run(*args, **kwargs):
@@ -139,4 +155,5 @@ def _traced_run(*args, **kwargs):
         return result
 
 
-subprocess.run = _traced_run
+if os.environ.get('GIT_CITY_185_TRACE'):
+    subprocess.run = _traced_run

@@ -79,6 +79,11 @@ date.
 changed file to stage, unstage or discard single hunks. Click individual changed
 lines to stage, unstage or discard just those. It is `git add -p`, made visual.
 
+**Live repository refresh.** External worktree edits and changes to the index,
+`HEAD` or refs refresh the app automatically. Temporary lock files in the top-level
+`.git` directory, such as `.git/index.lock` during a status read, are ignored so
+they cannot start a refresh loop.
+
 **Commit**, with amend, and a _Sign_ toggle that defaults to the repository's
 `commit.gpgsign`. Commits carry a verified or unverified badge. Keys stay with
 gpg-agent or ssh-agent and are never handled by the app.
@@ -157,7 +162,7 @@ fly-to.
 
 ### Rehearse
 
-Git City v0.9.1 bundles published, integrity-checked git-rehearse v1.3.0 for Windows x64,
+Git City v0.9.2 bundles published, integrity-checked git-rehearse v1.3.0 for Windows x64,
 Linux x64, Intel macOS and Apple Silicon. Merge, normal Rebase, the existing
 interactive Pick/Squash/Drop/reorder plan, and single Cherry-pick from Graph or
 commit details run in retained sandboxes. There is no separate installation.

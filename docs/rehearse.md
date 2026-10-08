@@ -5,7 +5,7 @@ retained sandbox. Review the result, resolve conflicts there, then explicitly
 confirm **Apply** to adopt the reviewed result in the original worktree.
 A clean Git result is not proof that the resulting code is correct.
 
-Git City v0.9.1 includes git-rehearse v1.3.0; no separate installation is needed.
+Git City v0.9.2 includes git-rehearse v1.3.0; no separate installation is needed.
 Missing or damaged tools require repairing or reinstalling the app.
 See [acceptance evidence](rehearsal-acceptance.md) and [development setup](rehearsal-development.md).
 

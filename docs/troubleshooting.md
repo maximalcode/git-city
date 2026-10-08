@@ -71,6 +71,14 @@ a monorepo genuinely takes minutes (measured: 14,271 commits → about 130
 seconds). Above roughly 20,000 files you get a warning with the real numbers and
 a way out before the wait starts.
 
+## The repository keeps refreshing itself
+
+If Git City repeatedly refreshes after a Git operation, update to v0.9.2. A transient top-level
+`.git/index.lock` created during a background status read could previously be treated as a refs
+change and start a refresh loop ([#185](https://github.com/maximalcode/git-city/issues/185), fixed
+in [#186](https://github.com/maximalcode/git-city/pull/186)). Real `HEAD`, index, refs and
+worktree changes still refresh the UI.
+
 ## "20,000 of 81,368 files" in the top bar
 
 Not a bug — the scene is showing a subset, and that chip is Git City telling you

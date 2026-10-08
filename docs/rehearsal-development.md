@@ -5,7 +5,7 @@ see the [Rehearse guide](rehearse.md). Packaged applications expose the same
 workflow and include their compatible tool. Source builds require an explicit
 absolute `GIT_CITY_REHEARSE_BIN`; they never search PATH or download a tool.
 Both the development renderer and `npm start` support these source builds.
-Git City v0.9.1 requires git-rehearse v1.3.0; re-run preparation and update any
+Git City v0.9.2 requires git-rehearse v1.3.0; re-run preparation and update any
 explicit development override when upgrading from the earlier test build.
 
 ## Pinned toolchain

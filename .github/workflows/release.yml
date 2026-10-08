@@ -60,7 +60,7 @@ jobs:
         env:
           PYTHONPATH: ${{ github.workspace }}/scripts/diagnostics/185
           GIT_CITY_185_TRACE: ${{ runner.temp }}/git-city-185-foreground-${{ matrix.replicate }}.jsonl
-          GIT_CITY_SMOKE_RESTARTS: 1
+          GIT_CITY_SMOKE_RESTARTS: 2
         run: node scripts/diagnostics/185/stress-packaged-harness.mjs "dist/win-unpacked/GitCity.exe"
 
       - name: 'Run bundled CLI baseline after packaged smoke'

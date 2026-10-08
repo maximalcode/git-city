@@ -1,9 +1,8 @@
 name: 'Windows smoke diagnostics #185'
 
 # Temporary diagnostic workflow for Git City #185. This branch intentionally
-# runs only the native Windows packaged diagnostic twice and never publishes a
-# release. Restore the normal release workflow after timing evidence is
-# collected.
+# validates the fixed original smoke under normal and stressed native Windows
+# conditions. Restore the normal release workflow after validation.
 
 on:
   workflow_dispatch:
@@ -19,8 +18,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        scenario: [open-repo]
-        replicate: [1, 2]
+        include:
+          - scenario: original
+            replicate: 1
+          - scenario: stressed
+            replicate: 1
+          - scenario: stressed
+            replicate: 2
     steps:
       - uses: actions/checkout@v4
 
@@ -34,6 +38,9 @@ jobs:
           python-version: '3.12'
 
       - run: npm ci
+
+      - name: Check watcher and status regression tests on native Windows
+        run: npx --no-install vitest run src/main/git/watcher.test.ts src/main/git/status.test.ts
 
       - name: Prepare pinned Rehearse tool
         env:
@@ -55,18 +62,25 @@ jobs:
           GIT_CITY_185_TRACE: ${{ runner.temp }}/git-city-185-pre-${{ matrix.replicate }}.jsonl
         run: node scripts/diagnostics/185/direct-cli-harness.mjs "dist/win-unpacked/resources/rehearse/git-rehearse.exe"
 
-      - name: 'Run minimal open-repository smoke with #185 Python trace'
-        if: ${{ !cancelled() && steps.package.outcome == 'success' }}
+      - name: 'Run original packaged smoke with #185 Python trace'
+        if: ${{ !cancelled() && steps.package.outcome == 'success' && matrix.scenario == 'original' }}
+        env:
+          PYTHONPATH: ${{ github.workspace }}/scripts/diagnostics/185
+          GIT_CITY_185_TRACE: ${{ runner.temp }}/git-city-185-foreground-${{ matrix.replicate }}.jsonl
+          GIT_CITY_SMOKE_RESTARTS: 2
+        run: node scripts/smoke-package.mjs "dist/win-unpacked/GitCity.exe"
+
+      - name: 'Run original packaged smoke under reproducing CPU load'
+        if: ${{ !cancelled() && steps.package.outcome == 'success' && matrix.scenario == 'stressed' }}
         env:
           PYTHONPATH: ${{ github.workspace }}/scripts/diagnostics/185
           GIT_CITY_185_TRACE: ${{ runner.temp }}/git-city-185-foreground-${{ matrix.replicate }}.jsonl
           GIT_CITY_185_STRESS_WORKERS: 2
-          GIT_CITY_185_SCENARIO: open-repo
-          GIT_CITY_185_STOP_WATCH: 1
+          GIT_CITY_SMOKE_RESTARTS: 2
         run: node scripts/diagnostics/185/stress-packaged-harness.mjs "dist/win-unpacked/GitCity.exe"
 
       - name: 'Run bundled CLI baseline after packaged smoke'
-        if: always() && matrix.scenario == 'open-repo'
+        if: always()
         env:
           PYTHONPATH: ${{ github.workspace }}/scripts/diagnostics/185
           GIT_CITY_185_TRACE: ${{ runner.temp }}/git-city-185-post-${{ matrix.replicate }}.jsonl

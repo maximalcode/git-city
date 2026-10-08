@@ -10,8 +10,9 @@ This preparation tracks [#187](https://github.com/maximalcode/git-city/issues/18
 the watcher fix from [#186](https://github.com/maximalcode/git-city/pull/186), which fixed
 [#185](https://github.com/maximalcode/git-city/issues/185): a transient top-level
 `.git/index.lock` created during a background status read was treated as a refs change and could
-start an endless repository refresh loop. Lock-file events are now ignored while real `HEAD`,
-index, refs and worktree changes still refresh the UI. The version metadata is prepared here;
+start an endless repository refresh loop. Temporary lock-file events in the top-level Git
+directory are now ignored while real `HEAD`, index, refs and worktree changes still refresh the UI.
+The version metadata is prepared here;
 publishing and tagging happen only after the release is promoted to `main`.
 
 ## Cut a release

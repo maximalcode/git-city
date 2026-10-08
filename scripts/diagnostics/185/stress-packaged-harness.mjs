@@ -1,6 +1,7 @@
-// Temporary #185 stress harness. It runs the unchanged packaged smoke as the
-// foreground child and adds bounded CPU pressure only after Python tracing
-// proves that the CLI stage has started. This is a stress test, not a cause.
+// Temporary #185 stress harness. It runs an unchanged packaged or CLI-only
+// diagnostic as the foreground child and adds bounded CPU pressure only after
+// Python tracing proves that the CLI stage has started. This is a stress test,
+// not a cause.
 import { spawn } from 'node:child_process'
 import { readFile } from 'node:fs/promises'
 import { availableParallelism } from 'node:os'
@@ -35,10 +36,11 @@ if (!isMainThread) {
   const root = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
   const binaryArgument = process.argv[2]
   const tracePath = process.env.GIT_CITY_185_TRACE
+  const scenario = process.env.GIT_CITY_185_SCENARIO ?? 'packaged'
 
-  if (!binaryArgument || !tracePath) {
+  if (!binaryArgument || !tracePath || !['packaged', 'cli-only'].includes(scenario)) {
     console.error(
-      '[DEBUG-185] usage: GIT_CITY_185_TRACE=<trace> node scripts/diagnostics/185/stress-packaged-harness.mjs <binary>'
+      '[DEBUG-185] usage: GIT_CITY_185_TRACE=<trace> [GIT_CITY_185_SCENARIO=packaged|cli-only] node scripts/diagnostics/185/stress-packaged-harness.mjs <binary>'
     )
     process.exitCode = 2
   } else {
@@ -166,7 +168,11 @@ if (!isMainThread) {
       }
     }
     const childExit = new Promise((resolveExit) => {
-      child = spawn(process.execPath, ['scripts/smoke-package.mjs', binary], {
+      const foregroundScript =
+        scenario === 'cli-only'
+          ? 'scripts/diagnostics/185/direct-cli-harness.mjs'
+          : 'scripts/smoke-package.mjs'
+      child = spawn(process.execPath, [foregroundScript, binary], {
         stdio: 'inherit'
       })
       child.once('error', (error) => resolveExit({ status: null, signal: null, error }))
@@ -193,6 +199,7 @@ if (!isMainThread) {
     log({
       event: 'foreground-exit',
       timestamp: new Date().toISOString(),
+      scenario,
       status: childResult.status,
       signal: childResult.signal,
       error: childResult.error?.code ?? null,

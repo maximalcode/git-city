@@ -1,7 +1,7 @@
 name: 'Windows smoke diagnostics #185'
 
 # Temporary diagnostic workflow for Git City #185. This branch intentionally
-# runs only the native Windows packaged smoke twice and never publishes a
+# runs only the native Windows CLI-only diagnostic twice and never publishes a
 # release. Restore the normal release workflow after timing evidence is
 # collected.
 
@@ -19,7 +19,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        scenario: [packaged]
+        scenario: [cli-only]
         replicate: [1, 2]
     steps:
       - uses: actions/checkout@v4
@@ -55,16 +55,16 @@ jobs:
           GIT_CITY_185_TRACE: ${{ runner.temp }}/git-city-185-pre-${{ matrix.replicate }}.jsonl
         run: node scripts/diagnostics/185/direct-cli-harness.mjs "dist/win-unpacked/resources/rehearse/git-rehearse.exe"
 
-      - name: 'Run stressed packaged smoke with #185 Python trace'
+      - name: 'Run stressed CLI-only diagnostic with #185 Python trace'
         if: ${{ !cancelled() && steps.package.outcome == 'success' }}
         env:
           PYTHONPATH: ${{ github.workspace }}/scripts/diagnostics/185
           GIT_CITY_185_TRACE: ${{ runner.temp }}/git-city-185-foreground-${{ matrix.replicate }}.jsonl
-          GIT_CITY_SMOKE_RESTARTS: 2
-        run: node scripts/diagnostics/185/stress-packaged-harness.mjs "dist/win-unpacked/GitCity.exe"
+          GIT_CITY_185_SCENARIO: cli-only
+        run: node scripts/diagnostics/185/stress-packaged-harness.mjs "dist/win-unpacked/resources/rehearse/git-rehearse.exe"
 
       - name: 'Run bundled CLI baseline after packaged smoke'
-        if: always() && matrix.scenario == 'packaged'
+        if: always() && matrix.scenario == 'cli-only'
         env:
           PYTHONPATH: ${{ github.workspace }}/scripts/diagnostics/185
           GIT_CITY_185_TRACE: ${{ runner.temp }}/git-city-185-post-${{ matrix.replicate }}.jsonl

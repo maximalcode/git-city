@@ -1,7 +1,7 @@
-// Temporary #185 stress harness. It runs an unchanged packaged or CLI-only
-// diagnostic as the foreground child and adds bounded CPU pressure only after
-// Python tracing proves that the CLI stage has started. This is a stress test,
-// not a cause.
+// Temporary #185 stress harness. It runs an unchanged packaged, CLI-only, or
+// open-repository diagnostic as the foreground child and adds bounded CPU
+// pressure only after Python tracing proves that the CLI stage has started.
+// This is a stress test, not a cause.
 import { spawn } from 'node:child_process'
 import { readFile } from 'node:fs/promises'
 import { availableParallelism } from 'node:os'
@@ -38,9 +38,9 @@ if (!isMainThread) {
   const tracePath = process.env.GIT_CITY_185_TRACE
   const scenario = process.env.GIT_CITY_185_SCENARIO ?? 'packaged'
 
-  if (!binaryArgument || !tracePath || !['packaged', 'cli-only'].includes(scenario)) {
+  if (!binaryArgument || !tracePath || !['packaged', 'cli-only', 'open-repo'].includes(scenario)) {
     console.error(
-      '[DEBUG-185] usage: GIT_CITY_185_TRACE=<trace> [GIT_CITY_185_SCENARIO=packaged|cli-only] node scripts/diagnostics/185/stress-packaged-harness.mjs <binary>'
+      '[DEBUG-185] usage: GIT_CITY_185_TRACE=<trace> [GIT_CITY_185_SCENARIO=packaged|cli-only|open-repo] node scripts/diagnostics/185/stress-packaged-harness.mjs <binary>'
     )
     process.exitCode = 2
   } else {
@@ -171,7 +171,9 @@ if (!isMainThread) {
       const foregroundScript =
         scenario === 'cli-only'
           ? 'scripts/diagnostics/185/direct-cli-harness.mjs'
-          : 'scripts/smoke-package.mjs'
+          : scenario === 'open-repo'
+            ? 'scripts/diagnostics/185/open-repo-harness.mjs'
+            : 'scripts/smoke-package.mjs'
       child = spawn(process.execPath, [foregroundScript, binary], {
         stdio: 'inherit'
       })

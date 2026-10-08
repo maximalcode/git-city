@@ -19,7 +19,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        scenario: [packaged]
+        scenario: [open-repo]
         replicate: [1, 2]
     steps:
       - uses: actions/checkout@v4
@@ -55,17 +55,17 @@ jobs:
           GIT_CITY_185_TRACE: ${{ runner.temp }}/git-city-185-pre-${{ matrix.replicate }}.jsonl
         run: node scripts/diagnostics/185/direct-cli-harness.mjs "dist/win-unpacked/resources/rehearse/git-rehearse.exe"
 
-      - name: 'Run stressed packaged smoke with #185 Python trace'
+      - name: 'Run minimal open-repository smoke with #185 Python trace'
         if: ${{ !cancelled() && steps.package.outcome == 'success' }}
         env:
           PYTHONPATH: ${{ github.workspace }}/scripts/diagnostics/185
           GIT_CITY_185_TRACE: ${{ runner.temp }}/git-city-185-foreground-${{ matrix.replicate }}.jsonl
           GIT_CITY_185_STRESS_WORKERS: 2
-          GIT_CITY_SMOKE_RESTARTS: 2
+          GIT_CITY_185_SCENARIO: open-repo
         run: node scripts/diagnostics/185/stress-packaged-harness.mjs "dist/win-unpacked/GitCity.exe"
 
       - name: 'Run bundled CLI baseline after packaged smoke'
-        if: always() && matrix.scenario == 'packaged'
+        if: always() && matrix.scenario == 'open-repo'
         env:
           PYTHONPATH: ${{ github.workspace }}/scripts/diagnostics/185
           GIT_CITY_185_TRACE: ${{ runner.temp }}/git-city-185-post-${{ matrix.replicate }}.jsonl

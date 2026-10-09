@@ -136,7 +136,14 @@ so refresh before trying again. The original worktree remains unchanged.
 **Apply** opens a confirmation naming the original worktree, action, checkout,
 branch changes and tracked local work. Review it, then choose **Apply rehearsal**.
 The backend rechecks the checkout, refs, index, local files and other worktrees.
-It adopts the reviewed commit objects rather than rerunning the original action.
+It adopts retained commit objects rather than rerunning the original action.
+
+The current bundle is git-rehearse v1.3.0. It does not accept an expected reviewed
+result revision: a separate CLI operation can change the retained result between
+review and Apply. Strict result binding is still pending
+[the compatible tool release](https://github.com/maximalcode/git-rehearse/issues/119)
+and [Git City's integration](https://github.com/maximalcode/git-city/issues/200).
+An app-side recheck is not a substitute for that contract.
 
 Tracked local changes are replayed in the sandbox and can themselves conflict.
 After Apply, carried edits are unstaged: the original staging selection is not

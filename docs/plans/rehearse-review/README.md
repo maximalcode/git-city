@@ -6,6 +6,14 @@ GitHub planning/spec issue: https://github.com/maximalcode/git-city/issues/195.
 
 The owner approved this independently reviewed plan. Implementation uses the published GitHub issues and their native blocking edges; the upstream release gate remains unresolved until compatible artifacts exist.
 
+Implementation is in progress in isolated integration branches. The tool contract
+is proposed in [git-rehearse PR #120](https://github.com/maximalcode/git-rehearse/pull/120).
+Git City's independent R1–R6 slices are being validated here. R7 and complete
+cross-repository acceptance remain blocked by #119: the authorized upstream
+merge/release, exact source revision, four platform artifacts with archive and
+executable checksums, and retained-data upgrade evidence. No release or merge is
+part of this implementation handoff.
+
 ## Approved product choices
 
 1. Implement the connected local review workspace and necessary draft/conflict/status protections. Leave the wider 22-item backlog outside this package.

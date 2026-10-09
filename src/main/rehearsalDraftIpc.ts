@@ -1,5 +1,6 @@
 import { app } from 'electron'
 import { join } from 'path'
+import { withRehearsal } from './rehearsalConflicts'
 import type {
   RehearsalDraftDiscardResult,
   RehearsalDraftPayload,
@@ -95,7 +96,10 @@ export function rehearsalDraftWrite(
   expectedDraftRevision: number | null
 ): Promise<RehearsalDraftWriteResult> {
   return tracked(
-    () => writeRehearsalDraft(draftFile(), identity, path, payload, expectedDraftRevision),
+    () =>
+      withRehearsal(identity, () =>
+        writeRehearsalDraft(draftFile(), identity, path, payload, expectedDraftRevision)
+      ),
     pendingKey(identity, path),
     true
   )
@@ -107,7 +111,10 @@ export function rehearsalDraftDiscard(
   expectedDraftRevision: number | null
 ): Promise<RehearsalDraftDiscardResult> {
   return tracked(
-    () => discardRehearsalDraft(draftFile(), identity, path, expectedDraftRevision),
+    () =>
+      withRehearsal(identity, () =>
+        discardRehearsalDraft(draftFile(), identity, path, expectedDraftRevision)
+      ),
     pendingKey(identity, path),
     true
   )

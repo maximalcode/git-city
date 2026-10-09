@@ -115,14 +115,12 @@ export function registerIpc(): void {
   ipcMain.handle(
     'git-city:rehearsal-draft-write',
     (_event, identity, path, payload, expectedDraftRevision) =>
-      withRehearsal(identity, () =>
-        rehearsalDraftWrite(identity, path, payload, expectedDraftRevision)
-      )
+      rehearsalDraftWrite(identity, path, payload, expectedDraftRevision)
   )
   ipcMain.handle(
     'git-city:rehearsal-draft-discard',
     (_event, identity, path, expectedDraftRevision) =>
-      withRehearsal(identity, () => rehearsalDraftDiscard(identity, path, expectedDraftRevision))
+      rehearsalDraftDiscard(identity, path, expectedDraftRevision)
   )
   ipcMain.handle('git-city:rehearsal-continue', (_event, identity: RehearsalReport) =>
     continueRehearsal(rehearsalTool(), identity, async () => {

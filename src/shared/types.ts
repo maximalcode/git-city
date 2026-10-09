@@ -605,8 +605,71 @@ export interface RehearsalDiscardResult {
 
 export interface RehearsalConflict {
   file: ConflictFile
+  /** Original conflict-marker content when the editor was opened. */
+  base_content?: string
   external?: boolean
   revision: string
+}
+
+/** The durable owner of an in-progress conflict editor draft. */
+export interface RehearsalDraftKey {
+  repository: string
+  origin_worktree: string
+  repository_id: string
+  rehearsal_id: string
+  path: string
+}
+
+export type RehearsalDraftMode = 'hunks' | 'whole-file'
+export type RehearsalDraftChoice = 'ours' | 'theirs' | 'both' | 'edit'
+
+/** User editing state only; saving a draft never writes the rehearsal sandbox. */
+export interface RehearsalDraftRecord {
+  schema: 1
+  key: RehearsalDraftKey
+  /** Sandbox revision when this draft was based. It is data, not part of ownership. */
+  base_revision: string
+  /** Content shown when the draft was opened, retained for deliberate reconciliation. */
+  base_content: string
+  mode: RehearsalDraftMode
+  whole_file_text: string | null
+  choices: Record<string, RehearsalDraftChoice>
+  edits: Record<string, string>
+  /** Hunk ids explicitly considered by the user; absent choices stay unreviewed. */
+  acknowledged_hunks: string[]
+  draft_revision: number
+  saved_at_unix: number
+}
+
+export type RehearsalDraftStatus =
+  'absent' | 'saved' | 'pending' | 'error' | 'conflict' | 'obsolete' | 'unknown'
+
+export interface RehearsalDraftReadResult {
+  status: RehearsalDraftStatus
+  record: RehearsalDraftRecord | null
+  message?: string
+}
+
+export interface RehearsalDraftPayload {
+  base_revision: string
+  base_content: string
+  mode: RehearsalDraftMode
+  whole_file_text: string | null
+  choices: Record<string, RehearsalDraftChoice>
+  edits: Record<string, string>
+  acknowledged_hunks: string[]
+}
+
+export interface RehearsalDraftWriteResult {
+  status: RehearsalDraftStatus
+  record: RehearsalDraftRecord | null
+  message?: string
+}
+
+export interface RehearsalDraftDiscardResult {
+  status: RehearsalDraftStatus
+  draft_revision: number | null
+  message?: string
 }
 
 export type RehearsalResult =
@@ -690,6 +753,18 @@ export interface GitCityApi {
     revision: string,
     text: string | { side: 'ours' | 'theirs' }
   ): Promise<void>
+  rehearsalDraftRead(identity: RehearsalIdentity, path: string): Promise<RehearsalDraftReadResult>
+  rehearsalDraftWrite(
+    identity: RehearsalIdentity,
+    path: string,
+    payload: RehearsalDraftPayload,
+    expectedDraftRevision: number | null
+  ): Promise<RehearsalDraftWriteResult>
+  rehearsalDraftDiscard(
+    identity: RehearsalIdentity,
+    path: string,
+    expectedDraftRevision: number | null
+  ): Promise<RehearsalDraftDiscardResult>
   rehearsalContinue(identity: RehearsalIdentity): Promise<RehearsalResult>
   rehearsalComparison(identity: RehearsalIdentity): Promise<RehearsalComparison>
   rehearsalShow(identity: RehearsalIdentity): Promise<RehearsalResult>

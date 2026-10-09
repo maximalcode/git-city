@@ -22,6 +22,23 @@ const api: GitCityApi = {
     ipcRenderer.invoke('git-city:rehearsal-conflict-read', identity, path),
   rehearsalConflictSave: (identity, path, revision, text) =>
     ipcRenderer.invoke('git-city:rehearsal-conflict-save', identity, path, revision, text),
+  rehearsalDraftRead: (identity, path) =>
+    ipcRenderer.invoke('git-city:rehearsal-draft-read', identity, path),
+  rehearsalDraftWrite: (identity, path, payload, expectedDraftRevision) =>
+    ipcRenderer.invoke(
+      'git-city:rehearsal-draft-write',
+      identity,
+      path,
+      payload,
+      expectedDraftRevision
+    ),
+  rehearsalDraftDiscard: (identity, path, expectedDraftRevision) =>
+    ipcRenderer.invoke(
+      'git-city:rehearsal-draft-discard',
+      identity,
+      path,
+      expectedDraftRevision
+    ),
   rehearsalContinue: (identity) => ipcRenderer.invoke('git-city:rehearsal-continue', identity),
   rehearsalComparison: (identity) => ipcRenderer.invoke('git-city:rehearsal-comparison', identity),
   rehearsalShow: (identity) => ipcRenderer.invoke('git-city:rehearsal-show', identity),

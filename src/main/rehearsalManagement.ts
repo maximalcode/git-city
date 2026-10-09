@@ -11,6 +11,7 @@ import { runGit } from './git/exec'
 import { rehearsalAvailability, runRehearsalTool } from './rehearsal'
 import { inspectRecovery } from './rehearsalRecovery'
 import { withRepositoryWrite } from './repositoryQueue'
+import { discardRehearsalDrafts } from './rehearsalDraftIpc'
 
 const object = (v: unknown): v is Record<string, unknown> =>
   typeof v === 'object' && v !== null && !Array.isArray(v)
@@ -269,6 +270,11 @@ export async function discardRehearsals(
             throw new Error(
               'Discard completion is uncertain. Refresh the inventory before trying again.'
             )
+          try {
+            await discardRehearsalDrafts(entry)
+          } catch (error) {
+            throw new Error(error instanceof Error ? error.message : 'Local drafts were kept.')
+          }
           result.discarded.push(entry.id)
         })
       )

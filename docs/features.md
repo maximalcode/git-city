@@ -174,8 +174,9 @@ work, history/storage and execution conditions. Text warnings stay prominent.
 **Compare city** switches one scene between frozen Before/After snapshots with a
 shared layout and text inventory; unfinished results explain the missing After.
 
-Text conflicts support hunk choices, free editing, checked save-and-stage,
-external-edit refresh and repeated Continue. Binary conflicts support complete
+Text conflicts support hunk choices, free editing, durable per-rehearsal drafts,
+checked save-and-stage, external-edit refresh and repeated Continue. Binary conflicts support
+complete
 Ours/Theirs versions; deletion/rename conflicts have external sandbox instructions.
 Apply confirms origin and consequences, rechecks state, then adopts exact reviewed
 objects. Stale results and local-work/foreign-checkout collisions are refused and

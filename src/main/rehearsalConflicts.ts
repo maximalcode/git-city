@@ -98,6 +98,7 @@ export async function readRehearsalConflict(
     if (!fileStat)
       return {
         file: { path, binary: false, segments: [] },
+        base_content: '',
         external: true,
         revision: revision(Buffer.alloc(0), stages)
       }
@@ -130,6 +131,7 @@ export async function readRehearsalConflict(
         )
       return {
         revision: revision(bytes, stages),
+        base_content: binary ? '' : bytes.toString('utf8'),
         file: {
           path,
           binary,

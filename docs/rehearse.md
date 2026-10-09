@@ -126,6 +126,10 @@ both, discard the draft, or deliberately use its retained text as a new draft on
 base. That new draft requires a fresh whole-file decision. Saving and staging still checks the
 sandbox revision, and a successful save clears only that exact draft. A draft left behind by
 external staging remains inspectable and can be explicitly discarded before Continue.
+If the sandbox file was saved but staging failed, the error says so and keeps the
+editor draft; refresh the sandbox/review, or resolve the sandbox lock externally,
+before staging. A write or truncate failure may have saved only part of the bytes,
+so refresh before trying again. The original worktree remains unchanged.
 
 ## Apply and local work
 

@@ -309,6 +309,7 @@ export function ConflictEditor({
   >('loading')
   const [obsolete, setObsolete] = useState<RehearsalDraftRecord | null>(null)
   const [saving, setSaving] = useState(false)
+  const [saveRequiresRefresh, setSaveRequiresRefresh] = useState(false)
   const hunkElements = useRef(new Map<number, HTMLElement>())
   const editSequence = useRef(0)
   const savedSequence = useRef(0)
@@ -376,6 +377,8 @@ export function ConflictEditor({
   const sessionRef = useRef(session)
   sessionRef.current = session
 
+  useEffect(() => setSaveRequiresRefresh(false), [buffer])
+
   useEffect(() => {
     const preserveBuffer =
       ((openedRevision.current === null && sessionBufferAtMount.current) ||
@@ -420,6 +423,7 @@ export function ConflictEditor({
           savedRevision.current = result.record.draft_revision
           setDraftRevision(result.record.draft_revision)
           if (result.record.base_revision !== buffer.revision) {
+            if (!preserveBuffer) restoreRecord(result.record)
             setAcknowledgements([])
             setObsolete(result.record)
             setDraftStatus('obsolete')
@@ -496,6 +500,7 @@ export function ConflictEditor({
   const persist = (next: Partial<RehearsalDraftPayload> = {}): void => {
     const api = bridge()
     if (!api || draftStatus === 'loading') return
+    if (obsolete && next.base_revision !== buffer.revision) return
     const sequence = ++editSequence.current
     const nextPayload = payload(next)
     onDirtyStateChange?.(true)
@@ -609,7 +614,7 @@ export function ConflictEditor({
     persist({ choices: Object.fromEntries(next), acknowledged_hunks: acknowledged })
   }
   const saveResolution = async (): Promise<void> => {
-    if (disabled || saving) return
+    if (disabled || saving || retainedDraft || saveRequiresRefresh) return
     setSaving(true)
     try {
       await writeQueue.current
@@ -631,6 +636,7 @@ export function ConflictEditor({
         state.raw ?? assemble(buffer.file.segments, state.choices, state.edits)
       )
       if (!result.ok) {
+        setSaveRequiresRefresh(true)
         onError(`⚠ ${result.message}`)
         return
       }
@@ -718,122 +724,136 @@ export function ConflictEditor({
           </button>
         </div>
       )}
-      {raw !== null ? (
-        <textarea
-          className="hunk-edit"
-          rows={12}
-          aria-label="Resolved file text"
-          value={raw}
-          onChange={(e) => {
-            const value = e.target.value
+      <fieldset disabled={Boolean(retainedDraft)}>
+        <legend>Resolution choices</legend>
+        {raw !== null ? (
+          <textarea
+            className="hunk-edit"
+            rows={12}
+            aria-label="Resolved file text"
+            value={raw}
+            onChange={(e) => {
+              const value = e.target.value
+              setRaw(value)
+              setAcknowledgements([])
+              persist({ mode: 'whole-file', whole_file_text: value, acknowledged_hunks: [] })
+            }}
+          />
+        ) : (
+          buffer.file.segments.map((seg, i) =>
+            seg.kind === 'text' ? (
+              <pre key={i}>{seg.text}</pre>
+            ) : (
+              <section
+                key={seg.id}
+                tabIndex={-1}
+                aria-label={`Conflict section ${seg.id + 1}`}
+                ref={(element) => {
+                  if (element) hunkElements.current.set(seg.id, element)
+                  else hunkElements.current.delete(seg.id)
+                }}
+              >
+                <h4>
+                  Section {seg.id + 1}:{' '}
+                  {acknowledgements.includes(String(seg.id)) ? 'Decided' : 'Unreviewed'}
+                </h4>
+                <ConflictHunk
+                  seg={{
+                    ...seg,
+                    oursLabel: `${oursMeaning} — ${seg.oursLabel}`,
+                    theirsLabel: `${theirsMeaning} — ${seg.theirsLabel}`
+                  }}
+                  choice={choices.get(seg.id) ?? 'ours'}
+                  decided={acknowledgements.includes(String(seg.id))}
+                  edit={edits.get(seg.id) ?? seg.ours + seg.theirs}
+                  onChoice={(choice) => acknowledge([seg.id], choice)}
+                  onEdit={(text) => {
+                    const next = new Map(edits).set(seg.id, text)
+                    const remaining = acknowledgements.filter((id) => id !== String(seg.id))
+                    setEdits(next)
+                    setAcknowledgements(remaining)
+                    persist({ edits: Object.fromEntries(next), acknowledged_hunks: remaining })
+                  }}
+                />
+                {choices.get(seg.id) === 'edit' && (
+                  <button
+                    onClick={() => acknowledge([seg.id], 'edit', true)}
+                    disabled={acknowledgements.includes(String(seg.id))}
+                  >
+                    Confirm section {seg.id + 1} edit
+                  </button>
+                )}
+              </section>
+            )
+          )
+        )}
+        <button
+          onClick={() => {
+            const value = assemble(buffer.file.segments, choices, edits)
             setRaw(value)
             setAcknowledgements([])
             persist({ mode: 'whole-file', whole_file_text: value, acknowledged_hunks: [] })
           }}
-        />
-      ) : (
-        buffer.file.segments.map((seg, i) =>
-          seg.kind === 'text' ? (
-            <pre key={i}>{seg.text}</pre>
-          ) : (
-            <section
-              key={seg.id}
-              tabIndex={-1}
-              aria-label={`Conflict section ${seg.id + 1}`}
-              ref={(element) => {
-                if (element) hunkElements.current.set(seg.id, element)
-                else hunkElements.current.delete(seg.id)
-              }}
-            >
-              <h4>
-                Section {seg.id + 1}:{' '}
-                {acknowledgements.includes(String(seg.id)) ? 'Decided' : 'Unreviewed'}
-              </h4>
-              <ConflictHunk
-                seg={{
-                  ...seg,
-                  oursLabel: `${oursMeaning} — ${seg.oursLabel}`,
-                  theirsLabel: `${theirsMeaning} — ${seg.theirsLabel}`
-                }}
-                choice={choices.get(seg.id) ?? 'ours'}
-                decided={acknowledgements.includes(String(seg.id))}
-                edit={edits.get(seg.id) ?? seg.ours + seg.theirs}
-                onChoice={(choice) => acknowledge([seg.id], choice)}
-                onEdit={(text) => {
-                  const next = new Map(edits).set(seg.id, text)
-                  const remaining = acknowledgements.filter((id) => id !== String(seg.id))
-                  setEdits(next)
-                  setAcknowledgements(remaining)
-                  persist({ edits: Object.fromEntries(next), acknowledged_hunks: remaining })
-                }}
-              />
-              {choices.get(seg.id) === 'edit' && (
-                <button
-                  onClick={() => acknowledge([seg.id], 'edit', true)}
-                  disabled={acknowledgements.includes(String(seg.id))}
-                >
-                  Confirm section {seg.id + 1} edit
-                </button>
-              )}
-            </section>
-          )
-        )
-      )}
-      <button
-        onClick={() => {
-          const value = assemble(buffer.file.segments, choices, edits)
-          setRaw(value)
-          setAcknowledgements([])
-          persist({ mode: 'whole-file', whole_file_text: value, acknowledged_hunks: [] })
-        }}
-        disabled={raw !== null}
-      >
-        Edit whole file
-      </button>
-      {raw !== null ? (
-        <button
-          disabled={acknowledgements.includes(WHOLE_FILE_DECISION)}
-          onClick={() => {
-            setAcknowledgements([WHOLE_FILE_DECISION])
-            persist({ acknowledged_hunks: [WHOLE_FILE_DECISION] })
-          }}
+          disabled={raw !== null}
         >
-          Confirm complete file resolution
+          Edit whole file
         </button>
-      ) : (
-        <div>
-          <p role="status">{readiness.unreviewed.length} unreviewed conflict sections.</p>
+        {raw !== null ? (
           <button
-            disabled={!readiness.unreviewed.length}
-            onClick={() => hunkElements.current.get(readiness.unreviewed[0])?.focus()}
+            disabled={acknowledgements.includes(WHOLE_FILE_DECISION)}
+            onClick={() => {
+              setAcknowledgements([WHOLE_FILE_DECISION])
+              persist({ acknowledged_hunks: [WHOLE_FILE_DECISION] })
+            }}
           >
-            Next unreviewed section
+            Confirm complete file resolution
           </button>
-          {(['ours', 'theirs', 'both'] as const).map((choice) => (
+        ) : (
+          <div>
+            <p role="status">{readiness.unreviewed.length} unreviewed conflict sections.</p>
             <button
-              key={choice}
               disabled={!readiness.unreviewed.length}
-              onClick={() => acknowledge(readiness.unreviewed, choice)}
+              onClick={() => hunkElements.current.get(readiness.unreviewed[0])?.focus()}
             >
-              Use{' '}
-              {choice === 'ours'
-                ? `Ours (${oursMeaning})`
-                : choice === 'theirs'
-                  ? `Theirs (${theirsMeaning})`
-                  : 'both versions'}{' '}
-              for all remaining sections
+              Next unreviewed section
             </button>
-          ))}
-        </div>
-      )}
+            {(['ours', 'theirs', 'both'] as const).map((choice) => (
+              <button
+                key={choice}
+                disabled={!readiness.unreviewed.length}
+                onClick={() => acknowledge(readiness.unreviewed, choice)}
+              >
+                Use{' '}
+                {choice === 'ours'
+                  ? `Ours (${oursMeaning})`
+                  : choice === 'theirs'
+                    ? `Theirs (${theirsMeaning})`
+                    : 'both versions'}{' '}
+                for all remaining sections
+              </button>
+            ))}
+          </div>
+        )}
+      </fieldset>
       <details>
         <summary>Inspect complete resolution</summary>
         <pre>{raw ?? assemble(buffer.file.segments, choices, edits)}</pre>
       </details>
       <p>These decisions choose conflict content; they do not mean tests passed.</p>
       {readiness.reason && <p role="status">{readiness.reason}</p>}
+      {saveRequiresRefresh && (
+        <p role="status">
+          Saving did not finish. Your draft is retained. Refresh sandbox and review its current
+          state before saving again.
+        </p>
+      )}
       <button
-        disabled={!readiness.eligible || draftStatus === 'loading'}
+        disabled={
+          !readiness.eligible ||
+          draftStatus === 'loading' ||
+          Boolean(retainedDraft) ||
+          saveRequiresRefresh
+        }
         onClick={() => void saveResolution()}
       >
         Save and stage in sandbox

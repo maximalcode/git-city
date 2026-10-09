@@ -203,7 +203,14 @@ test('durable conflict drafts survive file navigation, panel close and restart',
     await expect(editor.getByLabel('Resolved file text')).toHaveValue('draft one\n')
     await page.getByRole('button', { name: 'Close rehearsal panel' }).click()
     await expect(editor).toBeHidden()
+    const sandbox = await page.evaluate(async (repo) => {
+      const listing = await window.gitCity.rehearsalList(repo)
+      const shown = await window.gitCity.rehearsalShow(listing.entries[0])
+      if (shown.kind !== 'report' || !shown.report.sandbox) throw new Error('missing sandbox')
+      return shown.report.sandbox
+    }, root)
     await app.close()
+    await writeFile(join(sandbox, 'one.txt'), 'external sandbox resolution\n')
 
     const restarted = await launchNativeFocusApp(root, userData, tool!)
     try {
@@ -212,6 +219,28 @@ test('durable conflict drafts survive file navigation, panel close and restart',
       const restartedEditor = restarted.page.getByRole('region', {
         name: 'Sandbox conflict editor'
       })
+      await restartedEditor.getByRole('button', { name: 'Resolve one.txt', exact: true }).click()
+      await expect(
+        restartedEditor.getByText(/A retained draft is based on sandbox revision/)
+      ).toBeVisible()
+      await expect(
+        restartedEditor.getByRole('button', { name: 'Save and stage in sandbox' })
+      ).toBeDisabled()
+      await expect(
+        restartedEditor.getByRole('button', { name: 'Confirm complete file resolution' })
+      ).toBeDisabled()
+      await restartedEditor
+        .getByText('Inspect retained draft and its original base', { exact: true })
+        .click()
+      await expect(restartedEditor.getByRole('alert')).toContainText('draft one')
+      await restartedEditor
+        .getByRole('button', { name: 'Use retained text as a new draft on the current base' })
+        .click()
+      await expect(restartedEditor.getByLabel('Resolved file text')).toHaveValue('draft one\n')
+      await expect(
+        restartedEditor.getByRole('button', { name: 'Save and stage in sandbox' })
+      ).toBeDisabled()
+      await restarted.page.screenshot({ path: 'test-results/rehearsal-obsolete-draft-restart.png' })
       await restartedEditor.getByRole('button', { name: 'Resolve two.txt', exact: true }).click()
       await expect(restartedEditor.getByLabel('Resolved file text')).toHaveValue('draft two\n')
     } finally {

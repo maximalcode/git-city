@@ -37,6 +37,8 @@ test('two conflict decisions survive restart and later edits invalidate confirma
   let app = await launchNativeFocusApp(root, userData, tool)
   try {
     await app.page.getByRole('button', { name: 'Open a local repository…' }).click()
+    const onboarding = app.page.getByRole('button', { name: 'Got it', exact: true })
+    if (await onboarding.isVisible()) await onboarding.click()
     await app.page.getByRole('button', { name: 'Rehearse panel' }).click()
     await app.page.getByLabel('Branch or commit to merge into the current checkout').fill('topic')
     await app.page.keyboard.press('Enter')

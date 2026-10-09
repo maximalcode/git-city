@@ -17,7 +17,8 @@ import type {
   RehearsalReviewSummary
 } from '../shared/types'
 import { rehearsalComparisonKey } from '../shared/rehearsalComparison'
-import { runGit, runGitBuffer, runGitResult } from './git/exec'
+import { parseUnifiedDiff } from './git/diff'
+import { runGit, runGitBuffer, runGitBufferBounded, runGitResult } from './git/exec'
 import { rehearsalShow } from './rehearsal'
 import { resolveRehearsalEndpoints } from './rehearsalComparison'
 import { withRehearsal } from './rehearsalConflicts'
@@ -282,31 +283,99 @@ function contentText(value: BlobText): string | null {
   return value.kind === 'text' || value.kind === 'pointer' ? value.text : null
 }
 
-function textDiff(
-  before: string,
-  after: string
-): { hunks: DiffHunk[]; additions: number; deletions: number; tooLarge: boolean } {
-  if (before === after) return { hunks: [], additions: 0, deletions: 0, tooLarge: false }
-  const oldLines = before.length ? before.split(/\r?\n/) : []
-  const newLines = after.length ? after.split(/\r?\n/) : []
-  if (oldLines.at(-1) === '') oldLines.pop()
-  if (newLines.at(-1) === '') newLines.pop()
+function patchSize(hunks: DiffHunk[]): number {
+  return hunks.reduce(
+    (size, hunk) =>
+      size +
+      Buffer.byteLength(hunk.header) +
+      hunk.lines.reduce((lineSize, line) => lineSize + Buffer.byteLength(line.text) + 2, 0),
+    0
+  )
+}
+
+type FrozenDiff = {
+  hunks: DiffHunk[]
+  additions: number | null
+  deletions: number | null
+  tooLarge: boolean
+  unavailable: boolean
+}
+
+function splitStoredLines(text: string): string[] {
+  const lines = text ? text.split('\n') : []
+  if (lines.at(-1) === '') lines.pop()
+  return lines
+}
+
+function absentSideDiff(before: string | null, after: string | null): FrozenDiff {
+  const oldLines = before === null ? [] : splitStoredLines(before)
+  const newLines = after === null ? [] : splitStoredLines(after)
   const lines: DiffLine[] = [
     ...oldLines.map((text) => ({ kind: 'del' as const, text })),
     ...newLines.map((text) => ({ kind: 'add' as const, text }))
   ]
-  const hunk = {
-    header: `@@ -1,${oldLines.length} +1,${newLines.length} @@`,
+  const oldCount = oldLines.length
+  const newCount = newLines.length
+  const hunk: DiffHunk = {
+    header: `@@ -${oldCount ? 1 : 0},${oldCount} +${newCount ? 1 : 0},${newCount} @@`,
     lines
   }
-  const patchBytes =
-    Buffer.byteLength(hunk.header) +
-    lines.reduce((size, line) => size + Buffer.byteLength(line.text) + 2, 0)
+  const tooLarge = patchSize([hunk]) > REHEARSAL_REVIEW_PATCH_LIMIT
   return {
-    hunks: patchBytes > REHEARSAL_REVIEW_PATCH_LIMIT ? [] : [hunk],
-    additions: newLines.length,
-    deletions: oldLines.length,
-    tooLarge: patchBytes > REHEARSAL_REVIEW_PATCH_LIMIT
+    hunks: tooLarge ? [] : [hunk],
+    additions: newCount,
+    deletions: oldCount,
+    tooLarge,
+    unavailable: false
+  }
+}
+
+function pointerDiff(before: string, after: string): FrozenDiff {
+  if (before === after)
+    return { hunks: [], additions: 0, deletions: 0, tooLarge: false, unavailable: false }
+  const hunk: DiffHunk = {
+    header: '@@ -1,1 +1,1 @@',
+    lines: [
+      { kind: 'del', text: before },
+      { kind: 'add', text: after }
+    ]
+  }
+  return { hunks: [hunk], additions: 1, deletions: 1, tooLarge: false, unavailable: false }
+}
+
+async function retainedBlobDiff(root: string, before: string, after: string): Promise<FrozenDiff> {
+  if (before === after)
+    return { hunks: [], additions: 0, deletions: 0, tooLarge: false, unavailable: false }
+  const result = await runGitBufferBounded(
+    root,
+    [
+      '--no-replace-objects',
+      'diff',
+      '--no-ext-diff',
+      '--no-textconv',
+      '--text',
+      '--no-color',
+      '--unified=3',
+      before,
+      after
+    ],
+    REHEARSAL_REVIEW_PATCH_LIMIT + 1
+  )
+  if (result.kind === 'too-large')
+    return { hunks: [], additions: null, deletions: null, tooLarge: true, unavailable: false }
+  if (result.kind === 'unavailable')
+    return { hunks: [], additions: null, deletions: null, tooLarge: false, unavailable: true }
+  const parsed = parseUnifiedDiff(result.bytes.toString('utf8').replace(/\n$/, ''))
+  if (parsed.binary || !parsed.hunks.length)
+    return { hunks: [], additions: null, deletions: null, tooLarge: false, unavailable: true }
+  const hunks = parsed.hunks
+  const tooLarge = patchSize(hunks) > REHEARSAL_REVIEW_PATCH_LIMIT
+  return {
+    hunks: tooLarge ? [] : hunks,
+    additions: parsed.additions,
+    deletions: parsed.deletions,
+    tooLarge,
+    unavailable: false
   }
 }
 
@@ -349,8 +418,18 @@ async function makeEntry(
     .update('\0')
     .update(raw.newId)
     .digest('hex')
-  const diff = oldContent !== null && newContent !== null ? textDiff(oldContent, newContent) : null
-  const changes = diff?.tooLarge ? 'too-large' : baseChanges
+  let diff: FrozenDiff | null = null
+  if (!binary && !modeOnly) {
+    if (!old.present && newContent !== null) diff = absentSideDiff(null, newContent)
+    else if (oldContent !== null && !newer.present) diff = absentSideDiff(oldContent, null)
+    else if (oldContent !== null && newContent !== null) {
+      diff =
+        raw.oldMode === '160000' || raw.newMode === '160000'
+          ? pointerDiff(oldContent, newContent)
+          : await retainedBlobDiff(root, old.objectId!, newer.objectId!)
+    }
+  }
+  const changes = diff?.tooLarge ? 'too-large' : diff?.unavailable ? 'unavailable' : baseChanges
   const change =
     raw.status[0] === 'A'
       ? 'added'
@@ -383,8 +462,8 @@ async function makeEntry(
     lines: {
       before: oldContent !== null ? linesOf(oldContent) : null,
       after: newContent !== null ? linesOf(newContent) : null,
-      additions: diff && !diff.tooLarge ? diff.additions : null,
-      deletions: diff && !diff.tooLarge ? diff.deletions : null
+      additions: diff && !diff.tooLarge && !diff.unavailable ? diff.additions : null,
+      deletions: diff && !diff.tooLarge && !diff.unavailable ? diff.deletions : null
     }
   }
 }
@@ -745,12 +824,28 @@ export async function rehearsalReviewFile(
       if (selectedScope.scope.after?.kind === 'commit') text = contentText(after)
     } else if (entry.text.changes === 'mode-only') {
       availability = 'mode-only'
-    } else if (contentText(before) !== null && contentText(after) !== null) {
-      const diff = textDiff(contentText(before)!, contentText(after)!)
-      availability = diff.tooLarge ? 'too-large' : 'available'
-      hunks = diff.hunks
     } else {
-      availability = entry.text.changes
+      const beforeText = contentText(before)
+      const afterText = contentText(after)
+      let diff: FrozenDiff | null = null
+      if (!entry.old.present && afterText !== null) diff = absentSideDiff(null, afterText)
+      else if (beforeText !== null && !entry.new.present) diff = absentSideDiff(beforeText, null)
+      else if (beforeText !== null && afterText !== null) {
+        diff =
+          entry.type === 'gitlink'
+            ? pointerDiff(beforeText, afterText)
+            : entry.old.objectId && entry.new.objectId
+              ? await retainedBlobDiff(data.root, entry.old.objectId, entry.new.objectId)
+              : null
+      }
+      availability = diff
+        ? diff.tooLarge
+          ? 'too-large'
+          : diff.unavailable
+            ? 'unavailable'
+            : 'available'
+        : entry.text.changes
+      if (diff && !diff.tooLarge && !diff.unavailable) hunks = diff.hunks
     }
     return {
       identity: data.identity,

@@ -120,6 +120,7 @@ test('reviews immutable Changes, Before and After content for same-line, added a
     await reopened.getByRole('tab', { name: 'After', exact: true }).click()
     await expect(reopened.locator('pre')).toHaveText('after\n')
     await page.screenshot({ path: 'test-results/rehearsal-review-960x700.png' })
+    await page.screenshot({ path: 'test-results/rehearsal-review.png' })
     await page.setViewportSize({ width: 1280, height: 800 })
     await expect(review).toBeVisible()
     expect(

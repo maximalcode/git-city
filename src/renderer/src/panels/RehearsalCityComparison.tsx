@@ -2,7 +2,11 @@ import { createPortal } from 'react-dom'
 import SceneEffects from '../city/SceneEffects'
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { Canvas } from '@react-three/fiber'
-import type { RehearsalComparison, RehearsalReport } from '../../../shared/types'
+import type {
+  RehearsalComparison,
+  RehearsalReport,
+  RehearsalReviewEntry
+} from '../../../shared/types'
 import { materializeSnapshot } from '../../../shared/snapshots'
 import { useStore } from '../store'
 import { getMode } from '../city/modes'
@@ -42,6 +46,7 @@ function Comparison({
   reviewPaths = [],
   reviewMarkers = [],
   selectedPath,
+  selectedEntry,
   onSelectPath
 }: {
   data: RehearsalComparison
@@ -49,6 +54,7 @@ function Comparison({
   reviewPaths?: string[]
   reviewMarkers?: RehearsalReviewMarker[]
   selectedPath?: string | null
+  selectedEntry?: RehearsalReviewEntry | null
   onSelectPath?: (path: string) => void
 }): React.JSX.Element {
   const [side, setSide] = useState(0)
@@ -73,8 +79,19 @@ function Comparison({
   const focusRef = useRef(scene.focus)
   focusRef.current = scene.focus
   const resolveFocus = useCallback((path: string) => focusRef.current(path), [])
-  const selectedRepresented = selectedPath ? resolveFocus(selectedPath) !== null : true
-  const selectedPresent = selectedPath ? snapshotHasPath(snapshot, selectedPath) : true
+  const endpointPath = selectedEntry
+    ? side === 0
+      ? selectedEntry.oldPath
+      : selectedEntry.newPath
+    : selectedPath
+  const endpointPresent = selectedEntry
+    ? side === 0
+      ? selectedEntry.old.present
+      : selectedEntry.new.present
+    : endpointPath
+      ? snapshotHasPath(snapshot, endpointPath)
+      : true
+  const selectedRepresented = endpointPath ? resolveFocus(endpointPath) !== null : false
   return (
     <>
       <div role="group" aria-label="Rehearsal city endpoint">
@@ -106,15 +123,15 @@ function Comparison({
           )}
         </div>
       )}
-      {selectedPath && !selectedRepresented && (
-        <p className="rehearsal-city-note" role="status">
-          City context is unavailable for this file; frozen text review remains available.
-        </p>
-      )}
-      {selectedPath && selectedRepresented && !selectedPresent && (
+      {selectedEntry && !endpointPresent && (
         <p className="rehearsal-city-note" role="status">
           This file is absent from the {side === 0 ? 'Before' : 'After'} endpoint; frozen text
           review remains available.
+        </p>
+      )}
+      {endpointPath && endpointPresent && !selectedRepresented && (
+        <p className="rehearsal-city-note" role="status">
+          City context is unavailable for this file; frozen text review remains available.
         </p>
       )}
       {sceneHost &&
@@ -127,6 +144,9 @@ function Comparison({
               <Canvas
                 shadows
                 dpr={[1, 1.5]}
+                onCreated={(state) => {
+                  state.events.enabled = true
+                }}
                 camera={{
                   position: [
                     scene.worldSize * mode.cameraScale,
@@ -145,13 +165,13 @@ function Comparison({
                   reviewPaths,
                   reviewMarkers,
                   liveWorktree: false,
-                  selectedPath,
+                  selectedPath: endpointPath,
                   onSelectPath
                 })}
                 <CameraRig
                   worldSize={scene.worldSize}
                   resolveFocus={resolveFocus}
-                  selectedPath={selectedPath}
+                  selectedPath={endpointPath}
                 />
                 <SceneEffects theme={theme} useAO={theme.ao && mode.ao} size={scene.worldSize} />
               </Canvas>
@@ -178,12 +198,14 @@ export default function RehearsalCityComparison({
   reviewPaths,
   reviewMarkers,
   selectedPath,
+  selectedEntry,
   onSelectPath
 }: {
   report: RehearsalReport
   reviewPaths?: string[]
   reviewMarkers?: RehearsalReviewMarker[]
   selectedPath?: string | null
+  selectedEntry?: RehearsalReviewEntry | null
   onSelectPath?: (path: string) => void
 }): React.JSX.Element {
   const comparison = useStore((s) => s.rehearsalComparison)
@@ -220,6 +242,7 @@ export default function RehearsalCityComparison({
           reviewPaths={reviewPaths}
           reviewMarkers={reviewMarkers}
           selectedPath={selectedPath}
+          selectedEntry={selectedEntry}
           onSelectPath={onSelectPath}
           onReturn={() => {
             clear()

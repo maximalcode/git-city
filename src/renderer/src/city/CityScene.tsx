@@ -73,7 +73,7 @@ export default function CityScene({
     () =>
       reviewMarkers.flatMap((marker) => {
         const position = anchorsFor([marker.path])[0]
-        return position ? [{ position, change: marker.change }] : []
+        return position ? [{ position, change: marker.change, path: marker.path }] : []
       }),
     [anchorsFor, reviewMarkers]
   )
@@ -130,7 +130,7 @@ export default function CityScene({
       <Traffic model={model} snapshot={snapshot} />
       <Hotspots anchors={beacons} />
       {reviewMarkers.length > 0 ? (
-        <Hotspots markers={reviewMarkerBeacons} />
+        <Hotspots markers={reviewMarkerBeacons} onSelectPath={onSelectPath} />
       ) : (
         <Hotspots anchors={reviewBeacons} color="#6ec8ff" />
       )}

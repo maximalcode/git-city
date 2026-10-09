@@ -8,6 +8,7 @@ import { commitTimeLabel } from '../lib/daytime'
 import Picker from '../lib/Picker'
 import Icon from '../lib/icons'
 import { useStore, type ColorMode, type ViewMode } from '../store'
+import { hasRehearsalComparisonScene } from '../rehearsalComparison'
 import { THEMES, getTheme } from './themes'
 import { COLOR_MODES, type ColorContext } from './colorModes'
 import { cappedLabel } from '../layout/cap'
@@ -133,7 +134,8 @@ export default function Hud({ snapshot, model }: Props): React.JSX.Element {
 
   const last = analysis.snapshots.length - 1
   const hoveredFile = hovered ? byPath.get(hovered) : undefined
-  const selectedFile = selected ? byPath.get(selected) : undefined
+  const comparingRehearsal = useStore(hasRehearsalComparisonScene)
+  const selectedFile = selected && !comparingRehearsal ? byPath.get(selected) : undefined
 
   const st = workingStatus
   const busy = opInProgress !== null
@@ -286,7 +288,7 @@ export default function Hud({ snapshot, model }: Props): React.JSX.Element {
         </div>
       )}
 
-      {hoveredFile && hovered !== selected && (
+      {!comparingRehearsal && hoveredFile && hovered !== selected && (
         <div className="tooltip" ref={tooltipRef} style={{ left: -9999, top: -9999 }}>
           <div className="path">{hoveredFile.path}</div>
           <div className="meta">

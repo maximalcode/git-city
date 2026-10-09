@@ -3173,12 +3173,18 @@ body:not(:has(.rehearsal-panel)) .rehearsal-recovery {
 }
 .rehearsal-review-layout {
   align-items: stretch;
+  min-height: 0;
 }
 .rehearsal-review-inventory {
   min-width: 0;
+  min-height: 0;
 }
 .rehearsal-review-files {
   min-width: 0;
+  max-height: min(420px, 42vh);
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .rehearsal-review-file {
   display: flex;
@@ -3197,6 +3203,7 @@ body:not(:has(.rehearsal-panel)) .rehearsal-recovery {
 }
 .rehearsal-review-content {
   min-width: 0;
+  min-height: 0;
 }
 .rehearsal-review-resizer {
   width: 8px;

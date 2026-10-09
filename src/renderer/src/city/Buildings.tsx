@@ -130,14 +130,18 @@ export default function Buildings({ model, targets, onSelectPath }: Props): Reac
     if (id === undefined || anim.heights[id] < MIN_VISIBLE) return
     const path = model.paths[id]
     if (onSelectPath) onSelectPath(path)
-    else setSelected(path)
-    setDiffOpen(true)
+    else {
+      setSelected(path)
+      setDiffOpen(true)
+    }
   }
 
   return (
     <instancedMesh
       key={n} // remount when building count changes (new repo)
       ref={meshRef}
+      name="file-buildings"
+      userData={import.meta.env.DEV ? { filePaths: model.paths } : undefined}
       args={[undefined, undefined, n]}
       castShadow
       receiveShadow

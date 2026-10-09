@@ -123,6 +123,19 @@ function Hunks({ file }: { file: RehearsalReviewFileResult }): React.JSX.Element
   )
 }
 
+function contentStatus(file: RehearsalReviewFileResult): string {
+  const beforeMode = file.entry.old.present ? (file.entry.old.mode ?? 'unknown') : 'absent'
+  const afterMode = file.entry.new.present ? (file.entry.new.mode ?? 'unknown') : 'absent'
+  if (file.availability === 'mode-only') {
+    return beforeMode === afterMode
+      ? `File mode: ${beforeMode}.`
+      : `File mode changed: ${beforeMode} → ${afterMode}.`
+  }
+  if (file.availability === 'binary') return `Binary file — no text content (mode ${afterMode}).`
+  if (file.availability === 'too-large') return 'Text content exceeds the retained read limit.'
+  return `Content ${file.availability}.`
+}
+
 export interface RehearsalReviewContentProps {
   identity: RehearsalReviewIdentity
   reviewRevision: string
@@ -162,11 +175,7 @@ export function RehearsalReviewContent({
             ))}
           </div>
           {file && file.availability !== 'available' && file.availability !== 'absent' && (
-            <p role="status">
-              {file.availability === 'binary'
-                ? 'Binary file — no text content.'
-                : `Content ${file.availability}.`}
-            </p>
+            <p role="status">{contentStatus(file)}</p>
           )}
           {file?.availability === 'absent' && <p className="empty">This side is absent.</p>}
           {file?.text !== null && file?.text !== undefined && <pre>{file.text}</pre>}
@@ -187,9 +196,8 @@ export default function RehearsalReviewPanel({
   const [view, setView] = useState<RehearsalReviewFileView>('changes')
   const [filter, setFilter] = useState('')
   const [appliedFilter, setAppliedFilter] = useState('')
-  const [fileCursor, setFileCursor] = useState<string | null>(null)
-  const [fileEntries, setFileEntries] = useState<RehearsalReviewEntry[]>([])
-  const [nextCursor, setNextCursor] = useState<string | null>(null)
+  const [filePageCount, setFilePageCount] = useState(1)
+  const [refreshNonce, setRefreshNonce] = useState(0)
   const [knownTotal, setKnownTotal] = useState<number | null>(null)
   const [expanded, setExpanded] = useState(true)
   const [selectedScopeId, setSelectedScopeId] = useState<string | null>(null)
@@ -205,6 +213,8 @@ export default function RehearsalReviewPanel({
   )
   const previousRevision = useRef<string | null>(null)
   const previousIdentity = useRef<string | null>(null)
+  const previousReport = useRef<RehearsalReport | null>(null)
+  const previousReportKey = useRef<string | null>(null)
   const resizeStart = useRef<{ x: number; percent: number } | null>(null)
 
   useEffect(() => {
@@ -244,28 +254,79 @@ export default function RehearsalReviewPanel({
       return validateRehearsalReviewSummaryResponse(result, request)
     }
   )
+  const reloadSummary = summaryQuery.reload
+  useEffect(() => {
+    // The report object can be replaced after Refresh without any public
+    // report fields changing. That is still a new read boundary: the retained
+    // object may have been deleted or become unavailable in the meantime.
+    if (previousReport.current && previousReport.current !== report) {
+      setRefreshNonce((nonce) => nonce + 1)
+      if (previousReportKey.current === key) reloadSummary()
+    }
+    previousReport.current = report
+    previousReportKey.current = key
+  }, [key, reloadSummary, report])
   const summary = summaryQuery.loading ? null : summaryQuery.data
   const scopeId = selectedScopeId ?? summary?.defaultScopeId ?? null
   const filesQuery = useRepoQuery(
     summary && scopeId
-      ? ([reviewIdentity, summary.reviewRevision, scopeId, fileCursor, appliedFilter] as const)
+      ? ([
+          reviewIdentity,
+          summary.reviewRevision,
+          scopeId,
+          filePageCount,
+          appliedFilter,
+          refreshNonce
+        ] as const)
       : null,
-    async (client, [request, revision, scope, cursor, filterValue]) => {
-      const result = await client.rehearsalReviewFiles(
-        request,
-        revision,
-        scope,
-        cursor ?? undefined,
-        filterValue
-      )
-      return validateRehearsalReviewFilesResponse(result, request, revision, scope)
+    async (client, [request, revision, scope, pages, filterValue]) => {
+      let cursor: string | undefined
+      let result = null as Awaited<ReturnType<typeof client.rehearsalReviewFiles>> | null
+      const entries: RehearsalReviewEntry[] = []
+      for (let page = 0; page < pages; page++) {
+        const response = await client.rehearsalReviewFiles(
+          request,
+          revision,
+          scope,
+          cursor,
+          filterValue
+        )
+        result = validateRehearsalReviewFilesResponse(response, request, revision, scope)
+        entries.push(...result.entries)
+        if (!result.nextCursor) break
+        cursor = result.nextCursor
+      }
+      // The final page's metadata describes the aggregate request. Keeping
+      // its cursor lets the user request one more page without exposing any
+      // partially refreshed page to the renderer.
+      return result
+        ? { ...result, entries, nextCursor: result.nextCursor }
+        : {
+            identity: request,
+            reviewRevision: revision,
+            scopeId: scope,
+            entries,
+            nextCursor: null,
+            total: null,
+            complete: false,
+            filter: filterValue || null
+          }
     }
   )
   const files = filesQuery.loading ? null : filesQuery.data
+  const fileEntries = useMemo(() => files?.entries ?? [], [files])
+  const nextCursor = files?.nextCursor ?? null
   const selected = fileEntries.find((entry) => entry.entryId === selectedEntryId) ?? null
   const fileQuery = useRepoQuery(
     summary && scopeId && selected
-      ? ([reviewIdentity, summary.reviewRevision, scopeId, selected.entryId, view] as const)
+      ? ([
+          reviewIdentity,
+          summary.reviewRevision,
+          scopeId,
+          selected.entryId,
+          view,
+          refreshNonce
+        ] as const)
       : null,
     async (client, [request, revision, scope, entryId, selectedView]) => {
       const result = await client.rehearsalReviewFile(
@@ -293,8 +354,12 @@ export default function RehearsalReviewPanel({
     [fileEntries]
   )
   const reviewMarkers = useMemo(() => reviewEntryMarkers(fileEntries), [fileEntries])
-  const selectedPath = selected ? (selected.newPath ?? selected.oldPath) : null
   const selectedScope = summary?.scopes.find((candidate) => candidate.scopeId === scopeId) ?? null
+  const selectedAfterAvailable = Boolean(
+    selectedScope?.available &&
+    selectedScope.after &&
+    (selectedScope.kind === 'committed-reference' || summary?.afterAvailable)
+  )
   // The legacy city comparison bridge resolves the retained worktree endpoints
   // only. Never display that result while a committed-reference scope is
   // selected; its frozen text endpoints remain the authoritative review.
@@ -312,9 +377,7 @@ export default function RehearsalReviewPanel({
       setView('changes')
       setFilter('')
       setAppliedFilter('')
-      setFileCursor(null)
-      setFileEntries([])
-      setNextCursor(null)
+      setFilePageCount(1)
       setKnownTotal(null)
       previousRevision.current = null
       clearRehearsalComparison()
@@ -328,18 +391,21 @@ export default function RehearsalReviewPanel({
   }, [summary, selectedScopeId])
 
   useEffect(() => {
-    if (
-      summary?.reviewRevision &&
-      previousRevision.current &&
-      previousRevision.current !== summary.reviewRevision
-    )
+    const revision = summary?.reviewRevision
+    if (!revision) return
+    if (previousRevision.current && previousRevision.current !== revision) {
       setSelectedEntryId(null)
-    previousRevision.current = summary?.reviewRevision ?? previousRevision.current
-    setFileCursor(null)
-    setFileEntries([])
-    setNextCursor(null)
+      setView('changes')
+      setFilePageCount(1)
+      setKnownTotal(null)
+    }
+    previousRevision.current = revision
+  }, [summary?.reviewRevision])
+
+  useEffect(() => {
+    setFilePageCount(1)
     setKnownTotal(null)
-  }, [summary?.reviewRevision, scopeId, appliedFilter])
+  }, [scopeId, appliedFilter])
 
   useEffect(() => {
     const move = (event: PointerEvent): void => {
@@ -363,23 +429,21 @@ export default function RehearsalReviewPanel({
 
   useEffect(() => {
     if (!files || filesQuery.loading) return
-    setFileEntries((current) => (fileCursor ? [...current, ...files.entries] : files.entries))
-    setNextCursor(files.nextCursor)
     setKnownTotal(files.total)
     setSelectedEntryId((current) => {
-      if (fileCursor) return current ?? files.entries[0]?.entryId ?? null
       if (current && files.entries.some((entry) => entry.entryId === current)) return current
       return files.entries[0]?.entryId ?? null
     })
-  }, [files, filesQuery.loading, fileCursor])
+  }, [files, filesQuery.loading])
 
   const loadFiles = (nextFilter: string): void => {
+    setSelectedEntryId(null)
     setAppliedFilter(nextFilter)
-    setFileCursor(null)
+    setFilePageCount(1)
   }
 
   const loadMore = (): void => {
-    if (nextCursor) setFileCursor(nextCursor)
+    if (nextCursor) setFilePageCount((count) => count + 1)
   }
 
   const startResize = (event: React.PointerEvent<HTMLDivElement>): void => {
@@ -432,8 +496,29 @@ export default function RehearsalReviewPanel({
           {error && <p role="alert">⚠ {error}</p>}
           {summary && (
             <>
-              <p className="rehearsal-review-notice">{summary.notices[0]}</p>
-              {!summary.afterAvailable && <p role="alert">⚠ {summary.afterReason}</p>}
+              {summary.notices.length > 0 && (
+                <details className="rehearsal-review-notices">
+                  <summary>Review scope and limits ({summary.notices.length})</summary>
+                  <ul>
+                    {summary.notices.map((notice, index) => (
+                      <li key={`${notice}:${index}`}>{notice}</li>
+                    ))}
+                  </ul>
+                </details>
+              )}
+              {selectedScope && !selectedScope.available && (
+                <p role="alert">
+                  ⚠ {selectedScope.unavailableReason ?? 'This scope is unavailable.'}
+                </p>
+              )}
+              {!selectedAfterAvailable && selectedScope?.available && (
+                <p role="alert">
+                  ⚠{' '}
+                  {selectedScope.unavailableReason ??
+                    summary.afterReason ??
+                    'After endpoint unavailable.'}
+                </p>
+              )}
               <div className="rehearsal-review-toolbar">
                 <RehearsalReviewScopeSelector
                   scopes={summary.scopes}
@@ -442,7 +527,7 @@ export default function RehearsalReviewPanel({
                   onSelectScope={(nextScope) => {
                     setSelectedScopeId(nextScope)
                     setSelectedEntryId(null)
-                    setFileCursor(null)
+                    setFilePageCount(1)
                     clearRehearsalComparison()
                   }}
                 />
@@ -460,7 +545,7 @@ export default function RehearsalReviewPanel({
                       report={report}
                       reviewPaths={reviewPaths}
                       reviewMarkers={reviewMarkers}
-                      selectedPath={selectedPath}
+                      selectedEntry={selected}
                       onSelectPath={(path) => {
                         const entry = fileEntries.find(
                           (candidate) => candidate.oldPath === path || candidate.newPath === path
@@ -519,7 +604,7 @@ export default function RehearsalReviewPanel({
                   entry={selected}
                   file={file}
                   view={view}
-                  afterAvailable={summary.afterAvailable}
+                  afterAvailable={selectedAfterAvailable}
                   loading={loading}
                   onSelectView={selectView}
                 />

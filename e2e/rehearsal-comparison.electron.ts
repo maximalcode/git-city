@@ -41,6 +41,13 @@ test('keyboard city comparison stays with its frozen rehearsal when switching re
     const page = await app.firstWindow()
     await page.getByRole('button', { name: 'Open a local repository…' }).click()
     await page.getByRole('button', { name: 'Got it', exact: true }).click()
+    await page.getByRole('button', { name: 'Settings' }).click()
+    await page
+      .locator('label.settings-row.toggle')
+      .filter({ hasText: 'Reduce motion' })
+      .getByRole('checkbox')
+      .check({ force: true })
+    await page.getByRole('button', { name: 'Close' }).click()
     await page.getByRole('button', { name: 'Rehearse panel' }).click()
     const create = async (target: string): Promise<void> => {
       await expandRehearsal(page, /Rehearse again|Choose rehearsal target/)

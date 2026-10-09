@@ -238,8 +238,10 @@ export default function Fields({
     const path = fieldAt(e)
     if (!path) return
     if (onSelectPath) onSelectPath(path)
-    else setSelected(path)
-    setDiffOpen(true)
+    else {
+      setSelected(path)
+      setDiffOpen(true)
+    }
   }
 
   return (

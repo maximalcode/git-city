@@ -61,14 +61,35 @@ export default function CameraRig({
   const restoredView = useRef(false)
 
   // Create once. dispose() detaches the DOM listeners, so it must run ONLY on
-  // unmount — never when worldSize changes (a view-mode switch changes it,
-  // since the modes size their worlds differently). If it ran on every switch the
-  // memoized controls would be disposed and never reconnected, leaving the
-  // camera dead. Size/angle limits live in the separate effect below.
+  // unmount — never when worldSize or cacheKey changes (a view-mode switch
+  // changes both). If it ran on every switch the memoized controls would be
+  // disposed and never reconnected, leaving the camera dead. Size/angle limits
+  // and camera cache state live in separate effects below.
   useEffect(() => {
     controls.enableDamping = true
     controls.dampingFactor = 0.08
     controls.minDistance = 8
+    const stopAuto = (): void => {
+      intro.current = false
+      tween.current = null
+    }
+    controls.addEventListener('start', stopAuto)
+    return () => {
+      controls.removeEventListener('start', stopAuto)
+      controls.dispose()
+      // DEV probe: a view-mode switch must NOT reach here (see e2e). If this
+      // increments on a switch, the controls were torn down and the camera dies.
+      if (import.meta.env.DEV) {
+        const w = window as unknown as { __gitCityRigDisposes?: number }
+        w.__gitCityRigDisposes = (w.__gitCityRigDisposes ?? 0) + 1
+      }
+    }
+  }, [camera, controls])
+
+  // Save and restore the active scene's view independently of the controls'
+  // DOM-listener lifetime. The key changes when City/Farm changes, but the
+  // same MapControls instance must remain connected through that transition.
+  useEffect(() => {
     const cached = cacheKey ? cameraViews.get(cacheKey) : undefined
     if (cached) {
       camera.position.copy(cached.position)
@@ -78,28 +99,15 @@ export default function CameraRig({
     } else {
       controls.target.set(0, 0, 0)
     }
-    const stopAuto = (): void => {
-      intro.current = false
-      tween.current = null
-    }
-    controls.addEventListener('start', stopAuto)
     return () => {
-      controls.removeEventListener('start', stopAuto)
       if (cacheKey) {
         cameraViews.set(cacheKey, {
           position: camera.position.clone(),
           target: controls.target.clone()
         })
       }
-      controls.dispose()
-      // DEV probe: a view-mode switch must NOT reach here (see e2e). If this
-      // increments on a switch, the controls were torn down and the camera dies.
-      if (import.meta.env.DEV) {
-        const w = window as unknown as { __gitCityRigDisposes?: number }
-        w.__gitCityRigDisposes = (w.__gitCityRigDisposes ?? 0) + 1
-      }
     }
-  }, [camera, cacheKey, controls])
+  }, [cacheKey, camera, controls])
 
   // Someone reacting to the motion they can see, by ticking "Reduce motion",
   // was watching the camera keep orbiting: the flag was only read when the rig
@@ -124,6 +132,7 @@ export default function CameraRig({
       const w = window as unknown as {
         __gitCityCam?: unknown
         __gitCityScene?: unknown
+        __gitCitySceneCanvas?: HTMLCanvasElement
         __gitCitySceneReadyMs?: number
       }
       w.__gitCityCam = camera
@@ -131,14 +140,22 @@ export default function CameraRig({
       // instanced meshes actually moved this second?" — the only sound way to
       // verify animation from outside the canvas (#58).
       w.__gitCityScene = scene
+      w.__gitCitySceneCanvas = gl.domElement
       // Milliseconds from navigation start to the scene being interactive.
       // The scale work in #12 needed this and had to infer it from a polling
       // probe, which is not sound — the rig does not remount when the model
       // changes, so the sentinel never resets. One timestamp makes the cost
       // directly readable instead.
       w.__gitCitySceneReadyMs = performance.now()
+      return () => {
+        if (w.__gitCityScene === scene) {
+          delete w.__gitCityCam
+          delete w.__gitCityScene
+          delete w.__gitCitySceneCanvas
+        }
+      }
     }
-  }, [camera, scene])
+  }, [camera, gl, scene])
 
   // fly-to when the selection changes to something the scene can locate
   useEffect(() => {

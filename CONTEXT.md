@@ -65,3 +65,18 @@ _Avoid_: Erzwungenes Zurücksetzen.
 Ein erkannter Zwischenzustand einer Übernahme, der erst kontrolliert abgeschlossen
 oder zurückgesetzt werden muss, bevor weitere schreibende Aktionen erlaubt sind.
 _Avoid_: Fehlgeschlagener Probelauf.
+
+**Prüfansicht (Rehearse review)**:
+Der zusammenhängende Arbeitsbereich zum Prüfen eines Probelaufergebnisses anhand seiner Dateien, Inhalte und räumlichen Darstellung.
+_Avoid_: Pull-Request-Review, wenn damit GitHub-Kommentare oder Freigaben gemeint sind.
+
+**Prüfstand**:
+Das eindeutig bezeichnete Ergebnis eines Probelaufs, auf das sich eine Inhaltsprüfung und eine gewünschte Übernahme beziehen.
+_Avoid_: Probelauf-ID als alleinige Bezeichnung eines unveränderlichen Ergebnisses.
+
+**Vergleichsumfang**:
+Die Auswahl der zusammengehörigen Vorher- und Nachher-Inhalte: entweder des ursprünglichen getrackten Arbeitsstands einschließlich mitgenommener Arbeit oder einer betroffenen Referenz.
+
+**Konfliktentwurf**:
+Die aufbewahrte Bearbeitung einer Konfliktdatei, die noch nicht ausdrücklich in der Sandbox gespeichert und gestagt wurde.
+_Avoid_: Gespeicherte Konfliktlösung, wenn lediglich der Entwurf gesichert ist.

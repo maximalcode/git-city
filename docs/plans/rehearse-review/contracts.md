@@ -1,6 +1,6 @@
 # Shared contract note
 
-Draft contracts to approve with #195. They pin names and responsibilities so isolated workers do not independently invent incompatible interfaces. Existing public names remain intact; these are additive seams.
+Contracts approved with #195. They pin names and responsibilities so isolated workers do not independently invent incompatible interfaces. Existing public names remain intact; these are additive seams.
 
 ## Review reads — R2 owns the first complete implementation
 

@@ -2,14 +2,14 @@
 
 ## Readiness and scope
 
-Read the approved #195 specification, its final child issues/native blockers, repo instructions and domain docs. This local draft is not the dispatch input until the owner has approved the product choices and ticket graph and the tracker contains stable IDs. Do not infer approval from a default option in a pending question.
+Read the approved #195 specification, its final child issues/native blockers, repo instructions and domain docs. The owner explicitly approved the product choices, test seams and ticket graph. Use the stable GitHub issue mapping in the plan index; approval of the plan did not authorize a new merge or release.
 
-The user asked for planning. Do not start implementation from this planning session. The final handoff will invoke `implement-spec` against the approved Git City #195 after publication of its graph. Strict conditional Apply also needs the upstream U1/U2 flow below.
+The user asked for planning. Do not start implementation from this planning session. The next user instruction can invoke separate `implement-spec` runs for Git City #195 and git-rehearse #118. This planning session publishes their instructions only. Strict conditional Apply needs the upstream U1/U2 flow below. Begin with U1 when choosing a single next implementation run.
 
 ## Repositories and delivery
 
 - Git City: base current origin/develop at implementation start; one integration branch named feat/195-rehearse-review; one PR to develop. Keep main/release tags untouched. Record the actual base and final tested tip.
-- git-rehearse, strict path only: its own issue, current develop base, isolated integration worktree and PR. U1 changes its public contract; U2 supplies a compatible public release. A Git City worktree cannot absorb Rust commits from a separate repository as though they belonged to its integration branch.
+- git-rehearse, strict path only: issue maximalcode/git-rehearse#118, current develop base, isolated integration worktree and PR. U1 changes its public contract; U2 (maximalcode/git-rehearse#119) supplies a compatible public release. A Git City worktree cannot absorb Rust commits from a separate repository as though they belonged to its integration branch.
 - Current capacity allows at most three simultaneous child agents; dispatch only the ready ticket frontier and serialize integration. Worktrees start at the current validated integration tip. Current local checkouts belonging to other tasks are preserved.
 - Existing #193/#194 become R1/R5 after approved criteria are added; #191 is the source finding and closes only when the full covered feature merges. No issue closes merely because a worker reports completion.
 - Implementation ends with validated branch/PR and evidence. New feature merges/releases are separately scoped; the prior v0.9.2 authorization is not reused.
@@ -34,13 +34,13 @@ R2 may extract pure diff presentation from the ordinary DiffPanel while preservi
 
 Documentation belongs in each slice. Final screenshots/feature inventory are reconciled by the coordinator after all integrated behavior is present; that does not excuse leaving per-slice user-facing prose until another PR.
 
-## Apply identity: strict and narrower options
+## Approved Apply identity contract
 
 Current v1.3.0 checks original-state safety and fresh public report fields before applying. It does not accept an expected reviewed result. An app-side check followed by a separate CLI Apply has a gap in which another CLI operation could change the retained result. App memory locks do not remove this gap.
 
-Recommended strict plan: U1 exposes a public result revision plus endpoint descriptors; Git City derives its local review revision from that authoritative result and uses the same descriptors for scene and diff. R7 passes the expected result revision to conditional Apply. The tool compares and applies the same candidate under its ownership. Revalidate app state and preserve all existing safety checks too. Scope the concurrency guarantee to cooperating operations and unchanged immutable objects; do not claim arbitrary external filesystem processes are controlled.
+Approved strict plan: U1 exposes a public result revision plus endpoint descriptors; Git City derives its local review revision from that authoritative result and uses the same descriptors for scene and diff. R7 passes the expected result revision to conditional Apply. The tool compares and applies the same candidate under its ownership. Revalidate app state and preserve all existing safety checks too. Scope the concurrency guarantee to cooperating operations and unchanged immutable objects; do not claim arbitrary external filesystem processes are controlled.
 
-If the owner explicitly selects the narrower 1.3.0-compatible plan, remove U1/U2 from the approved graph, retain a full app-side revision comparison before Apply and document the remaining external check-to-use gap in specification, UI guarantee and tests. Do not label it atomic expected-result Apply. No worker may choose this fallback merely because U2 is unavailable.
+The narrower 1.3.0-compatible option was not selected. An unavailable U2 does not authorize an app-only fallback or weakening the result-binding guarantee.
 
 ## Highest test seam and required checks
 
@@ -74,8 +74,10 @@ Record each scenario, platform/window size, tested commit, pass/fail and evidenc
 11. Existing history, Keep, Discard, Stop, Undo, recovery and tool-unavailable flows remain usable.
 12. All four native packages use the approved tool and preserve retained data through the existing upgrade smoke.
 
-## Final handoff template after approval
+## Approved handoff scope
 
-“Use implement-spec for maximalcode/git-city#195 and its approved child graph from current develop. Follow the recorded contracts, documentation and acceptance matrix. Use isolated workers, one integration branch and a final PR to develop. Preserve existing work; do not merge or release as part of this implementation instruction. Under the strict plan, treat the referenced git-rehearse conditional-Apply release as an explicit external blocker for R7; coordinate its separate upstream implementation/delivery first or report the exact gate while independent slices progress.”
+Use `implement-spec` for https://github.com/maximalcode/git-city/issues/195 and its approved child graph, and separately for https://github.com/maximalcode/git-rehearse/issues/118. Use current `develop`, isolated worktrees and one integration branch per repository. Follow the approved specification, contracts, domain decision, documentation requirements and acceptance matrix; integrate only ready slices and deliver independently reviewed PRs to `develop`. Preserve existing work. Treat https://github.com/maximalcode/git-rehearse/issues/119 as an external merge/release gate: continue independent Git City slices while blocked, and report the exact missing artifact/evidence for R7 and complete acceptance. Do not merge PRs, close issues before merge or publish releases under this implementation instruction.
 
-Do not advertise this template as a ready one-command complete run while U2 or owner approval is unresolved.
+The planning documents are on `docs/195-rehearse-review-plan`; bring their approved final content into the Git City integration branch without overwriting newer domain documentation. They are implementation instructions and future-behavior decisions, not evidence that the feature has shipped. The final approval comment on #195 supersedes historical draft/pending wording retained in the original issue body and earlier comments.
+
+U1 can run now. U2 requires its real release prerequisites. Do not advertise complete Git City delivery while U2 is unresolved.

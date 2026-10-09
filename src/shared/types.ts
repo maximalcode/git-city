@@ -573,6 +573,99 @@ export interface RehearsalComparison {
   notice: string
 }
 
+/** Opaque identity/version values used by the frozen Rehearse review reads. */
+export type RehearsalReviewIdentity = RehearsalIdentity
+export type RehearsalReviewRevision = string
+export type RehearsalReviewCursor = string
+
+export type RehearsalReviewScopeKind = 'tracked-worktree' | 'committed-reference'
+export type RehearsalReviewChange = 'added' | 'modified' | 'deleted' | 'typechange'
+export type RehearsalReviewAvailability =
+  'available' | 'absent' | 'binary' | 'mode-only' | 'too-large' | 'unavailable'
+
+export interface RehearsalReviewEndpoint {
+  kind: 'commit'
+  commit: string
+  provenance: 'original' | 'carried'
+}
+
+export interface RehearsalReviewScope {
+  scopeId: string
+  kind: RehearsalReviewScopeKind
+  label: string
+  refAliases: string[]
+  before: RehearsalReviewEndpoint
+  after: RehearsalReviewEndpoint | null
+  available: boolean
+  unavailableReason?: string
+}
+
+export interface RehearsalReviewSide {
+  present: boolean
+  mode: string | null
+  objectId: string | null
+}
+
+export interface RehearsalReviewEntry {
+  entryId: string
+  change: RehearsalReviewChange
+  oldPath: string | null
+  newPath: string | null
+  old: RehearsalReviewSide
+  new: RehearsalReviewSide
+  binary: boolean
+  type: 'text' | 'binary' | 'mode' | 'symlink' | 'gitlink' | 'unknown'
+  text: {
+    changes: RehearsalReviewAvailability
+    before: RehearsalReviewAvailability
+    after: RehearsalReviewAvailability
+  }
+  lines: {
+    before: number | null
+    after: number | null
+    additions: number | null
+    deletions: number | null
+  }
+}
+
+export interface RehearsalReviewSummary {
+  identity: RehearsalReviewIdentity
+  reviewRevision: RehearsalReviewRevision
+  toolResultRevision: string | null
+  complete: boolean
+  afterAvailable: boolean
+  afterReason: string | null
+  scopes: RehearsalReviewScope[]
+  defaultScopeId: string | null
+  notices: string[]
+  carried: { status: string; paths: string[]; included: boolean; reason?: string } | null
+}
+
+export interface RehearsalReviewFilesResult {
+  identity: RehearsalReviewIdentity
+  reviewRevision: RehearsalReviewRevision
+  scopeId: string
+  entries: RehearsalReviewEntry[]
+  nextCursor: RehearsalReviewCursor | null
+  /** Null means the retained result was incomplete, so no total was established. */
+  total: number | null
+  complete: boolean
+  filter: string | null
+}
+
+export type RehearsalReviewFileView = 'changes' | 'before' | 'after'
+export interface RehearsalReviewFileResult {
+  identity: RehearsalReviewIdentity
+  reviewRevision: RehearsalReviewRevision
+  scopeId: string
+  entryId: string
+  view: RehearsalReviewFileView
+  availability: RehearsalReviewAvailability
+  text: string | null
+  hunks: DiffHunk[]
+  entry: RehearsalReviewEntry
+}
+
 /** Inventory belongs to one canonical original worktree. Byte counts are logical,
  * including shared Git objects; they are not a prediction of freed disk space. */
 export interface RehearsalEntry extends RehearsalIdentity {
@@ -692,6 +785,21 @@ export interface GitCityApi {
   ): Promise<void>
   rehearsalContinue(identity: RehearsalIdentity): Promise<RehearsalResult>
   rehearsalComparison(identity: RehearsalIdentity): Promise<RehearsalComparison>
+  rehearsalReviewSummary(identity: RehearsalReviewIdentity): Promise<RehearsalReviewSummary>
+  rehearsalReviewFiles(
+    identity: RehearsalReviewIdentity,
+    reviewRevision: RehearsalReviewRevision,
+    scopeId: string,
+    cursor?: RehearsalReviewCursor,
+    filter?: string
+  ): Promise<RehearsalReviewFilesResult>
+  rehearsalReviewFile(
+    identity: RehearsalReviewIdentity,
+    reviewRevision: RehearsalReviewRevision,
+    scopeId: string,
+    entryId: string,
+    view: RehearsalReviewFileView
+  ): Promise<RehearsalReviewFileResult>
   rehearsalShow(identity: RehearsalIdentity): Promise<RehearsalResult>
   rehearsalList(repo: string): Promise<RehearsalInventory>
   rehearsalDiscard(repo: string, identities: RehearsalIdentity[]): Promise<RehearsalDiscardResult>

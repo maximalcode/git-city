@@ -31,6 +31,15 @@ the submitted plan, full ref movements, file consequences, and replay warnings.
 Actionable conflict and unexpected-content warnings stay in the main report
 area.
 
+Completed reports also offer **Frozen file review**. Open **Review changed files**
+to load the complete tracked-worktree inventory, filter it by path, and select a
+file. The **Changes**, **Before**, and **After** views read the retained Git
+objects from the rehearsal sandbox, so edits made later in the live checkout or
+sandbox cannot replace the result being inspected. Added and deleted sides are
+labelled as absent; binary, mode-only, oversized, and unavailable content stays
+visible with an explanation. Untracked files and the original staging selection
+are excluded from this scope.
+
 **Compare city** opens the frozen **Before** and **After** views when a finished
 result has an available After. They use the same layout and provide a text
 inventory of files and line counts. Stopped, incomplete, failed, and unresolved
@@ -72,6 +81,9 @@ affected files, conflicts, unexpected content changes and carried tracked work.
 **Compare city** switches the same scene between the frozen **Before** and
 **After** states. The text inventory lists files and line counts. Incomplete
 results do not have a finished After. Comparing does not switch the real checkout.
+The frozen file review uses the same retained endpoint resolver as Compare city;
+refreshing or changing the rehearsal invalidates older inventory and content
+responses instead of showing a stale patch beside a new list.
 
 For a text conflict, choose **Resolve**, then Ours, Theirs, Both, Edit, or
 **Edit whole file**. **Save and stage in sandbox** saves to the sandbox only.

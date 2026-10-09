@@ -4,6 +4,7 @@ import RehearsalUndo from './RehearsalUndo'
 import RehearsalMode from './RehearsalMode'
 import RehearsalHistory from './RehearsalHistory'
 import RehearsalConflicts from './RehearsalConflicts'
+import RehearsalReviewPanel from './RehearsalReviewPanel'
 import { useEffect, useRef, useState } from 'react'
 import { useStore } from '../store'
 import { bridge } from '../lib/bridge'
@@ -303,7 +304,10 @@ export default function RehearsalPanel(): React.JSX.Element | null {
               )}
               {!busy &&
                 (result?.kind === 'report' ? (
-                  <RehearsalReportView report={result.report} />
+                  <>
+                    <RehearsalReportView report={result.report} />
+                    <RehearsalReviewPanel report={result.report} />
+                  </>
                 ) : (
                   result && (
                     <p role="alert">

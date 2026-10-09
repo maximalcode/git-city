@@ -173,6 +173,11 @@ details expose refs/commits, files, conflicts, unexpected content, tracked carri
 work, history/storage and execution conditions. Text warnings stay prominent.
 **Compare city** switches one scene between frozen Before/After snapshots with a
 shared layout and text inventory; unfinished results explain the missing After.
+**Frozen file review** provides a complete tracked-file inventory independent of
+city rendering caps, path filtering, and revision-bound Changes/Before/After
+content from retained Git objects. Live edits, untracked files, and staging
+selection are excluded; binary, mode-only, oversized, absent, and unavailable
+content remains explicitly labelled.
 
 Text conflicts support hunk choices, free editing, checked save-and-stage,
 external-edit refresh and repeated Continue. Binary conflicts support complete

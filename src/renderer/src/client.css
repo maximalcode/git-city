@@ -3056,3 +3056,80 @@ body:has(.rehearsal-panel) .rehearsal-mode {
 body:not(:has(.rehearsal-panel)) .rehearsal-recovery {
   max-width: min(500px, calc(100vw - 32px));
 }
+
+/* Frozen review is intentionally small; R4 owns the eventual workspace shell. */
+.rehearsal-review-panel {
+  margin: 16px 0;
+  padding: 12px;
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+}
+.rehearsal-review-heading,
+.rehearsal-review-layout,
+.rehearsal-review-heading + p {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.rehearsal-review-heading {
+  justify-content: space-between;
+}
+.rehearsal-review-panel label {
+  display: grid;
+  gap: 4px;
+  margin: 10px 0;
+}
+.rehearsal-review-panel input {
+  min-width: 0;
+  padding: 6px;
+}
+.rehearsal-review-layout {
+  align-items: stretch;
+}
+.rehearsal-review-inventory {
+  flex: 0 1 42%;
+  min-width: 0;
+}
+.rehearsal-review-files {
+  min-width: 0;
+}
+.rehearsal-review-file {
+  display: flex;
+  width: 100%;
+  justify-content: space-between;
+  gap: 8px;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.rehearsal-review-file[aria-selected='true'] {
+  outline: 1px solid var(--accent);
+}
+.rehearsal-review-file small {
+  flex: none;
+  color: var(--text-dim);
+}
+.rehearsal-review-content {
+  flex: 1 1 58%;
+  min-width: 0;
+}
+.rehearsal-review-content pre {
+  max-height: 260px;
+  margin: 8px 0;
+  overflow: auto;
+  padding: 8px;
+  background: var(--code-bg, #171717);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.rehearsal-review-hunks {
+  max-height: 260px;
+  overflow: auto;
+}
+@media (max-width: 600px) {
+  .rehearsal-review-layout {
+    display: block;
+  }
+  .rehearsal-review-inventory {
+    margin-bottom: 12px;
+  }
+}

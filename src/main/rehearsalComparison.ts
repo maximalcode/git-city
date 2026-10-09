@@ -17,7 +17,12 @@ const inside = (parent: string, child: string): boolean => {
   return !path || (!isAbsolute(path) && path !== '..' && !path.startsWith(`..${sep}`))
 }
 
-async function endpoints(report: RehearsalReport): Promise<string[]> {
+/**
+ * Resolve the exact immutable commits retained by a rehearsal. Both the city
+ * comparison and the text review call this function; neither is allowed to
+ * infer an endpoint from the live checkout or a renderer supplied path.
+ */
+export async function resolveRehearsalEndpoints(report: RehearsalReport): Promise<string[]> {
   const root = await realpath(report.sandbox ?? '')
   const origin = await realpath(report.origin_worktree)
   if (!report.sandbox || inside(root, origin) || inside(origin, root))
@@ -68,13 +73,13 @@ export async function compareRehearsal(
       return result.report
     }
     const report = await read()
-    const commits = await endpoints(report)
+    const commits = await resolveRehearsalEndpoints(report)
     const analysis = await analyzeComparison(report.sandbox!, commits)
     // Other CLI processes don't share the app queue. Reject a changing result.
     const current = await read()
     if (
       rehearsalComparisonKey(current) !== rehearsalComparisonKey(report) ||
-      JSON.stringify(await endpoints(current)) !== JSON.stringify(commits)
+      JSON.stringify(await resolveRehearsalEndpoints(current)) !== JSON.stringify(commits)
     )
       throw new Error('Rehearsal changed during analysis. Refresh the comparison.')
     return {

@@ -84,6 +84,18 @@ const SHOTS = [
         .locator('.rehearsal-history > summary')
         .filter({ hasText: /Saved rehearsals · [1-9]/ })
         .waitFor({ timeout: 180_000 })
+      const review = page.getByRole('region', { name: 'Frozen rehearsal review' })
+      await review.waitFor({ timeout: 180_000 })
+      await review.getByText(/^\d+ changed files$/).waitFor({ timeout: 180_000 })
+      const files = review.getByRole('option')
+      if (!(await files.count())) return
+      // Prefer a source file, using the same visible inventory as a person.
+      const source = files.filter({ hasText: /src\/.*\.(tsx?|rs)/ }).first()
+      await ((await source.count()) ? source : files.first()).click()
+      await review.getByText('Loading retained review…', { exact: true }).waitFor({
+        state: 'hidden',
+        timeout: 180_000
+      })
     }
   },
   // ── Hero ─────────────────────────────────────────────────────────────────

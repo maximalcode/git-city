@@ -3,6 +3,7 @@ import { join } from 'path'
 import type {
   RehearsalDraftDiscardResult,
   RehearsalDraftPayload,
+  RehearsalDraftListResult,
   RehearsalDraftReadResult,
   RehearsalDraftWriteResult,
   RehearsalIdentity
@@ -11,6 +12,7 @@ import {
   discardRehearsalDraft,
   discardRehearsalDraftsFor,
   hasRehearsalDrafts,
+  listRehearsalDrafts,
   readRehearsalDraft,
   writeRehearsalDraft
 } from './rehearsalDrafts'
@@ -18,7 +20,7 @@ import {
 const draftFile = (): string => join(app.getPath('userData'), 'rehearsal-drafts.json')
 
 let inFlight = 0
-let persistenceFailed = false
+const failedDrafts = new Set<string>()
 const waiters = new Set<() => void>()
 
 /** Main-process quit barrier: requests already admitted by IPC finish durably. */
@@ -32,11 +34,12 @@ export function rehearsalDraftWritesPending(): boolean {
 }
 
 export function rehearsalDraftPersistenceFailed(): boolean {
-  return persistenceFailed
+  return failedDrafts.size > 0
 }
 
 async function tracked<T extends { status: string }>(
   operation: () => Promise<T>,
+  draftKey: string,
   mutating = false
 ): Promise<T> {
   inFlight += 1
@@ -44,12 +47,13 @@ async function tracked<T extends { status: string }>(
     const result = await operation()
     if (mutating) {
       if (result.status === 'error' || result.status === 'conflict' || result.status === 'unknown')
-        persistenceFailed = true
-      else if (result.status === 'saved' || result.status === 'absent') persistenceFailed = false
+        failedDrafts.add(draftKey)
+      else if (result.status === 'saved' || result.status === 'absent')
+        failedDrafts.delete(draftKey)
     }
     return result
   } catch (error) {
-    persistenceFailed = true
+    if (mutating) failedDrafts.add(draftKey)
     throw error
   } finally {
     inFlight -= 1
@@ -60,11 +64,28 @@ async function tracked<T extends { status: string }>(
   }
 }
 
+function pendingKey(identity: RehearsalIdentity, path: string): string {
+  return (
+    JSON.stringify([
+      identity.repository,
+      identity.origin_worktree,
+      identity.repository_id,
+      identity.id
+    ]) +
+    '\0' +
+    path
+  )
+}
+
 export function rehearsalDraftRead(
   identity: RehearsalIdentity,
   path: string
 ): Promise<RehearsalDraftReadResult> {
-  return tracked(() => readRehearsalDraft(draftFile(), identity, path))
+  return tracked(() => readRehearsalDraft(draftFile(), identity, path), pendingKey(identity, path))
+}
+
+export function rehearsalDraftList(identity: RehearsalIdentity): Promise<RehearsalDraftListResult> {
+  return tracked(() => listRehearsalDrafts(draftFile(), identity), pendingKey(identity, ''))
 }
 
 export function rehearsalDraftWrite(
@@ -75,6 +96,7 @@ export function rehearsalDraftWrite(
 ): Promise<RehearsalDraftWriteResult> {
   return tracked(
     () => writeRehearsalDraft(draftFile(), identity, path, payload, expectedDraftRevision),
+    pendingKey(identity, path),
     true
   )
 }
@@ -86,12 +108,15 @@ export function rehearsalDraftDiscard(
 ): Promise<RehearsalDraftDiscardResult> {
   return tracked(
     () => discardRehearsalDraft(draftFile(), identity, path, expectedDraftRevision),
+    pendingKey(identity, path),
     true
   )
 }
 
-export function discardRehearsalDrafts(identity: RehearsalIdentity): Promise<void> {
-  return discardRehearsalDraftsFor(draftFile(), identity)
+export async function discardRehearsalDrafts(identity: RehearsalIdentity): Promise<void> {
+  await discardRehearsalDraftsFor(draftFile(), identity)
+  const prefix = pendingKey(identity, '')
+  for (const key of failedDrafts) if (key.startsWith(prefix)) failedDrafts.delete(key)
 }
 
 export function rehearsalDraftsExist(identity: RehearsalIdentity): Promise<boolean> {

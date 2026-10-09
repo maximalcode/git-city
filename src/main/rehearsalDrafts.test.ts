@@ -1,17 +1,24 @@
-import { afterEach, describe, expect, it } from 'vitest'
-import { mkdtemp, readFile, rm, writeFile } from 'fs/promises'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { mkdtemp, readFile, rename, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import type { RehearsalDraftPayload, RehearsalIdentity } from '../shared/types'
 import {
   discardRehearsalDraft,
   discardRehearsalDraftsFor,
+  listRehearsalDrafts,
   readRehearsalDraft,
   writeRehearsalDraft
 } from './rehearsalDrafts'
 
+vi.mock('fs/promises', async (original) => {
+  const fs = await original<typeof import('fs/promises')>()
+  return { ...fs, rename: vi.fn(fs.rename) }
+})
+
 const cleanup: string[] = []
 afterEach(async () => {
+  vi.mocked(rename).mockClear()
   for (const directory of cleanup.splice(0)) await rm(directory, { recursive: true, force: true })
 })
 
@@ -101,6 +108,15 @@ describe('rehearsal draft persistence', () => {
     expect(raw.records).toHaveLength(1)
   })
 
+  it('restores the valid backup when the primary snapshot is missing', async () => {
+    const { file, identity } = await fixture()
+    await writeRehearsalDraft(file, identity, 'file.txt', payload('base', 'retained'), null)
+    await rm(file)
+    const restored = await readRehearsalDraft(file, identity, 'file.txt')
+    expect(restored.status).toBe('unknown')
+    expect(restored.record?.whole_file_text).toBe('retained')
+  })
+
   it('reports an inaccessible store without inventing a draft', async () => {
     const { file, identity } = await fixture()
     const saved = await writeRehearsalDraft(
@@ -122,12 +138,37 @@ describe('rehearsal draft persistence', () => {
     expect(failure.record).toBeNull()
   })
 
+  it('preserves the previous valid draft if publication fails after primary corruption', async () => {
+    const { file, identity } = await fixture()
+    await writeRehearsalDraft(file, identity, 'file.txt', payload('base', 'acknowledged'), null)
+    const validBackup = await readFile(file + '.previous', 'utf8')
+    await writeFile(file, '{incompatible primary data}')
+    vi.mocked(rename).mockRejectedValueOnce(new Error('publication failed'))
+    const failed = await writeRehearsalDraft(
+      file,
+      identity,
+      'file.txt',
+      payload('base', 'new unsaved edits'),
+      1
+    )
+    expect(failed.status).toBe('error')
+    expect(await readFile(file + '.previous', 'utf8')).toBe(validBackup)
+    expect(await readFile(file, 'utf8')).toBe('{incompatible primary data}')
+    const restored = await readRehearsalDraft(file, identity, 'file.txt')
+    expect(restored.record?.whole_file_text).toBe('acknowledged')
+  })
+
   it('clears only drafts belonging to a successfully discarded rehearsal', async () => {
     const first = await fixture()
     const second = { ...first.identity, id: 'rehearsal-2' }
     await writeRehearsalDraft(first.file, first.identity, 'one.txt', payload('a', 'first'), null)
     await writeRehearsalDraft(first.file, first.identity, 'two.txt', payload('a', 'second'), null)
     await writeRehearsalDraft(first.file, second, 'one.txt', payload('b', 'other'), null)
+    expect(
+      (await listRehearsalDrafts(first.file, first.identity)).records.map(
+        (record) => record.key.path
+      )
+    ).toEqual(['one.txt', 'two.txt'])
     await discardRehearsalDraftsFor(first.file, first.identity)
     expect((await readRehearsalDraft(first.file, first.identity, 'one.txt')).status).toBe('absent')
     expect((await readRehearsalDraft(first.file, first.identity, 'two.txt')).status).toBe('absent')

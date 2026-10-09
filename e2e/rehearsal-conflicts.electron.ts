@@ -1,3 +1,4 @@
+import { discardFixtureRehearsals } from './rehearsal-fixture-cleanup'
 import { expandRehearsal } from './rehearsal-ui'
 import { test, expect } from '@playwright/test'
 import { launchNativeFocusApp } from './native-focus'
@@ -51,7 +52,9 @@ test('keyboard sandbox conflict resolution preserves the original until checked 
       await page.keyboard.press('Enter')
     }
     await press('Resolve file.txt')
-    await expect(editor.getByRole('heading')).toBeFocused()
+    await expect(
+      editor.getByRole('heading', { name: 'Resolve in sandbox', exact: true })
+    ).toBeFocused()
     // Every hunk action is reachable by sequential Tab navigation.
     await page.keyboard.press('Tab')
     await expect(
@@ -82,20 +85,25 @@ test('keyboard sandbox conflict resolution preserves the original until checked 
       })
     )
     await writeFile(join(retained.sandbox, 'file.txt'), 'external resolution\n')
+    await press('Confirm section 1 edit')
     await press('Save and stage in sandbox')
     await expect(editor.getByRole('alert')).toContainText('Nothing was overwritten')
     await press('Refresh sandbox')
-    await expect(editor.getByText('external resolution', { exact: true })).toBeVisible()
+    await expect(
+      editor.getByText('external resolution', { exact: true }).filter({ visible: true })
+    ).toBeVisible()
     await expect(
       editor.getByRole('group', { name: 'Conflict content' }).getByRole('alert')
-    ).toContainText('saved draft is based on sandbox revision')
+    ).toContainText('retained draft is based on sandbox revision')
     await editor.getByRole('button', { name: 'Start from current sandbox', exact: true }).click()
     await app.focus('away')
     await expect.poll(() => page.evaluate(() => document.hasFocus())).toBe(false)
     await writeFile(join(retained.sandbox, 'file.txt'), 'changed while outside the app\n')
     await app.focus('back')
     await expect.poll(() => page.evaluate(() => document.hasFocus())).toBe(true)
-    await expect(editor.getByText('changed while outside the app', { exact: true })).toBeVisible()
+    await expect(
+      editor.getByText('changed while outside the app', { exact: true }).filter({ visible: true })
+    ).toBeVisible()
     await expect(
       editor.getByText(
         '⚠ File reloaded after external changes. Review the current content before saving.',
@@ -108,6 +116,7 @@ test('keyboard sandbox conflict resolution preserves the original until checked 
     await editor.getByLabel('Resolved file text').focus()
     await page.keyboard.press(process.platform === 'darwin' ? 'Meta+a' : 'Control+a')
     await page.keyboard.type('reviewed resolution\n')
+    await press('Confirm complete file resolution')
     await press('Save and stage in sandbox')
     await expect(editor.getByRole('button', { name: 'Continue rehearsal' })).toBeEnabled()
     expect(git('rev-parse', 'HEAD')).toBe(before.head)
@@ -188,10 +197,12 @@ test('durable conflict drafts survive file navigation, panel close and restart',
     await edit('one.txt', 'draft one\n')
     await edit('two.txt', 'draft two\n')
     await page.getByRole('button', { name: 'Close rehearsal panel' }).click()
+    await expect(editor).toBeHidden()
     await page.getByRole('button', { name: 'Rehearse panel' }).click()
     await editor.getByRole('button', { name: 'Resolve one.txt', exact: true }).click()
     await expect(editor.getByLabel('Resolved file text')).toHaveValue('draft one\n')
     await page.getByRole('button', { name: 'Close rehearsal panel' }).click()
+    await expect(editor).toBeHidden()
     await app.close()
 
     const restarted = await launchNativeFocusApp(root, userData, tool!)
@@ -271,16 +282,19 @@ for (const scenario of ['binary', 'delete', 'rename'] as const) {
       await expect(button).toBeEnabled()
       await button.focus()
       await page.keyboard.press('Enter')
-      await expect(editor.getByRole('heading')).toBeFocused()
+      await expect(
+        editor.getByRole('heading', { name: 'Resolve in sandbox', exact: true })
+      ).toBeFocused()
       const listing = JSON.parse(
         execFileSync(tool, ['--json', 'list'], { cwd: root, encoding: 'utf8' })
       )
-      const report = JSON.parse(
-        execFileSync(tool, ['--json', 'show', listing.rehearsals[0].id], {
-          cwd: root,
-          encoding: 'utf8'
-        })
+      const shown = await page.evaluate(
+        (identity) => window.gitCity.rehearsalShow(identity),
+        listing.rehearsals[0]
       )
+      expect(shown.kind).toBe('report')
+      if (shown.kind !== 'report') throw new Error('Expected the retained conflict report.')
+      const report = shown.report
       if (scenario === 'binary') {
         await expect(
           editor.getByRole('group', { name: 'Binary conflict: choose a complete version' })
@@ -291,7 +305,9 @@ for (const scenario of ['binary', 'delete', 'rename'] as const) {
         await page.keyboard.press('Tab')
         await expect(editor.getByRole('button', { name: 'Use theirs in sandbox' })).toBeFocused()
         await page.keyboard.press('Enter')
-        await expect(editor.getByRole('heading')).toBeFocused()
+        await expect(
+          editor.getByRole('heading', { name: 'Resolve in sandbox', exact: true })
+        ).toBeFocused()
         expect(await readFile(join(report.sandbox, 'file'))).toEqual(Buffer.from([0, 254]))
       } else {
         await expect(editor.getByRole('status')).toContainText('Deletion or rename conflict')
@@ -313,11 +329,7 @@ for (const scenario of ['binary', 'delete', 'rename'] as const) {
       await page.screenshot({ path: `test-results/rehearsal-${scenario}.png` })
     } finally {
       await app.close()
-      const listing = JSON.parse(
-        execFileSync(tool, ['--json', 'list'], { cwd: root, encoding: 'utf8' })
-      )
-      for (const rehearsal of listing.rehearsals)
-        execFileSync(tool, ['--json', 'discard', rehearsal.id], { cwd: root })
+      await discardFixtureRehearsals(tool, root)
       await rm(root, { recursive: true, force: true })
       await rm(userData, { recursive: true, force: true })
     }

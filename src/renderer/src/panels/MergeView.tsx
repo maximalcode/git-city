@@ -278,28 +278,42 @@ export function ConflictHunk({
   seg,
   choice,
   edit,
+  decided = true,
   onChoice,
   onEdit
 }: {
   seg: Extract<ConflictSegment, { kind: 'conflict' }>
   choice: Choice
   edit: string
+  decided?: boolean
   onChoice: (c: Choice) => void
   onEdit: (text: string) => void
 }): React.JSX.Element {
   return (
     <div className="hunk">
       <div className="hunk-actions">
-        <button className={choice === 'ours' ? 'active' : ''} onClick={() => onChoice('ours')}>
+        <button
+          className={decided && choice === 'ours' ? 'active' : ''}
+          onClick={() => onChoice('ours')}
+        >
           Ours{seg.oursLabel ? ` (${seg.oursLabel})` : ''}
         </button>
-        <button className={choice === 'theirs' ? 'active' : ''} onClick={() => onChoice('theirs')}>
+        <button
+          className={decided && choice === 'theirs' ? 'active' : ''}
+          onClick={() => onChoice('theirs')}
+        >
           Theirs{seg.theirsLabel ? ` (${seg.theirsLabel})` : ''}
         </button>
-        <button className={choice === 'both' ? 'active' : ''} onClick={() => onChoice('both')}>
+        <button
+          className={decided && choice === 'both' ? 'active' : ''}
+          onClick={() => onChoice('both')}
+        >
           Both
         </button>
-        <button className={choice === 'edit' ? 'active' : ''} onClick={() => onChoice('edit')}>
+        <button
+          className={decided && choice === 'edit' ? 'active' : ''}
+          onClick={() => onChoice('edit')}
+        >
           Edit
         </button>
       </div>

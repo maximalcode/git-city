@@ -743,6 +743,12 @@ export interface RehearsalDraftReadResult {
   message?: string
 }
 
+export interface RehearsalDraftListResult {
+  status: 'saved' | 'unknown'
+  records: RehearsalDraftRecord[]
+  message?: string
+}
+
 export interface RehearsalDraftPayload {
   base_revision: string
   base_content: string
@@ -847,6 +853,7 @@ export interface GitCityApi {
     text: string | { side: 'ours' | 'theirs' }
   ): Promise<void>
   rehearsalDraftRead(identity: RehearsalIdentity, path: string): Promise<RehearsalDraftReadResult>
+  rehearsalDraftList(identity: RehearsalIdentity): Promise<RehearsalDraftListResult>
   rehearsalDraftWrite(
     identity: RehearsalIdentity,
     path: string,

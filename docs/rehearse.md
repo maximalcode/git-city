@@ -86,7 +86,14 @@ refreshing or changing the rehearsal invalidates older inventory and content
 responses instead of showing a stale patch beside a new list.
 
 For a text conflict, choose **Resolve**, then Ours, Theirs, Both, Edit, or
-**Edit whole file**. **Save and stage in sandbox** saves to the sandbox only.
+**Edit whole file**. Every section starts **Unreviewed**; the initial preview is
+not a decision. Choose a version for each section, confirm an edited section,
+or use a labelled bulk choice for the remaining sections. **Next unreviewed
+section** moves keyboard focus to the next decision. Whole-file editing requires
+**Confirm complete file resolution**, and later typing removes that confirmation.
+**Inspect complete resolution** shows the assembled file before saving. These
+decisions select content; they do not mean tests passed.
+**Save and stage in sandbox** checks those decisions again and saves to the sandbox only.
 Binary conflicts offer a complete Ours/Theirs version. During rebase, these
 mean the destination and replayed commit respectively. For deletion or rename
 conflicts, follow the displayed sandbox path and external staging instructions.
@@ -100,9 +107,11 @@ persistence is separate from **Save and stage in sandbox**: switching files, reh
 worktrees, closing the panel, and restarting Git City restore the last acknowledged draft for the
 same rehearsal identity and conflict path. A pending or failed draft save is shown in the editor;
 keep the panel open and retry before abandoning it. If the sandbox changes externally, Git City
-keeps the old draft and the new sandbox revision separate and asks you to discard the old draft or
-start from the current content. Saving and staging still checks the sandbox revision, and a
-successful save clears only that exact draft.
+keeps the old draft, its original base, and the new sandbox revision separate. You can inspect
+both, discard the draft, or deliberately use its retained text as a new draft on the current
+base. That new draft requires a fresh whole-file decision. Saving and staging still checks the
+sandbox revision, and a successful save clears only that exact draft. A draft left behind by
+external staging remains inspectable and can be explicitly discarded before Continue.
 
 ## Apply and local work
 

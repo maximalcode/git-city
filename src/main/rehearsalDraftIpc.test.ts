@@ -11,7 +11,8 @@ import {
   rehearsalDraftRead,
   rehearsalDraftWrite,
   rehearsalDraftDiscard,
-  rehearsalDraftsExist
+  rehearsalDraftsExist,
+  rehearsalDraftPersistenceFailed
 } from './rehearsalDraftIpc'
 
 const identity: RehearsalIdentity = {
@@ -57,5 +58,19 @@ describe('rehearsal draft bridge adapter', () => {
     expect(removed.status).toBe('absent')
     expect((await rehearsalDraftRead(scopedIdentity, 'conflict.txt')).status).toBe('absent')
     expect(await rehearsalDraftsExist(scopedIdentity)).toBe(false)
+  })
+
+  it('keeps a failed draft pending when a different file saves successfully', async () => {
+    root = await mkdtemp(join(tmpdir(), 'city-draft-ipc-'))
+    electronState.userData = root
+    const scopedIdentity = { ...identity, repository: root, origin_worktree: root }
+    expect((await rehearsalDraftWrite(scopedIdentity, 'failed.txt', draft, 0)).status).toBe('error')
+    expect(rehearsalDraftPersistenceFailed()).toBe(true)
+    expect((await rehearsalDraftWrite(scopedIdentity, 'other.txt', draft, null)).status).toBe(
+      'saved'
+    )
+    expect(rehearsalDraftPersistenceFailed()).toBe(true)
+    await rehearsalDraftDiscard(scopedIdentity, 'failed.txt', null)
+    expect(rehearsalDraftPersistenceFailed()).toBe(false)
   })
 })

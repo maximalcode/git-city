@@ -205,8 +205,13 @@ export async function saveRehearsalConflict(
 
 export const continueRehearsal = (
   tool: string | undefined,
-  identity: RehearsalIdentity
+  identity: RehearsalIdentity,
+  draftRefusal?: () => Promise<string | null>
 ): ReturnType<typeof rehearsalContinue> =>
   withRehearsalExecution(identity.origin_worktree, (execution) =>
-    withRehearsal(identity, () => rehearsalContinue(tool, identity, execution))
+    withRehearsal(identity, async () => {
+      const reason = await draftRefusal?.()
+      if (reason) return { kind: 'refused', message: reason }
+      return rehearsalContinue(tool, identity, execution)
+    })
   )

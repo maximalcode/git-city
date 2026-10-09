@@ -8,7 +8,13 @@ function bytes(value: number | null): string {
   return `${(value / 1024 ** 2).toFixed(1)} MiB`
 }
 
-export default function RehearsalHistory({ repo }: { repo: string }): React.JSX.Element {
+export default function RehearsalHistory({
+  repo,
+  onBeforeSelect
+}: {
+  repo: string
+  onBeforeSelect?: () => Promise<boolean>
+}): React.JSX.Element {
   const inventory = useStore((s) => s.rehearsalInventories[repo])
   const current = useStore((s) => s.rehearsalCurrent[repo])
   const busy = useStore((s) => s.rehearsalBusy)
@@ -86,8 +92,11 @@ export default function RehearsalHistory({ repo }: { repo: string }): React.JSX.
                   disabled={busy}
                   aria-pressed={current === entry.id}
                   onClick={() => {
-                    heading.current?.focus()
-                    void select(repo, entry)
+                    void (async () => {
+                      if (onBeforeSelect && !(await onBeforeSelect())) return
+                      heading.current?.focus()
+                      await select(repo, entry)
+                    })()
                   }}
                 >
                   Open {entry.id}

@@ -31,14 +31,20 @@ the submitted plan, full ref movements, file consequences, and replay warnings.
 Actionable conflict and unexpected-content warnings stay in the main report
 area.
 
-Completed reports also offer **Frozen file review**. Open **Review changed files**
-to load the complete tracked-worktree inventory, filter it by path, and select a
-file. The **Changes**, **Before**, and **After** views read the retained Git
+Completed reports open a content-first **Frozen file review** workspace. It loads
+the complete tracked-worktree inventory, lets you choose the review scope, filter
+by path, and select a file. The **Changes**, **Before**, and **After** views read the retained Git
 objects from the rehearsal sandbox, so edits made later in the live checkout or
 sandbox cannot replace the result being inspected. Added and deleted sides are
 labelled as absent; binary, mode-only, oversized, and unavailable content stays
 visible with an explanation. Untracked files and the original staging selection
 are excluded from this scope.
+
+The file list and content pane can be resized with the divider. Focus the divider
+and use the left/right arrow keys for keyboard resizing. The workspace keeps long
+paths and code inside its own scroll areas at laptop and larger desktop sizes.
+Use **Show city context** when spatial context helps; **Compare city** opens the
+shared frozen Before/After scene, while the live city remains a separate workspace.
 
 **Compare city** opens the frozen **Before** and **After** views when a finished
 result has an available After. They use the same layout and provide a text

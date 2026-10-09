@@ -109,6 +109,7 @@ export function RehearsalReviewFileInventory({
             aria-selected={selectedEntryId === entry.entryId}
             className="rehearsal-review-file"
             key={entry.entryId}
+            disabled={loading}
             onClick={() => onSelectEntry(entry.entryId)}
           >
             <span>{name(entry)}</span>
@@ -215,12 +216,36 @@ export default function RehearsalReviewPanel({
   const [fileEntries, setFileEntries] = useState<RehearsalReviewEntry[]>([])
   const [nextCursor, setNextCursor] = useState<string | null>(null)
   const [knownTotal, setKnownTotal] = useState<number | null>(null)
-  const [expanded, setExpanded] = useState(false)
+  const [expanded, setExpanded] = useState(true)
+  const [selectedScopeId, setSelectedScopeId] = useState<string | null>(null)
+  const [inventoryPercent, setInventoryPercent] = useState(() => {
+    if (typeof window === 'undefined') return 34
+    const stored = Number(window.localStorage.getItem('git-city.review.inventory-percent'))
+    return Number.isFinite(stored) ? Math.max(24, Math.min(48, stored)) : 34
+  })
+  const [cityVisible, setCityVisible] = useState(
+    () =>
+      typeof window !== 'undefined' &&
+      window.localStorage.getItem('git-city.review.city-visible') === 'true'
+  )
   const previousRevision = useRef<string | null>(null)
+  const previousIdentity = useRef<string | null>(null)
+  const resizeStart = useRef<{ x: number; percent: number } | null>(null)
+
+  useEffect(() => {
+    window.localStorage.setItem('git-city.review.inventory-percent', String(inventoryPercent))
+  }, [inventoryPercent])
+  useEffect(() => {
+    window.localStorage.setItem('git-city.review.city-visible', String(cityVisible))
+  }, [cityVisible])
   const api = bridge()
   const { id, repository, repository_id, origin_worktree } = report
   const reviewIdentity = useMemo(
     () => ({ id, repository, repository_id, origin_worktree }),
+    [id, repository, repository_id, origin_worktree]
+  )
+  const identityKey = useMemo(
+    () => JSON.stringify([id, repository, repository_id, origin_worktree]),
     [id, repository, repository_id, origin_worktree]
   )
   const key = useMemo(
@@ -243,7 +268,7 @@ export default function RehearsalReviewPanel({
     }
   )
   const summary = summaryQuery.loading ? null : summaryQuery.data
-  const scopeId = summary?.defaultScopeId ?? null
+  const scopeId = selectedScopeId ?? summary?.defaultScopeId ?? null
   const filesQuery = useRepoQuery(
     summary && scopeId
       ? ([reviewIdentity, summary.reviewRevision, scopeId, fileCursor, appliedFilter] as const)
@@ -290,6 +315,27 @@ export default function RehearsalReviewPanel({
   // Replacing a report revision invalidates the inventory and pending content,
   // while a harmless refresh keeps a surviving selection by entry ID.
   useEffect(() => {
+    if (previousIdentity.current && previousIdentity.current !== identityKey) {
+      setSelectedEntryId(null)
+      setSelectedScopeId(null)
+      setView('changes')
+      setFilter('')
+      setAppliedFilter('')
+      setFileCursor(null)
+      setFileEntries([])
+      setNextCursor(null)
+      setKnownTotal(null)
+      previousRevision.current = null
+    }
+    previousIdentity.current = identityKey
+  }, [identityKey])
+
+  useEffect(() => {
+    if (summary && !summary.scopes.some((scope) => scope.scopeId === selectedScopeId))
+      setSelectedScopeId(summary.defaultScopeId ?? summary.scopes[0]?.scopeId ?? null)
+  }, [summary, selectedScopeId])
+
+  useEffect(() => {
     if (
       summary?.reviewRevision &&
       previousRevision.current &&
@@ -304,12 +350,33 @@ export default function RehearsalReviewPanel({
   }, [summary?.reviewRevision, scopeId, appliedFilter])
 
   useEffect(() => {
+    const move = (event: PointerEvent): void => {
+      const start = resizeStart.current
+      if (!start) return
+      const delta = ((event.clientX - start.x) / window.innerWidth) * 100
+      setInventoryPercent(Math.max(24, Math.min(48, start.percent + delta)))
+    }
+    const stop = (): void => {
+      resizeStart.current = null
+      document.body.style.removeProperty('cursor')
+      document.body.style.removeProperty('user-select')
+    }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', stop)
+    return () => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', stop)
+    }
+  }, [])
+
+  useEffect(() => {
     if (!files || filesQuery.loading) return
     setFileEntries((current) => (fileCursor ? [...current, ...files.entries] : files.entries))
     setNextCursor(files.nextCursor)
     setKnownTotal(files.total)
     setSelectedEntryId((current) => {
-      if (current) return current
+      if (fileCursor) return current ?? files.entries[0]?.entryId ?? null
+      if (current && files.entries.some((entry) => entry.entryId === current)) return current
       return files.entries[0]?.entryId ?? null
     })
   }, [files, filesQuery.loading, fileCursor])
@@ -323,6 +390,22 @@ export default function RehearsalReviewPanel({
     if (nextCursor) setFileCursor(nextCursor)
   }
 
+  const startResize = (event: React.PointerEvent<HTMLDivElement>): void => {
+    resizeStart.current = { x: event.clientX, percent: inventoryPercent }
+    event.currentTarget.setPointerCapture?.(event.pointerId)
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+  }
+
+  const resizeByKeyboard = (event: React.KeyboardEvent<HTMLDivElement>): void => {
+    if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+      event.preventDefault()
+      setInventoryPercent((value) =>
+        Math.max(24, Math.min(48, value + (event.key === 'ArrowLeft' ? -2 : 2)))
+      )
+    }
+  }
+
   const choose = (entry: RehearsalReviewEntry): void => {
     setSelectedEntryId(entry.entryId)
     setView('changes')
@@ -333,9 +416,15 @@ export default function RehearsalReviewPanel({
   }
 
   return (
-    <section className="rehearsal-review-panel" aria-label="Frozen rehearsal review">
+    <section
+      className="rehearsal-review-panel rehearsal-review-workspace"
+      aria-label="Frozen rehearsal review"
+    >
       <div className="rehearsal-review-heading">
-        <h3>Frozen file review</h3>
+        <div>
+          <p className="rehearsal-review-eyebrow">Review workspace</p>
+          <h3>Frozen file review</h3>
+        </div>
         <button onClick={() => setExpanded((value) => !value)} aria-expanded={expanded}>
           {expanded ? 'Hide file review' : 'Review changed files'}
         </button>
@@ -348,7 +437,42 @@ export default function RehearsalReviewPanel({
             <>
               <p className="rehearsal-review-notice">{summary.notices[0]}</p>
               {!summary.afterAvailable && <p role="alert">⚠ {summary.afterReason}</p>}
-              <div className="rehearsal-review-layout">
+              <div className="rehearsal-review-toolbar">
+                <RehearsalReviewScopeSelector
+                  scopes={summary.scopes}
+                  selectedScopeId={scopeId}
+                  disabled={loading}
+                  onSelectScope={(nextScope) => {
+                    setSelectedScopeId(nextScope)
+                    setSelectedEntryId(null)
+                    setFileCursor(null)
+                  }}
+                />
+                <button
+                  type="button"
+                  aria-pressed={cityVisible}
+                  onClick={() => setCityVisible((visible) => !visible)}
+                >
+                  {cityVisible ? 'Hide city context' : 'Show city context'}
+                </button>
+                <span role="status" aria-live="polite">
+                  {selected ? `Selected ${name(selected)}` : 'Select a changed file'}
+                </span>
+              </div>
+              {cityVisible && (
+                <div className="rehearsal-review-city-slot" aria-label="Optional rehearsal city">
+                  <p>City context follows the selected review file.</p>
+                  <p className="rehearsal-review-city-note">
+                    Use Compare city below to open the shared before/after scene.
+                  </p>
+                </div>
+              )}
+              <div
+                className="rehearsal-review-layout"
+                style={
+                  { '--rehearsal-inventory-width': `${inventoryPercent}%` } as React.CSSProperties
+                }
+              >
                 <RehearsalReviewFileInventory
                   identity={reviewIdentity}
                   reviewRevision={summary.reviewRevision}
@@ -366,6 +490,18 @@ export default function RehearsalReviewPanel({
                     if (entry) choose(entry)
                   }}
                   onLoadMore={loadMore}
+                />
+                <div
+                  className="rehearsal-review-resizer"
+                  role="separator"
+                  aria-label="Resize file list"
+                  aria-orientation="vertical"
+                  aria-valuemin={24}
+                  aria-valuemax={48}
+                  aria-valuenow={Math.round(inventoryPercent)}
+                  tabIndex={0}
+                  onPointerDown={startResize}
+                  onKeyDown={resizeByKeyboard}
                 />
                 <RehearsalReviewContent
                   identity={reviewIdentity}

@@ -2809,7 +2809,7 @@
 
 /* Rehearsal stays alongside the real workspace; only confirmations are modal. */
 :root {
-  --rehearsal-width: clamp(360px, 34vw, 440px);
+  --rehearsal-width: clamp(520px, 58vw, 980px);
 }
 .app-workspace {
   height: 100%;
@@ -3013,7 +3013,7 @@ body:has(.rehearsal-panel) .rehearsal-mode {
 }
 @media (max-width: 900px) {
   :root {
-    --rehearsal-width: 360px;
+    --rehearsal-width: min(100vw, 600px);
   }
   .rehearsal-header,
   .rehearsal-body,
@@ -3026,7 +3026,7 @@ body:has(.rehearsal-panel) .rehearsal-mode {
 }
 @media (max-width: 600px) {
   :root {
-    --rehearsal-width: 65vw;
+    --rehearsal-width: 100vw;
   }
   .rehearsal-direction {
     grid-template-columns: 1fr;
@@ -3057,15 +3057,24 @@ body:not(:has(.rehearsal-panel)) .rehearsal-recovery {
   max-width: min(500px, calc(100vw - 32px));
 }
 
-/* Frozen review is intentionally small; R4 owns the eventual workspace shell. */
+/* Review workspace: content stays usable while the live city remains available beside it. */
 .rehearsal-review-panel {
-  margin: 16px 0;
-  padding: 12px;
+  margin: 20px 0;
+  padding: 16px;
   border: 1px solid var(--panel-border);
-  border-radius: 6px;
+  border-radius: 8px;
+  min-width: 0;
+  overflow: hidden;
+}
+.rehearsal-review-eyebrow {
+  margin: 0 0 4px;
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
 }
 .rehearsal-review-heading,
-.rehearsal-review-layout,
 .rehearsal-review-heading + p {
   display: flex;
   gap: 8px;
@@ -3073,6 +3082,44 @@ body:not(:has(.rehearsal-panel)) .rehearsal-recovery {
 }
 .rehearsal-review-heading {
   justify-content: space-between;
+}
+.rehearsal-review-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin: 12px 0;
+}
+.rehearsal-review-toolbar select,
+.rehearsal-review-toolbar button {
+  min-height: 32px;
+}
+.rehearsal-review-toolbar span {
+  flex: 1 1 180px;
+  min-width: 0;
+  color: var(--text-dim);
+  overflow-wrap: anywhere;
+}
+.rehearsal-review-city-slot {
+  margin: 12px 0;
+  padding: 10px 12px;
+  border: 1px dashed var(--panel-border);
+  border-radius: 6px;
+  background: #ffffff05;
+}
+.rehearsal-review-city-slot p {
+  margin: 0;
+}
+.rehearsal-review-city-note {
+  color: var(--text-dim);
+  font-size: 12px;
+}
+.rehearsal-review-layout {
+  display: grid;
+  grid-template-columns: minmax(150px, var(--rehearsal-inventory-width, 34%)) 8px minmax(0, 1fr);
+  gap: 10px;
+  align-items: stretch;
+  min-width: 0;
 }
 .rehearsal-review-panel label {
   display: grid;
@@ -3087,7 +3134,6 @@ body:not(:has(.rehearsal-panel)) .rehearsal-recovery {
   align-items: stretch;
 }
 .rehearsal-review-inventory {
-  flex: 0 1 42%;
   min-width: 0;
 }
 .rehearsal-review-files {
@@ -3109,8 +3155,19 @@ body:not(:has(.rehearsal-panel)) .rehearsal-recovery {
   color: var(--text-dim);
 }
 .rehearsal-review-content {
-  flex: 1 1 58%;
   min-width: 0;
+}
+.rehearsal-review-resizer {
+  width: 8px;
+  min-height: 160px;
+  align-self: stretch;
+  border-inline: 1px solid transparent;
+  cursor: col-resize;
+}
+.rehearsal-review-resizer:hover,
+.rehearsal-review-resizer:focus-visible {
+  border-color: var(--accent);
+  outline: 0;
 }
 .rehearsal-review-content pre {
   max-height: 260px;
@@ -3131,5 +3188,8 @@ body:not(:has(.rehearsal-panel)) .rehearsal-recovery {
   }
   .rehearsal-review-inventory {
     margin-bottom: 12px;
+  }
+  .rehearsal-review-resizer {
+    display: none;
   }
 }

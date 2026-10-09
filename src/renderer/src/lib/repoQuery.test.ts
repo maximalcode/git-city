@@ -5,6 +5,7 @@ import type {
   RehearsalReviewFileView
 } from '../../../shared/types'
 import { runRepoRead, type QueryPatch } from './repoQuery'
+import { validateRehearsalReviewFileResponse } from './rehearsalReviewResponses'
 
 function collector(): { patches: QueryPatch<unknown>[]; emit: (p: QueryPatch<unknown>) => void } {
   const patches: QueryPatch<unknown>[] = []
@@ -195,6 +196,25 @@ describe('runRepoRead', () => {
       'new-entry',
       'after'
     )
+  })
+
+  it('rejects a bridge response whose frozen entry or view does not match the request', () => {
+    const identity = {
+      id: 'review-1',
+      repository: '/repo',
+      origin_worktree: '/repo',
+      repository_id: 'repo'
+    }
+    expect(() =>
+      validateRehearsalReviewFileResponse(
+        reviewFileResult('old-entry', 'before'),
+        identity,
+        'revision-1',
+        'tracked-worktree',
+        'new-entry',
+        'after'
+      )
+    ).toThrow('stale')
   })
 })
 

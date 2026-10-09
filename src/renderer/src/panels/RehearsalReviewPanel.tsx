@@ -7,6 +7,11 @@ import type {
 } from '../../../shared/types'
 import { bridge } from '../lib/bridge'
 import { useRepoQuery } from '../lib/repoQuery'
+import {
+  validateRehearsalReviewFileResponse,
+  validateRehearsalReviewFilesResponse,
+  validateRehearsalReviewSummaryResponse
+} from '../lib/rehearsalReviewResponses'
 
 function name(entry: RehearsalReviewEntry): string {
   if (entry.oldPath && entry.newPath && entry.oldPath !== entry.newPath)
@@ -76,7 +81,10 @@ export default function RehearsalReviewPanel({
   )
   const summaryQuery = useRepoQuery(
     api?.rehearsalReviewSummary ? ([reviewIdentity, key] as const) : null,
-    (client, [request]) => client.rehearsalReviewSummary(request)
+    async (client, [request]) => {
+      const result = await client.rehearsalReviewSummary(request)
+      return validateRehearsalReviewSummaryResponse(result, request)
+    }
   )
   const summary = summaryQuery.loading ? null : summaryQuery.data
   const scopeId = summary?.defaultScopeId ?? null
@@ -84,8 +92,16 @@ export default function RehearsalReviewPanel({
     summary && scopeId
       ? ([reviewIdentity, summary.reviewRevision, scopeId, fileCursor, appliedFilter] as const)
       : null,
-    (client, [request, revision, scope, cursor, filterValue]) =>
-      client.rehearsalReviewFiles(request, revision, scope, cursor ?? undefined, filterValue)
+    async (client, [request, revision, scope, cursor, filterValue]) => {
+      const result = await client.rehearsalReviewFiles(
+        request,
+        revision,
+        scope,
+        cursor ?? undefined,
+        filterValue
+      )
+      return validateRehearsalReviewFilesResponse(result, request, revision, scope)
+    }
   )
   const files = filesQuery.loading ? null : filesQuery.data
   const selected = fileEntries.find((entry) => entry.entryId === selectedEntryId) ?? null
@@ -93,8 +109,23 @@ export default function RehearsalReviewPanel({
     summary && scopeId && selected
       ? ([reviewIdentity, summary.reviewRevision, scopeId, selected.entryId, view] as const)
       : null,
-    (client, [request, revision, scope, entryId, selectedView]) =>
-      client.rehearsalReviewFile(request, revision, scope, entryId, selectedView)
+    async (client, [request, revision, scope, entryId, selectedView]) => {
+      const result = await client.rehearsalReviewFile(
+        request,
+        revision,
+        scope,
+        entryId,
+        selectedView
+      )
+      return validateRehearsalReviewFileResponse(
+        result,
+        request,
+        revision,
+        scope,
+        entryId,
+        selectedView
+      )
+    }
   )
   const file = fileQuery.loading ? null : fileQuery.data
   const loading = summaryQuery.loading || filesQuery.loading || fileQuery.loading
@@ -172,7 +203,11 @@ export default function RehearsalReviewPanel({
               </label>
               <div className="rehearsal-review-layout">
                 <div className="rehearsal-review-files" role="listbox" aria-label="Changed files">
-                  <p>{files?.total ?? fileEntries.length} changed files</p>
+                  <p>
+                    {files?.total === null
+                      ? 'Changed file count unavailable'
+                      : `${files?.total ?? fileEntries.length} changed files`}
+                  </p>
                   {fileEntries.map((entry) => (
                     <button
                       role="option"

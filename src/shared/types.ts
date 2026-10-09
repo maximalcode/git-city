@@ -647,7 +647,8 @@ export interface RehearsalReviewFilesResult {
   scopeId: string
   entries: RehearsalReviewEntry[]
   nextCursor: RehearsalReviewCursor | null
-  total: number
+  /** Null means the retained result was incomplete, so no total was established. */
+  total: number | null
   complete: boolean
   filter: string | null
 }

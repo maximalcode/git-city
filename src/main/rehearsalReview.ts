@@ -419,6 +419,17 @@ export async function rehearsalReviewFiles(
       throw new Error('Review result changed. Refresh the summary.')
     if (data.scope.scopeId !== scopeId)
       throw new Error('Review scope is unavailable. Refresh the summary.')
+    if (data.report.outcome !== 'clean' || data.scope.after === null)
+      return {
+        identity: data.identity,
+        reviewRevision,
+        scopeId,
+        entries: [],
+        nextCursor: null,
+        total: null,
+        complete: false,
+        filter: null
+      }
     const needle = (filter ?? '').trim().toLocaleLowerCase()
     const all = needle
       ? data.entries.filter((entry) =>

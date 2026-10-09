@@ -176,3 +176,20 @@ it('keeps missing and invalid retained objects explicit without reading a live f
   expect(invalidFiles.entries[0].binary).toBe(true)
   expect(invalidFiles.entries[0].text.changes).toBe('binary')
 })
+
+it('leaves the incomplete inventory total unknown instead of claiming zero', async () => {
+  vi.mocked(rehearsalShow).mockResolvedValue({
+    kind: 'report',
+    report: { ...report, outcome: 'incomplete', conflicted: true }
+  })
+  const summary = await rehearsalReviewSummary('/tool', identity)
+  const files = await rehearsalReviewFiles(
+    '/tool',
+    identity,
+    summary.reviewRevision,
+    'tracked-worktree'
+  )
+  expect(files.complete).toBe(false)
+  expect(files.entries).toEqual([])
+  expect(files.total).toBeNull()
+})

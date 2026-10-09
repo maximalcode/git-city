@@ -22,6 +22,7 @@ export default function RehearsalPanel(): React.JSX.Element | null {
   const [confirmApply, setConfirmApply] = useState<RehearsalReport | null>(null)
   const [conflictDirty, setConflictDirty] = useState(false)
   const conflictAbandon = useRef<(() => Promise<boolean>) | null>(null)
+  const conflictPrepare = useRef<(() => Promise<boolean>) | null>(null)
   const applyTrigger = useRef<HTMLButtonElement>(null)
   const wasConfirming = useRef(false)
   const cancelApply = useRef<HTMLButtonElement>(null)
@@ -82,20 +83,21 @@ export default function RehearsalPanel(): React.JSX.Element | null {
   const openPanel = useStore((s) => s.openRehearsal)
   const close = useStore((s) => s.closeRehearsal)
   const rehearse = useStore((s) => s.rehearse)
-  const requestClose = async (): Promise<void> => {
+  const guardConflictNavigation = async (action: string): Promise<boolean> => {
     if (!conflictDirty) {
-      close()
-      return
+      return true
     }
-    if (
-      !window.confirm(
-        'This rehearsal has a saved conflict draft. Abandon it and close the rehearsal panel?'
-      )
-    )
-      return
+    const ready = conflictPrepare.current ? await conflictPrepare.current() : false
+    if (ready) return true
+    if (!window.confirm(`This conflict draft could not be saved. Abandon it and ${action}?`))
+      return false
     const abandoned = conflictAbandon.current ? await conflictAbandon.current() : false
-    if (!abandoned) return
+    if (!abandoned) return false
     setConflictDirty(false)
+    return true
+  }
+  const requestClose = async (): Promise<void> => {
+    if (!(await guardConflictNavigation('close the rehearsal panel'))) return
     close()
   }
 
@@ -323,8 +325,8 @@ export default function RehearsalPanel(): React.JSX.Element | null {
               {!busy &&
                 (result?.kind === 'report' ? (
                   <>
-                    <RehearsalReportView report={result.report} />
                     <RehearsalReviewPanel report={result.report} />
+                    <RehearsalReportView report={result.report} />
                   </>
                 ) : (
                   result && (
@@ -351,6 +353,9 @@ export default function RehearsalPanel(): React.JSX.Element | null {
                 onDirtyStateChange={setConflictDirty}
                 onAbandonAvailable={(abandon) => {
                   conflictAbandon.current = abandon
+                }}
+                onPrepareNavigationAvailable={(prepare) => {
+                  conflictPrepare.current = prepare
                 }}
               />
             )}
@@ -412,7 +417,11 @@ export default function RehearsalPanel(): React.JSX.Element | null {
             </details>
             <details className="rehearsal-history">
               <summary>Saved rehearsals{inventory ? ` · ${inventory.entries.length}` : ''}</summary>
-              <RehearsalHistory key={repo} repo={repo} />
+              <RehearsalHistory
+                key={repo}
+                repo={repo}
+                onBeforeSelect={() => guardConflictNavigation('switch rehearsals')}
+              />
             </details>
             <RehearsalUndo key={`undo:${repo}`} repo={repo} blocked={!!blocked} />
             {report && <RehearsalDetails report={report} />}

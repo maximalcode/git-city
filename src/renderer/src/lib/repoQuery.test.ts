@@ -201,6 +201,71 @@ describe('runRepoRead', () => {
     )
   })
 
+  it('drops a late bridge response when the review identity changes with an overlapping entry', async () => {
+    let finishOld!: (value: RehearsalReviewFileResult) => void
+    const reviewFile = vi.fn<GitCityApi['rehearsalReviewFile']>()
+    reviewFile
+      .mockImplementationOnce(
+        () => new Promise<RehearsalReviewFileResult>((resolve) => (finishOld = resolve))
+      )
+      .mockResolvedValueOnce(reviewFileResult('same-entry', 'after', '/second'))
+
+    const firstIdentity = {
+      id: 'review-1',
+      repository: '/first',
+      origin_worktree: '/first',
+      repository_id: 'shared'
+    }
+    const secondIdentity = {
+      id: 'review-2',
+      repository: '/second',
+      origin_worktree: '/second',
+      repository_id: 'shared'
+    }
+    const received: string[] = []
+    const cancelOld = runRepoRead(
+      () =>
+        reviewFile(firstIdentity, 'revision-1', 'tracked-worktree', 'same-entry', 'before').then(
+          (result) => result.text ?? ''
+        ),
+      (patch) => {
+        if (patch.data !== undefined && patch.data !== null) received.push(patch.data)
+      }
+    )
+    await Promise.resolve()
+    cancelOld()
+
+    runRepoRead(
+      () =>
+        reviewFile(secondIdentity, 'revision-2', 'tracked-worktree', 'same-entry', 'after').then(
+          (result) => result.text ?? ''
+        ),
+      (patch) => {
+        if (patch.data !== undefined && patch.data !== null) received.push(patch.data)
+      }
+    )
+    finishOld(reviewFileResult('same-entry', 'before', '/first'))
+    await settle()
+
+    expect(received).toEqual(['same-entry:after'])
+    expect(reviewFile).toHaveBeenNthCalledWith(
+      1,
+      firstIdentity,
+      'revision-1',
+      'tracked-worktree',
+      'same-entry',
+      'before'
+    )
+    expect(reviewFile).toHaveBeenNthCalledWith(
+      2,
+      secondIdentity,
+      'revision-2',
+      'tracked-worktree',
+      'same-entry',
+      'after'
+    )
+  })
+
   it('rejects a bridge response whose frozen entry or view does not match the request', () => {
     const identity = {
       id: 'review-1',
@@ -230,14 +295,15 @@ describe('runRepoRead', () => {
 
 function reviewFileResult(
   entryId: string,
-  view: RehearsalReviewFileView
+  view: RehearsalReviewFileView,
+  repository = '/repo'
 ): RehearsalReviewFileResult {
   const side = { present: true, mode: '100644', objectId: 'a'.repeat(40) }
   return {
     identity: {
       id: 'review-1',
-      repository: '/repo',
-      origin_worktree: '/repo',
+      repository,
+      origin_worktree: repository,
       repository_id: 'repo'
     },
     reviewRevision: 'revision-1',

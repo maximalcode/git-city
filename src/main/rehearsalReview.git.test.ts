@@ -160,7 +160,7 @@ describe('frozen review Git-backed API', () => {
   })
 
   it('ignores mutable attributes and color configuration for known text', async () => {
-    const data = fixture('line\r\n', 'line\n', 'tracked.txt', { configIsolation: true })
+    const data = fixture('line\r\n', 'line', 'tracked.txt', { configIsolation: true })
     const sandboxStatus = data.sandbox.git('status', '--porcelain')
     const { result } = await reviewChanges(data)
     expect(result.availability).toBe('available')

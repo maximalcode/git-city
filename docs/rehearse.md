@@ -45,8 +45,9 @@ visible with an explanation. Rename detection is bounded for very large
 changesets and leaves complete add/delete entries when it cannot safely pair
 paths. Endpoint blobs are limited to 2 MiB and generated patches to 4 MiB;
 over-limit content remains identifiable without being presented as a complete
-diff. Untracked files and the original staging selection are excluded from the
-tracked-worktree scope.
+diff. The retained raw inventory is capped at 32 MiB; a larger inventory is
+reported as unavailable rather than silently truncated. Untracked files and the
+original staging selection are excluded from the tracked-worktree scope.
 
 The file list and content pane can be resized with the divider. Focus the divider
 and use the left/right arrow keys for keyboard resizing. The workspace keeps long

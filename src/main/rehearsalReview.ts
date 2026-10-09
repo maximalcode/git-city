@@ -25,6 +25,7 @@ import { withRehearsal } from './rehearsalConflicts'
 
 export const REHEARSAL_REVIEW_BLOB_LIMIT = 2 * 1024 * 1024
 export const REHEARSAL_REVIEW_PATCH_LIMIT = 4 * 1024 * 1024
+export const REHEARSAL_REVIEW_INVENTORY_LIMIT = 32 * 1024 * 1024
 export const REHEARSAL_REVIEW_PAGE_SIZE = 200
 const RENAME_DETECTION_ENTRY_LIMIT = 400
 const BLOB_READ_CONCURRENCY = 4
@@ -56,12 +57,11 @@ type ReviewData = {
   identity: RehearsalIdentity
   revision: string
   scope: RehearsalReviewScope
-  entries: RehearsalReviewEntry[]
   root: string
-  scopes: Map<string, { scope: RehearsalReviewScope; entries: RehearsalReviewEntry[] }>
+  scopes: Map<string, ScopeData>
 }
 
-type ScopeData = { scope: RehearsalReviewScope; entries: RehearsalReviewEntry[] }
+type ScopeData = { scope: RehearsalReviewScope; entries: RawEntry[] }
 
 function identityOf(report: RehearsalReport): RehearsalIdentity {
   return {
@@ -190,22 +190,32 @@ async function rawDiff(
 ): Promise<RawEntry[]> {
   if (!before && !after) return []
   const emptyTree = before && after ? null : await emptyTreeObject(root)
-  const output = await runGit(root, [
-    '--no-replace-objects',
-    '-c',
-    'core.quotepath=false',
-    'diff-tree',
-    '--no-ext-diff',
-    '--no-textconv',
-    detectRenames ? '--find-renames=50%' : '--no-renames',
-    '-r',
-    '--raw',
-    '-z',
-    before ?? emptyTree!,
-    after ?? emptyTree!,
-    '--'
-  ])
-  return parseRawDiff(output)
+  const result = await runGitBufferBounded(
+    root,
+    [
+      '--no-replace-objects',
+      '-c',
+      'core.quotepath=false',
+      'diff-tree',
+      '--no-ext-diff',
+      '--no-textconv',
+      detectRenames ? '--find-renames=50%' : '--no-renames',
+      '-r',
+      '--raw',
+      '-z',
+      before ?? emptyTree!,
+      after ?? emptyTree!,
+      '--'
+    ],
+    REHEARSAL_REVIEW_INVENTORY_LIMIT
+  )
+  if (result.kind === 'too-large')
+    throw new Error(
+      'Frozen review inventory exceeds the 32 MiB retained output limit. Refresh with a smaller result.'
+    )
+  if (result.kind === 'unavailable')
+    throw new Error('Frozen review inventory is unavailable. Refresh the retained result.')
+  return parseRawDiff(result.bytes.toString('utf8'))
 }
 
 /** Resolve the empty tree in the repository's object format (SHA-1 or SHA-256). */
@@ -281,6 +291,20 @@ function availability(value: BlobText, present: boolean): RehearsalReviewAvailab
 
 function contentText(value: BlobText): string | null {
   return value.kind === 'text' || value.kind === 'pointer' ? value.text : null
+}
+
+function entryIdFor(scopeId: string, raw: RawEntry): string {
+  return createHash('sha256')
+    .update(scopeId)
+    .update('\0')
+    .update(raw.oldPath ?? '')
+    .update('\0')
+    .update(raw.newPath ?? '')
+    .update('\0')
+    .update(raw.oldId)
+    .update('\0')
+    .update(raw.newId)
+    .digest('hex')
 }
 
 function patchSize(hunks: DiffHunk[]): number {
@@ -383,7 +407,8 @@ async function makeEntry(
   root: string,
   scopeId: string,
   raw: RawEntry,
-  renameDetectionLimited = false
+  renameDetectionLimited = false,
+  includeDiff = true
 ): Promise<RehearsalReviewEntry> {
   const old = side(raw.oldMode, raw.oldId)
   const newer = side(raw.newMode, raw.newId)
@@ -407,19 +432,9 @@ async function makeEntry(
         : oldContent !== null || newContent !== null
           ? 'available'
           : 'unavailable'
-  const key = createHash('sha256')
-    .update(scopeId)
-    .update('\0')
-    .update(raw.oldPath ?? '')
-    .update('\0')
-    .update(raw.newPath ?? '')
-    .update('\0')
-    .update(raw.oldId)
-    .update('\0')
-    .update(raw.newId)
-    .digest('hex')
+  const key = entryIdFor(scopeId, raw)
   let diff: FrozenDiff | null = null
-  if (!binary && !modeOnly) {
+  if (includeDiff && !binary && !modeOnly) {
     if (!old.present && newContent !== null) diff = absentSideDiff(null, newContent)
     else if (oldContent !== null && !newer.present) diff = absentSideDiff(oldContent, null)
     else if (oldContent !== null && newContent !== null) {
@@ -550,6 +565,27 @@ function referenceScopes(report: RehearsalReport): Array<{
   )
 }
 
+async function verifyFrozenState(
+  tool: string | undefined,
+  identity: RehearsalIdentity,
+  data: ReviewData
+): Promise<void> {
+  const current = await readReport(tool, identity)
+  const currentRoot = await validateSandbox(current)
+  const currentEndpoints = await resolveRehearsalEndpoints(current)
+  const currentAdditional = referenceScopes(current)
+  const currentAdditionalKeys = currentAdditional.map(
+    (group) => `${group.aliases.join(',')}\0${group.before ?? ''}\0${group.after ?? ''}`
+  )
+  const currentRevision = revisionOf(current, currentEndpoints, currentAdditionalKeys)
+  if (
+    JSON.stringify(identityOf(current)) !== JSON.stringify(data.identity) ||
+    currentRoot !== data.root ||
+    currentRevision !== data.revision
+  )
+    throw new Error('Rehearsal changed during review. Refresh the result.')
+}
+
 async function loadData(
   tool: string | undefined,
   identity: RehearsalIdentity
@@ -587,12 +623,7 @@ async function loadData(
     ? await inventoryRaw(root, before, after)
     : { entries: [], renameLimited: false }
   scope.renameDetectionLimited = defaultRaw.renameLimited
-  const entries = await mapBounded(
-    defaultRaw.entries,
-    (item) => makeEntry(root, scope.scopeId, item, defaultRaw.renameLimited),
-    BLOB_READ_CONCURRENCY
-  )
-  scopes.push({ scope, entries })
+  scopes.push({ scope, entries: defaultRaw.entries })
   for (const group of additional) {
     const aliases = [...group.aliases].sort()
     const id = scopeIdFor(aliases[0], group.before, group.after)
@@ -621,32 +652,18 @@ async function loadData(
       ? await inventoryRaw(root, group.before, group.after)
       : { entries: [], renameLimited: false }
     committedScope.renameDetectionLimited = raw.renameLimited
-    const committedEntries = await mapBounded(
-      raw.entries,
-      (item) => makeEntry(root, id, item, raw.renameLimited),
-      BLOB_READ_CONCURRENCY
-    )
-    scopes.push({ scope: committedScope, entries: committedEntries })
+    scopes.push({ scope: committedScope, entries: raw.entries })
   }
-  const current = await readReport(tool, identity)
-  const currentRoot = await validateSandbox(current)
-  const currentEndpoints = await resolveRehearsalEndpoints(current)
-  if (
-    rehearsalComparisonKey(current) !== rehearsalComparisonKey(report) ||
-    JSON.stringify(current.drift) !== JSON.stringify(report.drift) ||
-    currentEndpoints.join('\0') !== endpoints.join('\0') ||
-    currentRoot !== root
-  )
-    throw new Error('Rehearsal changed during review. Refresh the result.')
-  return {
+  const data: ReviewData = {
     report,
     identity: identityOf(report),
     revision,
     scope,
-    entries,
     root,
     scopes: new Map(scopes.map((item) => [item.scope.scopeId, item]))
   }
+  await verifyFrozenState(tool, identity, data)
+  return data
 }
 
 function decodeCursor(
@@ -770,11 +787,23 @@ export async function rehearsalReviewFiles(
         )
       : selectedScope.entries
     const offset = decodeCursor(cursor, reviewRevision, scopeId, needle)
-    const entries = all.slice(offset, offset + REHEARSAL_REVIEW_PAGE_SIZE)
+    const page = all.slice(offset, offset + REHEARSAL_REVIEW_PAGE_SIZE)
+    const entries = await mapBounded(
+      page,
+      (raw) =>
+        makeEntry(
+          data.root,
+          selectedScope.scope.scopeId,
+          raw,
+          selectedScope.scope.renameDetectionLimited
+        ),
+      BLOB_READ_CONCURRENCY
+    )
     const nextCursor =
       offset + entries.length < all.length
         ? encodeCursor(reviewRevision, scopeId, needle, offset + entries.length)
         : null
+    await verifyFrozenState(tool, identity, data)
     return {
       identity: data.identity,
       reviewRevision,
@@ -804,8 +833,17 @@ export async function rehearsalReviewFile(
       throw new Error('Review result changed. Refresh the summary.')
     const selectedScope = data.scopes.get(scopeId)
     if (!selectedScope) throw new Error('Review scope is unavailable. Refresh the summary.')
-    const entry = selectedScope.entries.find((candidate) => candidate.entryId === entryId)
-    if (!entry) throw new Error('Review file is unavailable. Refresh the file list.')
+    const raw = selectedScope.entries.find(
+      (candidate) => entryIdFor(selectedScope.scope.scopeId, candidate) === entryId
+    )
+    if (!raw) throw new Error('Review file is unavailable. Refresh the file list.')
+    const entry = await makeEntry(
+      data.root,
+      selectedScope.scope.scopeId,
+      raw,
+      selectedScope.scope.renameDetectionLimited,
+      view === 'changes'
+    )
     const before = await blobText(data.root, entry.old.objectId, entry.old.mode)
     const after = await blobText(data.root, entry.new.objectId, entry.new.mode)
     let availability: RehearsalReviewAvailability
@@ -847,6 +885,7 @@ export async function rehearsalReviewFile(
         : entry.text.changes
       if (diff && !diff.tooLarge && !diff.unavailable) hunks = diff.hunks
     }
+    await verifyFrozenState(tool, identity, data)
     return {
       identity: data.identity,
       reviewRevision,

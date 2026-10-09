@@ -213,6 +213,7 @@ export default function RehearsalReviewPanel({
   const [fileCursor, setFileCursor] = useState<string | null>(null)
   const [fileEntries, setFileEntries] = useState<RehearsalReviewEntry[]>([])
   const [nextCursor, setNextCursor] = useState<string | null>(null)
+  const [knownTotal, setKnownTotal] = useState<number | null>(null)
   const [expanded, setExpanded] = useState(false)
   const previousRevision = useRef<string | null>(null)
   const api = bridge()
@@ -298,12 +299,14 @@ export default function RehearsalReviewPanel({
     setFileCursor(null)
     setFileEntries([])
     setNextCursor(null)
+    setKnownTotal(null)
   }, [summary?.reviewRevision, scopeId, appliedFilter])
 
   useEffect(() => {
     if (!files || filesQuery.loading) return
     setFileEntries((current) => (fileCursor ? [...current, ...files.entries] : files.entries))
     setNextCursor(files.nextCursor)
+    setKnownTotal(files.total)
     setSelectedEntryId((current) => {
       if (current) return current
       return files.entries[0]?.entryId ?? null
@@ -351,7 +354,7 @@ export default function RehearsalReviewPanel({
                   scopeId={scopeId ?? ''}
                   entries={fileEntries}
                   selectedEntryId={selectedEntryId}
-                  total={files?.total === null ? null : (files?.total ?? fileEntries.length)}
+                  total={files ? files.total : knownTotal}
                   nextCursor={nextCursor}
                   filter={filter}
                   loading={loading}

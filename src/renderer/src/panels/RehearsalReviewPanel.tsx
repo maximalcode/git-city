@@ -4,9 +4,12 @@ import type {
   RehearsalReviewEntry,
   RehearsalReviewFileResult,
   RehearsalReviewFileView,
-  RehearsalReviewIdentity,
-  RehearsalReviewScope
+  RehearsalReviewIdentity
 } from '../../../shared/types'
+export {
+  RehearsalReviewScopeSelector,
+  type RehearsalReviewScopeSelectorProps
+} from './RehearsalReviewScopeSelector'
 import { bridge } from '../lib/bridge'
 import { useRepoQuery } from '../lib/repoQuery'
 import {
@@ -28,37 +31,6 @@ function status(entry: RehearsalReviewEntry): string {
   if (entry.change === 'renamed') return 'Renamed'
   if (entry.change === 'typechange') return 'Type changed'
   return entry.binary ? 'Binary' : 'Modified'
-}
-
-/** Controlled seam for R3/R4 scope ownership. R2 renders one scope inline. */
-export interface RehearsalReviewScopeSelectorProps {
-  scopes: RehearsalReviewScope[]
-  selectedScopeId: string | null
-  disabled?: boolean
-  onSelectScope: (scopeId: string) => void
-}
-
-export function RehearsalReviewScopeSelector({
-  scopes,
-  selectedScopeId,
-  disabled = false,
-  onSelectScope
-}: RehearsalReviewScopeSelectorProps): React.JSX.Element {
-  return (
-    <select
-      aria-label="Review scope"
-      value={selectedScopeId ?? ''}
-      disabled={disabled}
-      onChange={(event) => onSelectScope(event.target.value)}
-    >
-      {scopes.map((scope) => (
-        <option key={scope.scopeId} value={scope.scopeId} disabled={!scope.available}>
-          {scope.label}
-          {scope.replay ? ` · replay ${scope.replay.compared ? 'compared' : 'uncompared'}` : ''}
-        </option>
-      ))}
-    </select>
-  )
 }
 
 export interface RehearsalReviewFileInventoryProps {

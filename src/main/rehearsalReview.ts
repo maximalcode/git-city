@@ -471,7 +471,15 @@ async function loadData(
     renameDetectionLimited: false
   }
   const scopes: ScopeData[] = []
-  const defaultRaw = await inventoryRaw(root, before, after)
+  const defaultEndpointsAvailable =
+    (await retainedCommitAvailable(root, before)) && (await retainedCommitAvailable(root, after))
+  scope.available = defaultEndpointsAvailable
+  if (!defaultEndpointsAvailable)
+    scope.unavailableReason =
+      'A retained worktree endpoint is unavailable; this scope was not replaced with a live reference.'
+  const defaultRaw = defaultEndpointsAvailable
+    ? await inventoryRaw(root, before, after)
+    : { entries: [], renameLimited: false }
   scope.renameDetectionLimited = defaultRaw.renameLimited
   const entries = await mapBounded(
     defaultRaw.entries,
@@ -572,7 +580,8 @@ export async function rehearsalReviewSummary(
 ): Promise<RehearsalReviewSummary> {
   return withRehearsal(identity, async () => {
     const data = await loadData(tool, identity)
-    const complete = data.report.outcome === 'clean' && data.scope.after !== null
+    const complete =
+      data.report.outcome === 'clean' && data.scope.after !== null && data.scope.available
     const notices = [
       'Review reads use retained Git objects. Live worktree edits are excluded.',
       'Untracked files and the original staging selection are excluded from this tracked-worktree scope.'
@@ -588,9 +597,11 @@ export async function rehearsalReviewSummary(
       reviewRevision: data.revision,
       toolResultRevision: null,
       complete,
-      afterAvailable: data.scope.after?.kind === 'commit',
+      afterAvailable: data.scope.available && data.scope.after?.kind === 'commit',
       afterReason:
-        data.scope.after?.kind === 'commit' ? null : 'No finished After endpoint is available.',
+        data.scope.available && data.scope.after?.kind === 'commit'
+          ? null
+          : (data.scope.unavailableReason ?? 'No finished After endpoint is available.'),
       scopes: [...data.scopes.values()].map((item) => item.scope),
       defaultScopeId: data.scope.scopeId,
       notices,

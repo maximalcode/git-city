@@ -16,6 +16,9 @@ test('reviews immutable Changes, Before and After content for same-line, added a
   git('config', 'user.name', 'Test')
   git('config', 'user.email', 'test@example.invalid')
   git('config', 'commit.gpgSign', 'false')
+  // The review must classify retained bytes itself; mutable attributes must not
+  // turn valid UTF-8 content into an unavailable or filtered response.
+  await writeFile(join(repo, '.gitattributes'), '*.txt binary\n')
   await writeFile(join(repo, 'same.txt'), 'before\n')
   await writeFile(join(repo, 'deleted.txt'), 'kept before\n')
   git('add', '.')
@@ -61,6 +64,47 @@ test('reviews immutable Changes, Before and After content for same-line, added a
       'Deleted'
     )
 
+    const selected = await page.evaluate((path) => window.gitCity.rehearsalList(path), repo)
+    const identity = selected.entries.find((item) => item.command.at(-1) === 'topic')!
+    const bridgeReview = await page.evaluate(async (reviewIdentity) => {
+      const summary = await window.gitCity.rehearsalReviewSummary(reviewIdentity)
+      const files = await window.gitCity.rehearsalReviewFiles(
+        reviewIdentity,
+        summary.reviewRevision,
+        summary.defaultScopeId!
+      )
+      const read = async (name: string, view: 'before' | 'after') => {
+        const entry = files.entries.find(
+          (candidate) => candidate.newPath === name || candidate.oldPath === name
+        )!
+        return window.gitCity.rehearsalReviewFile(
+          reviewIdentity,
+          summary.reviewRevision,
+          summary.defaultScopeId!,
+          entry.entryId,
+          view
+        )
+      }
+      return {
+        summary,
+        files,
+        addedBefore: await read('added.txt', 'before'),
+        addedAfter: await read('added.txt', 'after'),
+        deletedBefore: await read('deleted.txt', 'before'),
+        deletedAfter: await read('deleted.txt', 'after')
+      }
+    }, identity)
+    expect(bridgeReview.summary.scopes.map((scope) => scope.scopeId)).toContain('tracked-worktree')
+    expect(bridgeReview.files.complete).toBe(true)
+    expect(bridgeReview.files.total).toBe(3)
+    expect(bridgeReview.addedBefore).toMatchObject({ availability: 'absent', text: null })
+    expect(bridgeReview.addedAfter).toMatchObject({ availability: 'available', text: 'new file\n' })
+    expect(bridgeReview.deletedBefore).toMatchObject({
+      availability: 'available',
+      text: 'kept before\n'
+    })
+    expect(bridgeReview.deletedAfter).toMatchObject({ availability: 'absent', text: null })
+
     await same.click()
     await expect(review.getByRole('tab', { name: 'Changes', exact: true })).toHaveAttribute(
       'aria-selected',
@@ -89,8 +133,7 @@ test('reviews immutable Changes, Before and After content for same-line, added a
     await expect(review.locator('pre')).toHaveCount(0)
     await expect(review.getByText('This side is absent.', { exact: true })).toBeVisible()
 
-    const selected = await page.evaluate((path) => window.gitCity.rehearsalList(path), repo)
-    const entry = selected.entries.find((item) => item.command.at(-1) === 'topic')!
+    const entry = identity
     const shown = await page.evaluate(
       async ({ path, id }) => {
         const list = await window.gitCity.rehearsalList(path)

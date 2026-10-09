@@ -393,3 +393,26 @@ it('preserves a committed scope when one retained endpoint object is missing', a
   expect(files.total).toBeNull()
   expect(files.entries).toEqual([])
 })
+
+it('does not replace a missing tracked endpoint with live worktree content', async () => {
+  vi.mocked(runGit).mockImplementation(async (_root, args) => {
+    if (args.includes('--path-format=absolute')) return '/sandbox/.git'
+    if (args.includes('cat-file') && args.includes('-e')) throw new Error('missing object')
+    return ''
+  })
+  const summary = await rehearsalReviewSummary('/tool', identity)
+  expect(summary.complete).toBe(false)
+  expect(summary.afterAvailable).toBe(false)
+  expect(summary.scopes[0]).toMatchObject({
+    scopeId: 'tracked-worktree',
+    available: false,
+    unavailableReason: expect.stringContaining('not replaced')
+  })
+  const files = await rehearsalReviewFiles(
+    '/tool',
+    identity,
+    summary.reviewRevision,
+    'tracked-worktree'
+  )
+  expect(files).toMatchObject({ complete: false, total: null, entries: [] })
+})

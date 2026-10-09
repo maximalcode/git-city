@@ -16,8 +16,12 @@ test('reviews immutable Changes, Before and After content for same-line, added a
   git('config', 'user.name', 'Test')
   git('config', 'user.email', 'test@example.invalid')
   git('config', 'commit.gpgSign', 'false')
+  // The review must classify retained bytes itself; mutable attributes must not
+  // turn valid UTF-8 content into an unavailable or filtered response.
+  await writeFile(join(repo, '.gitattributes'), '*.txt binary\n')
   await writeFile(join(repo, 'same.txt'), 'before\n')
   await writeFile(join(repo, 'deleted.txt'), 'kept before\n')
+  await writeFile(join(repo, 'carried.txt'), 'carried before\n')
   git('add', '.')
   git('commit', '-m', 'base')
   git('checkout', '-b', 'topic')
@@ -27,6 +31,7 @@ test('reviews immutable Changes, Before and After content for same-line, added a
   git('add', '-A')
   git('commit', '-m', 'review changes')
   git('checkout', 'main')
+  await writeFile(join(repo, 'carried.txt'), 'carried live edit\n')
   const beforeHead = git('rev-parse', 'HEAD')
   const app = await electron.launch({
     args: [resolve('out/main/index.js'), `--user-data-dir=${userData}`],
@@ -69,6 +74,48 @@ test('reviews immutable Changes, Before and After content for same-line, added a
       'Deleted'
     )
 
+    const selected = await page.evaluate((path) => window.gitCity.rehearsalList(path), repo)
+    const identity = selected.entries.find((item) => item.command.at(-1) === 'topic')!
+    const bridgeReview = await page.evaluate(async (reviewIdentity) => {
+      const summary = await window.gitCity.rehearsalReviewSummary(reviewIdentity)
+      const files = await window.gitCity.rehearsalReviewFiles(
+        reviewIdentity,
+        summary.reviewRevision,
+        summary.defaultScopeId!
+      )
+      const read = async (name: string, view: 'before' | 'after') => {
+        const entry = files.entries.find(
+          (candidate) => candidate.newPath === name || candidate.oldPath === name
+        )!
+        return window.gitCity.rehearsalReviewFile(
+          reviewIdentity,
+          summary.reviewRevision,
+          summary.defaultScopeId!,
+          entry.entryId,
+          view
+        )
+      }
+      return {
+        summary,
+        files,
+        addedBefore: await read('added.txt', 'before'),
+        addedAfter: await read('added.txt', 'after'),
+        deletedBefore: await read('deleted.txt', 'before'),
+        deletedAfter: await read('deleted.txt', 'after')
+      }
+    }, identity)
+    expect(bridgeReview.summary.scopes.map((scope) => scope.scopeId)).toContain('tracked-worktree')
+    expect(bridgeReview.summary.carried?.included).toBe(true)
+    expect(bridgeReview.files.complete).toBe(true)
+    expect(bridgeReview.files.total).toBe(3)
+    expect(bridgeReview.addedBefore).toMatchObject({ availability: 'absent', text: null })
+    expect(bridgeReview.addedAfter).toMatchObject({ availability: 'available', text: 'new file\n' })
+    expect(bridgeReview.deletedBefore).toMatchObject({
+      availability: 'available',
+      text: 'kept before\n'
+    })
+    expect(bridgeReview.deletedAfter).toMatchObject({ availability: 'absent', text: null })
+
     await same.click()
     await expect(review.getByRole('tab', { name: 'Changes', exact: true })).toHaveAttribute(
       'aria-selected',
@@ -97,8 +144,7 @@ test('reviews immutable Changes, Before and After content for same-line, added a
     await expect(review.locator('pre')).toHaveCount(0)
     await expect(review.getByText('This side is absent.', { exact: true })).toBeVisible()
 
-    const selected = await page.evaluate((path) => window.gitCity.rehearsalList(path), repo)
-    const entry = selected.entries.find((item) => item.command.at(-1) === 'topic')!
+    const entry = identity
     const shown = await page.evaluate(
       async ({ path, id }) => {
         const list = await window.gitCity.rehearsalList(path)
@@ -129,6 +175,72 @@ test('reviews immutable Changes, Before and After content for same-line, added a
     await page.screenshot({ path: 'test-results/rehearsal-review-1280x800.png' })
     expect(git('rev-parse', 'HEAD')).toBe(beforeHead)
     expect(await readFile(join(repo, 'same.txt'), 'utf8')).toBe('live checkout edit\n')
+  } finally {
+    await app.close()
+    try {
+      const inventory = JSON.parse(
+        execFileSync(tool, ['--json', 'list'], { cwd: repo, encoding: 'utf8' })
+      )
+      for (const item of inventory.rehearsals)
+        execFileSync(tool, ['--json', 'discard', item.id], { cwd: repo })
+    } finally {
+      await rm(repo, { recursive: true, force: true })
+      await rm(userData, { recursive: true, force: true })
+    }
+  }
+})
+
+test('exposes separate real rebase reference scopes through the public bridge', async () => {
+  const tool = process.env.GIT_CITY_REHEARSE_BIN!
+  expect(tool).toBeTruthy()
+  const userData = await mkdtemp(join(tmpdir(), 'city-review-scopes-user-'))
+  const repo = await mkdtemp(join(tmpdir(), 'city-review-scopes-app-'))
+  const git = (...args: string[]): string =>
+    execFileSync('git', args, { cwd: repo, encoding: 'utf8' }).trim()
+  git('init', '-b', 'main')
+  git('config', 'user.name', 'Test')
+  git('config', 'user.email', 'test@example.invalid')
+  git('config', 'commit.gpgSign', 'false')
+  await writeFile(join(repo, 'base.txt'), 'base\n')
+  git('add', '.')
+  git('commit', '-m', 'base')
+  git('checkout', '-b', 'topic')
+  await writeFile(join(repo, 'topic.txt'), 'topic\n')
+  git('add', '.')
+  git('commit', '-m', 'topic')
+  git('checkout', 'main')
+  const before = { head: git('rev-parse', 'HEAD'), index: await readFile(join(repo, '.git/index')) }
+  const app = await electron.launch({
+    args: [resolve('out/main/index.js'), `--user-data-dir=${userData}`],
+    env: {
+      ...process.env,
+      ELECTRON_RENDERER_URL: 'http://localhost:5199',
+      GIT_CITY_REHEARSE_BIN: tool
+    }
+  })
+  try {
+    await app.evaluate(({ dialog }, path) => {
+      dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] })
+    }, repo)
+    const page = await app.firstWindow()
+    await page.getByRole('button', { name: 'Open a local repository…' }).click()
+    const result = await page.evaluate(
+      ({ path, target }) => window.gitCity.rehearse(path, 'rebase', target),
+      { path: repo, target: 'topic' }
+    )
+    expect(result.kind).toBe('report')
+    if (result.kind !== 'report') throw new Error(result.message)
+    const summary = await page.evaluate(
+      (identity) => window.gitCity.rehearsalReviewSummary(identity),
+      result.report
+    )
+    const committed = summary.scopes.filter((scope) => scope.kind === 'committed-reference')
+    expect(committed.length).toBeGreaterThan(0)
+    expect(committed.some((scope) => scope.refAliases.includes('HEAD'))).toBe(true)
+    expect(committed.some((scope) => scope.refAliases.includes('refs/heads/main'))).toBe(true)
+    expect(git('rev-parse', 'HEAD')).toBe(before.head)
+    expect(await readFile(join(repo, '.git/index'))).toEqual(before.index)
+    await page.screenshot({ path: 'test-results/rehearsal-review-scopes.png' })
   } finally {
     await app.close()
     try {

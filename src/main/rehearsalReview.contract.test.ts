@@ -5,7 +5,7 @@ import {
   rehearsalReviewSummary
 } from './rehearsalReview'
 import { rehearsalShow } from './rehearsal'
-import { runGit, runGitBuffer, runGitResult } from './git/exec'
+import { runGit, runGitBuffer, runGitBufferBounded, runGitResult } from './git/exec'
 import type { RehearsalReport } from '../shared/types'
 
 vi.mock('fs/promises', () => ({ realpath: vi.fn(async (path: string) => path) }))
@@ -16,6 +16,7 @@ vi.mock('./rehearsalComparison', () => ({
 vi.mock('./git/exec', () => ({
   runGit: vi.fn(),
   runGitBuffer: vi.fn(),
+  runGitBufferBounded: vi.fn(),
   runGitResult: vi.fn(async () => ({
     code: 0,
     stdout: '4b825dc642cb6eb9a060e54bf8d69288fbee4904\n',
@@ -64,10 +65,15 @@ beforeEach(() => {
     const object = args.at(-1)
     return Buffer.from(object === oldObject ? 'old\n' : 'new!\n')
   })
+  vi.mocked(runGitBufferBounded).mockImplementation(async (_root, args) => ({
+    kind: 'ok',
+    bytes: Buffer.from(args.includes('diff-tree') ? raw : '@@ -1 +1 @@\n-old\n+new!\n')
+  }))
 })
 
 it('returns a revision-bound complete scope and inventory without using a path selector', async () => {
   const summary = await rehearsalReviewSummary('/tool', identity)
+  expect(runGitBuffer).not.toHaveBeenCalled()
   expect(summary.identity).toEqual(identity)
   expect(summary.afterAvailable).toBe(true)
   expect(summary.scopes[0]).toMatchObject({ scopeId: 'tracked-worktree', kind: 'tracked-worktree' })
@@ -77,6 +83,7 @@ it('returns a revision-bound complete scope and inventory without using a path s
     summary.reviewRevision,
     'tracked-worktree'
   )
+  expect(runGitBuffer).toHaveBeenCalledTimes(2)
   expect(files.total).toBe(1)
   expect(files.entries[0]).toMatchObject({
     oldPath: ':(pathspec) [x].txt',
@@ -137,7 +144,22 @@ it('reads before, after and changes from immutable object IDs and rejects stale 
   expect(
     vi.mocked(runGit).mock.calls.every(([, args]) => !args.includes(':(pathspec) [x].txt'))
   ).toBe(true)
-  const diffCall = vi.mocked(runGit).mock.calls.find(([, args]) => args.includes('diff-tree'))
+  const blobDiffCall = vi
+    .mocked(runGitBufferBounded)
+    .mock.calls.find(([, args]) => args.includes('diff'))
+  expect(blobDiffCall?.[1]).toEqual(
+    expect.arrayContaining([
+      '--no-replace-objects',
+      'diff',
+      '--no-ext-diff',
+      '--no-textconv',
+      oldObject,
+      newObject
+    ])
+  )
+  const diffCall = vi
+    .mocked(runGitBufferBounded)
+    .mock.calls.find(([, args]) => args.includes('diff-tree'))
   expect(diffCall?.[1]).toEqual(
     expect.arrayContaining([
       '--no-replace-objects',
@@ -146,6 +168,18 @@ it('reads before, after and changes from immutable object IDs and rejects stale 
       '--no-renames'
     ])
   )
+})
+
+it('rejects a retained result that changes after page analysis', async () => {
+  const summary = await rehearsalReviewSummary('/tool', identity)
+  let reads = 0
+  vi.mocked(rehearsalShow).mockImplementation(async () => {
+    reads++
+    return { kind: 'report', report: reads === 3 ? { ...report, outcome: 'incomplete' } : report }
+  })
+  await expect(
+    rehearsalReviewFiles('/tool', identity, summary.reviewRevision, 'tracked-worktree')
+  ).rejects.toThrow('changed during review')
 })
 
 it('keeps missing and invalid retained objects explicit without reading a live file', async () => {
@@ -267,6 +301,10 @@ it('preserves special file metadata and detected rename identity', async () => {
     if (args[1] === 'cat-file' && args[2] === '-s') return '5'
     return ''
   })
+  vi.mocked(runGitBufferBounded).mockImplementation(async (_root, args) => ({
+    kind: 'ok',
+    bytes: Buffer.from(args.includes('diff-tree') ? specialRaw : '@@ -1 +1 @@\n-text\n+text\n')
+  }))
   vi.mocked(runGitBuffer).mockImplementation(async (_root, args) => {
     const object = args.at(-1)
     return Buffer.from(object === symlinkObject ? '../target' : 'text\n')
@@ -310,6 +348,10 @@ it('pages the complete inventory at 200 and marks bounded rename detection', asy
     if (args[1] === 'cat-file' && args[2] === '-s') return '5'
     return ''
   })
+  vi.mocked(runGitBufferBounded).mockImplementation(async (_root, args) => ({
+    kind: 'ok',
+    bytes: Buffer.from(args.includes('diff-tree') ? manyRaw : '@@ -1 +1 @@\n-text\n+text\n')
+  }))
   vi.mocked(runGitBuffer).mockResolvedValue(Buffer.from('text\n'))
   const summary = await rehearsalReviewSummary('/tool', identity)
   expect(summary.notices).toContain(
@@ -325,6 +367,34 @@ it('pages the complete inventory at 200 and marks bounded rename detection', asy
   expect(files.entries).toHaveLength(200)
   expect(files.nextCursor).toBeTruthy()
   expect(files.entries[0].rename).toBe('limited')
+  expect(vi.mocked(runGitBuffer).mock.calls).toHaveLength(199)
+
+  const filtered = await rehearsalReviewFiles(
+    '/tool',
+    identity,
+    summary.reviewRevision,
+    'tracked-worktree',
+    undefined,
+    'file-400'
+  )
+  expect(filtered.total).toBe(1)
+  expect(filtered.entries).toHaveLength(1)
+  expect(filtered.entries[0].newPath).toBe('file-400.txt')
+
+  vi.mocked(runGitBuffer).mockClear()
+  await rehearsalReviewFile(
+    '/tool',
+    identity,
+    summary.reviewRevision,
+    'tracked-worktree',
+    files.entries[1].entryId,
+    'before'
+  )
+  expect(
+    vi
+      .mocked(runGitBuffer)
+      .mock.calls.every(([, args]) => args.at(-1) === files.entries[1].new.objectId)
+  ).toBe(true)
 })
 
 it('keeps over-limit blobs and generated patches explicit', async () => {
@@ -334,6 +404,7 @@ it('keeps over-limit blobs and generated patches explicit', async () => {
     if (args[1] === 'cat-file' && args[2] === '-s') return String(2 * 1024 * 1024 + 1)
     return ''
   })
+  vi.mocked(runGitBufferBounded).mockResolvedValue({ kind: 'ok', bytes: Buffer.from(raw) })
   const summary = await rehearsalReviewSummary('/tool', identity)
   const files = await rehearsalReviewFiles(
     '/tool',
@@ -358,6 +429,9 @@ it('keeps over-limit blobs and generated patches explicit', async () => {
   vi.mocked(runGitBuffer).mockImplementation(async (_root, args) =>
     Buffer.from(args.at(-1) === oldObject ? oldText : newText)
   )
+  vi.mocked(runGitBufferBounded).mockImplementation(async (_root, args) =>
+    args.includes('diff-tree') ? { kind: 'ok', bytes: Buffer.from(raw) } : { kind: 'too-large' }
+  )
   const large = await rehearsalReviewSummary('/tool', identity)
   const largeFiles = await rehearsalReviewFiles(
     '/tool',
@@ -376,6 +450,13 @@ it('keeps over-limit blobs and generated patches explicit', async () => {
   )
   expect(largeChanges.availability).toBe('too-large')
   expect(largeChanges.hunks).toEqual([])
+})
+
+it('refuses an oversized retained inventory explicitly', async () => {
+  vi.mocked(runGitBufferBounded).mockImplementation(async (_root, args) =>
+    args.includes('diff-tree') ? { kind: 'too-large' } : { kind: 'unavailable' }
+  )
+  await expect(rehearsalReviewSummary('/tool', identity)).rejects.toThrow('32 MiB')
 })
 
 it('preserves a committed scope when one retained endpoint object is missing', async () => {
@@ -436,6 +517,7 @@ it('derives the empty tree in the repository object format', async () => {
     stdout: `${emptyTreeSha256}\n`,
     stderr: ''
   })
+  vi.mocked(runGitBufferBounded).mockResolvedValue({ kind: 'ok', bytes: Buffer.from(raw) })
   vi.mocked(rehearsalShow).mockResolvedValue({
     kind: 'report',
     report: {
@@ -449,7 +531,7 @@ it('derives the empty tree in the repository object format', async () => {
   await rehearsalReviewSummary('/tool', identity)
   expect(
     vi
-      .mocked(runGit)
+      .mocked(runGitBufferBounded)
       .mock.calls.filter(([, args]) => args.includes('diff-tree'))
       .some(([, args]) => args.includes(emptyTreeSha256))
   ).toBe(true)

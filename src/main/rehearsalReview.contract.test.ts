@@ -5,7 +5,7 @@ import {
   rehearsalReviewSummary
 } from './rehearsalReview'
 import { rehearsalShow } from './rehearsal'
-import { runGit, runGitBuffer, runGitResult } from './git/exec'
+import { runGit, runGitBuffer, runGitBufferBounded, runGitResult } from './git/exec'
 import type { RehearsalReport } from '../shared/types'
 
 vi.mock('fs/promises', () => ({ realpath: vi.fn(async (path: string) => path) }))
@@ -16,6 +16,7 @@ vi.mock('./rehearsalComparison', () => ({
 vi.mock('./git/exec', () => ({
   runGit: vi.fn(),
   runGitBuffer: vi.fn(),
+  runGitBufferBounded: vi.fn(),
   runGitResult: vi.fn(async () => ({
     code: 0,
     stdout: '4b825dc642cb6eb9a060e54bf8d69288fbee4904\n',
@@ -63,6 +64,10 @@ beforeEach(() => {
   vi.mocked(runGitBuffer).mockImplementation(async (_root, args) => {
     const object = args.at(-1)
     return Buffer.from(object === oldObject ? 'old\n' : 'new!\n')
+  })
+  vi.mocked(runGitBufferBounded).mockResolvedValue({
+    kind: 'ok',
+    bytes: Buffer.from('@@ -1 +1 @@\n-old\n+new!\n')
   })
 })
 
@@ -137,6 +142,19 @@ it('reads before, after and changes from immutable object IDs and rejects stale 
   expect(
     vi.mocked(runGit).mock.calls.every(([, args]) => !args.includes(':(pathspec) [x].txt'))
   ).toBe(true)
+  const blobDiffCall = vi
+    .mocked(runGitBufferBounded)
+    .mock.calls.find(([, args]) => args.includes('diff'))
+  expect(blobDiffCall?.[1]).toEqual(
+    expect.arrayContaining([
+      '--no-replace-objects',
+      'diff',
+      '--no-ext-diff',
+      '--no-textconv',
+      oldObject,
+      newObject
+    ])
+  )
   const diffCall = vi.mocked(runGit).mock.calls.find(([, args]) => args.includes('diff-tree'))
   expect(diffCall?.[1]).toEqual(
     expect.arrayContaining([
@@ -358,6 +376,7 @@ it('keeps over-limit blobs and generated patches explicit', async () => {
   vi.mocked(runGitBuffer).mockImplementation(async (_root, args) =>
     Buffer.from(args.at(-1) === oldObject ? oldText : newText)
   )
+  vi.mocked(runGitBufferBounded).mockResolvedValue({ kind: 'too-large' })
   const large = await rehearsalReviewSummary('/tool', identity)
   const largeFiles = await rehearsalReviewFiles(
     '/tool',

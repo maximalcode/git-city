@@ -17,13 +17,15 @@ import type {
   RehearsalReviewSummary
 } from '../shared/types'
 import { rehearsalComparisonKey } from '../shared/rehearsalComparison'
-import { runGit, runGitBuffer, runGitResult } from './git/exec'
+import { parseUnifiedDiff } from './git/diff'
+import { runGit, runGitBuffer, runGitBufferBounded, runGitResult } from './git/exec'
 import { rehearsalShow } from './rehearsal'
 import { resolveRehearsalEndpoints } from './rehearsalComparison'
 import { withRehearsal } from './rehearsalConflicts'
 
 export const REHEARSAL_REVIEW_BLOB_LIMIT = 2 * 1024 * 1024
 export const REHEARSAL_REVIEW_PATCH_LIMIT = 4 * 1024 * 1024
+export const REHEARSAL_REVIEW_INVENTORY_LIMIT = 32 * 1024 * 1024
 export const REHEARSAL_REVIEW_PAGE_SIZE = 200
 const RENAME_DETECTION_ENTRY_LIMIT = 400
 const BLOB_READ_CONCURRENCY = 4
@@ -55,12 +57,11 @@ type ReviewData = {
   identity: RehearsalIdentity
   revision: string
   scope: RehearsalReviewScope
-  entries: RehearsalReviewEntry[]
   root: string
-  scopes: Map<string, { scope: RehearsalReviewScope; entries: RehearsalReviewEntry[] }>
+  scopes: Map<string, ScopeData>
 }
 
-type ScopeData = { scope: RehearsalReviewScope; entries: RehearsalReviewEntry[] }
+type ScopeData = { scope: RehearsalReviewScope; entries: RawEntry[] }
 
 function identityOf(report: RehearsalReport): RehearsalIdentity {
   return {
@@ -189,22 +190,32 @@ async function rawDiff(
 ): Promise<RawEntry[]> {
   if (!before && !after) return []
   const emptyTree = before && after ? null : await emptyTreeObject(root)
-  const output = await runGit(root, [
-    '--no-replace-objects',
-    '-c',
-    'core.quotepath=false',
-    'diff-tree',
-    '--no-ext-diff',
-    '--no-textconv',
-    detectRenames ? '--find-renames=50%' : '--no-renames',
-    '-r',
-    '--raw',
-    '-z',
-    before ?? emptyTree!,
-    after ?? emptyTree!,
-    '--'
-  ])
-  return parseRawDiff(output)
+  const result = await runGitBufferBounded(
+    root,
+    [
+      '--no-replace-objects',
+      '-c',
+      'core.quotepath=false',
+      'diff-tree',
+      '--no-ext-diff',
+      '--no-textconv',
+      detectRenames ? '--find-renames=50%' : '--no-renames',
+      '-r',
+      '--raw',
+      '-z',
+      before ?? emptyTree!,
+      after ?? emptyTree!,
+      '--'
+    ],
+    REHEARSAL_REVIEW_INVENTORY_LIMIT
+  )
+  if (result.kind === 'too-large')
+    throw new Error(
+      'Frozen review inventory exceeds the 32 MiB retained output limit. Refresh with a smaller result.'
+    )
+  if (result.kind === 'unavailable')
+    throw new Error('Frozen review inventory is unavailable. Refresh the retained result.')
+  return parseRawDiff(result.bytes.toString('utf8'))
 }
 
 /** Resolve the empty tree in the repository's object format (SHA-1 or SHA-256). */
@@ -282,31 +293,113 @@ function contentText(value: BlobText): string | null {
   return value.kind === 'text' || value.kind === 'pointer' ? value.text : null
 }
 
-function textDiff(
-  before: string,
-  after: string
-): { hunks: DiffHunk[]; additions: number; deletions: number; tooLarge: boolean } {
-  if (before === after) return { hunks: [], additions: 0, deletions: 0, tooLarge: false }
-  const oldLines = before.length ? before.split(/\r?\n/) : []
-  const newLines = after.length ? after.split(/\r?\n/) : []
-  if (oldLines.at(-1) === '') oldLines.pop()
-  if (newLines.at(-1) === '') newLines.pop()
+function entryIdFor(scopeId: string, raw: RawEntry): string {
+  return createHash('sha256')
+    .update(scopeId)
+    .update('\0')
+    .update(raw.oldPath ?? '')
+    .update('\0')
+    .update(raw.newPath ?? '')
+    .update('\0')
+    .update(raw.oldId)
+    .update('\0')
+    .update(raw.newId)
+    .digest('hex')
+}
+
+function patchSize(hunks: DiffHunk[]): number {
+  return hunks.reduce(
+    (size, hunk) =>
+      size +
+      Buffer.byteLength(hunk.header) +
+      hunk.lines.reduce((lineSize, line) => lineSize + Buffer.byteLength(line.text) + 2, 0),
+    0
+  )
+}
+
+type FrozenDiff = {
+  hunks: DiffHunk[]
+  additions: number | null
+  deletions: number | null
+  tooLarge: boolean
+  unavailable: boolean
+}
+
+function splitStoredLines(text: string): string[] {
+  const lines = text ? text.split('\n') : []
+  if (lines.at(-1) === '') lines.pop()
+  return lines
+}
+
+function absentSideDiff(before: string | null, after: string | null): FrozenDiff {
+  const oldLines = before === null ? [] : splitStoredLines(before)
+  const newLines = after === null ? [] : splitStoredLines(after)
   const lines: DiffLine[] = [
     ...oldLines.map((text) => ({ kind: 'del' as const, text })),
     ...newLines.map((text) => ({ kind: 'add' as const, text }))
   ]
-  const hunk = {
-    header: `@@ -1,${oldLines.length} +1,${newLines.length} @@`,
+  const oldCount = oldLines.length
+  const newCount = newLines.length
+  const hunk: DiffHunk = {
+    header: `@@ -${oldCount ? 1 : 0},${oldCount} +${newCount ? 1 : 0},${newCount} @@`,
     lines
   }
-  const patchBytes =
-    Buffer.byteLength(hunk.header) +
-    lines.reduce((size, line) => size + Buffer.byteLength(line.text) + 2, 0)
+  const tooLarge = patchSize([hunk]) > REHEARSAL_REVIEW_PATCH_LIMIT
   return {
-    hunks: patchBytes > REHEARSAL_REVIEW_PATCH_LIMIT ? [] : [hunk],
-    additions: newLines.length,
-    deletions: oldLines.length,
-    tooLarge: patchBytes > REHEARSAL_REVIEW_PATCH_LIMIT
+    hunks: tooLarge ? [] : [hunk],
+    additions: newCount,
+    deletions: oldCount,
+    tooLarge,
+    unavailable: false
+  }
+}
+
+function pointerDiff(before: string, after: string): FrozenDiff {
+  if (before === after)
+    return { hunks: [], additions: 0, deletions: 0, tooLarge: false, unavailable: false }
+  const hunk: DiffHunk = {
+    header: '@@ -1,1 +1,1 @@',
+    lines: [
+      { kind: 'del', text: before },
+      { kind: 'add', text: after }
+    ]
+  }
+  return { hunks: [hunk], additions: 1, deletions: 1, tooLarge: false, unavailable: false }
+}
+
+async function retainedBlobDiff(root: string, before: string, after: string): Promise<FrozenDiff> {
+  if (before === after)
+    return { hunks: [], additions: 0, deletions: 0, tooLarge: false, unavailable: false }
+  const result = await runGitBufferBounded(
+    root,
+    [
+      '--no-replace-objects',
+      'diff',
+      '--no-ext-diff',
+      '--no-textconv',
+      '--text',
+      '--no-color',
+      '--unified=3',
+      before,
+      after
+    ],
+    REHEARSAL_REVIEW_PATCH_LIMIT + 1
+  )
+  if (result.kind === 'too-large')
+    return { hunks: [], additions: null, deletions: null, tooLarge: true, unavailable: false }
+  if (result.kind === 'unavailable')
+    return { hunks: [], additions: null, deletions: null, tooLarge: false, unavailable: true }
+  const parsed = parseUnifiedDiff(result.bytes.toString('utf8').replace(/\n$/, ''))
+  if (parsed.binary || !parsed.hunks.length)
+    return { hunks: [], additions: null, deletions: null, tooLarge: false, unavailable: true }
+  const hunks = parsed.hunks
+  const tooLarge = patchSize(hunks) > REHEARSAL_REVIEW_PATCH_LIMIT
+  return {
+    hunks: tooLarge ? [] : hunks,
+    additions: parsed.additions,
+    deletions: parsed.deletions,
+    tooLarge,
+    unavailable: false
   }
 }
 
@@ -314,7 +407,8 @@ async function makeEntry(
   root: string,
   scopeId: string,
   raw: RawEntry,
-  renameDetectionLimited = false
+  renameDetectionLimited = false,
+  includeDiff = true
 ): Promise<RehearsalReviewEntry> {
   const old = side(raw.oldMode, raw.oldId)
   const newer = side(raw.newMode, raw.newId)
@@ -338,19 +432,19 @@ async function makeEntry(
         : oldContent !== null || newContent !== null
           ? 'available'
           : 'unavailable'
-  const key = createHash('sha256')
-    .update(scopeId)
-    .update('\0')
-    .update(raw.oldPath ?? '')
-    .update('\0')
-    .update(raw.newPath ?? '')
-    .update('\0')
-    .update(raw.oldId)
-    .update('\0')
-    .update(raw.newId)
-    .digest('hex')
-  const diff = oldContent !== null && newContent !== null ? textDiff(oldContent, newContent) : null
-  const changes = diff?.tooLarge ? 'too-large' : baseChanges
+  const key = entryIdFor(scopeId, raw)
+  let diff: FrozenDiff | null = null
+  if (includeDiff && !binary && !modeOnly) {
+    if (!old.present && newContent !== null) diff = absentSideDiff(null, newContent)
+    else if (oldContent !== null && !newer.present) diff = absentSideDiff(oldContent, null)
+    else if (oldContent !== null && newContent !== null) {
+      diff =
+        raw.oldMode === '160000' || raw.newMode === '160000'
+          ? pointerDiff(oldContent, newContent)
+          : await retainedBlobDiff(root, old.objectId!, newer.objectId!)
+    }
+  }
+  const changes = diff?.tooLarge ? 'too-large' : diff?.unavailable ? 'unavailable' : baseChanges
   const change =
     raw.status[0] === 'A'
       ? 'added'
@@ -383,8 +477,8 @@ async function makeEntry(
     lines: {
       before: oldContent !== null ? linesOf(oldContent) : null,
       after: newContent !== null ? linesOf(newContent) : null,
-      additions: diff && !diff.tooLarge ? diff.additions : null,
-      deletions: diff && !diff.tooLarge ? diff.deletions : null
+      additions: diff && !diff.tooLarge && !diff.unavailable ? diff.additions : null,
+      deletions: diff && !diff.tooLarge && !diff.unavailable ? diff.deletions : null
     }
   }
 }
@@ -471,6 +565,27 @@ function referenceScopes(report: RehearsalReport): Array<{
   )
 }
 
+async function verifyFrozenState(
+  tool: string | undefined,
+  identity: RehearsalIdentity,
+  data: ReviewData
+): Promise<void> {
+  const current = await readReport(tool, identity)
+  const currentRoot = await validateSandbox(current)
+  const currentEndpoints = await resolveRehearsalEndpoints(current)
+  const currentAdditional = referenceScopes(current)
+  const currentAdditionalKeys = currentAdditional.map(
+    (group) => `${group.aliases.join(',')}\0${group.before ?? ''}\0${group.after ?? ''}`
+  )
+  const currentRevision = revisionOf(current, currentEndpoints, currentAdditionalKeys)
+  if (
+    JSON.stringify(identityOf(current)) !== JSON.stringify(data.identity) ||
+    currentRoot !== data.root ||
+    currentRevision !== data.revision
+  )
+    throw new Error('Rehearsal changed during review. Refresh the result.')
+}
+
 async function loadData(
   tool: string | undefined,
   identity: RehearsalIdentity
@@ -508,12 +623,7 @@ async function loadData(
     ? await inventoryRaw(root, before, after)
     : { entries: [], renameLimited: false }
   scope.renameDetectionLimited = defaultRaw.renameLimited
-  const entries = await mapBounded(
-    defaultRaw.entries,
-    (item) => makeEntry(root, scope.scopeId, item, defaultRaw.renameLimited),
-    BLOB_READ_CONCURRENCY
-  )
-  scopes.push({ scope, entries })
+  scopes.push({ scope, entries: defaultRaw.entries })
   for (const group of additional) {
     const aliases = [...group.aliases].sort()
     const id = scopeIdFor(aliases[0], group.before, group.after)
@@ -542,32 +652,18 @@ async function loadData(
       ? await inventoryRaw(root, group.before, group.after)
       : { entries: [], renameLimited: false }
     committedScope.renameDetectionLimited = raw.renameLimited
-    const committedEntries = await mapBounded(
-      raw.entries,
-      (item) => makeEntry(root, id, item, raw.renameLimited),
-      BLOB_READ_CONCURRENCY
-    )
-    scopes.push({ scope: committedScope, entries: committedEntries })
+    scopes.push({ scope: committedScope, entries: raw.entries })
   }
-  const current = await readReport(tool, identity)
-  const currentRoot = await validateSandbox(current)
-  const currentEndpoints = await resolveRehearsalEndpoints(current)
-  if (
-    rehearsalComparisonKey(current) !== rehearsalComparisonKey(report) ||
-    JSON.stringify(current.drift) !== JSON.stringify(report.drift) ||
-    currentEndpoints.join('\0') !== endpoints.join('\0') ||
-    currentRoot !== root
-  )
-    throw new Error('Rehearsal changed during review. Refresh the result.')
-  return {
+  const data: ReviewData = {
     report,
     identity: identityOf(report),
     revision,
     scope,
-    entries,
     root,
     scopes: new Map(scopes.map((item) => [item.scope.scopeId, item]))
   }
+  await verifyFrozenState(tool, identity, data)
+  return data
 }
 
 function decodeCursor(
@@ -691,11 +787,23 @@ export async function rehearsalReviewFiles(
         )
       : selectedScope.entries
     const offset = decodeCursor(cursor, reviewRevision, scopeId, needle)
-    const entries = all.slice(offset, offset + REHEARSAL_REVIEW_PAGE_SIZE)
+    const page = all.slice(offset, offset + REHEARSAL_REVIEW_PAGE_SIZE)
+    const entries = await mapBounded(
+      page,
+      (raw) =>
+        makeEntry(
+          data.root,
+          selectedScope.scope.scopeId,
+          raw,
+          selectedScope.scope.renameDetectionLimited
+        ),
+      BLOB_READ_CONCURRENCY
+    )
     const nextCursor =
       offset + entries.length < all.length
         ? encodeCursor(reviewRevision, scopeId, needle, offset + entries.length)
         : null
+    await verifyFrozenState(tool, identity, data)
     return {
       identity: data.identity,
       reviewRevision,
@@ -725,8 +833,17 @@ export async function rehearsalReviewFile(
       throw new Error('Review result changed. Refresh the summary.')
     const selectedScope = data.scopes.get(scopeId)
     if (!selectedScope) throw new Error('Review scope is unavailable. Refresh the summary.')
-    const entry = selectedScope.entries.find((candidate) => candidate.entryId === entryId)
-    if (!entry) throw new Error('Review file is unavailable. Refresh the file list.')
+    const raw = selectedScope.entries.find(
+      (candidate) => entryIdFor(selectedScope.scope.scopeId, candidate) === entryId
+    )
+    if (!raw) throw new Error('Review file is unavailable. Refresh the file list.')
+    const entry = await makeEntry(
+      data.root,
+      selectedScope.scope.scopeId,
+      raw,
+      selectedScope.scope.renameDetectionLimited,
+      view === 'changes'
+    )
     const before = await blobText(data.root, entry.old.objectId, entry.old.mode)
     const after = await blobText(data.root, entry.new.objectId, entry.new.mode)
     let availability: RehearsalReviewAvailability
@@ -745,13 +862,30 @@ export async function rehearsalReviewFile(
       if (selectedScope.scope.after?.kind === 'commit') text = contentText(after)
     } else if (entry.text.changes === 'mode-only') {
       availability = 'mode-only'
-    } else if (contentText(before) !== null && contentText(after) !== null) {
-      const diff = textDiff(contentText(before)!, contentText(after)!)
-      availability = diff.tooLarge ? 'too-large' : 'available'
-      hunks = diff.hunks
     } else {
-      availability = entry.text.changes
+      const beforeText = contentText(before)
+      const afterText = contentText(after)
+      let diff: FrozenDiff | null = null
+      if (!entry.old.present && afterText !== null) diff = absentSideDiff(null, afterText)
+      else if (beforeText !== null && !entry.new.present) diff = absentSideDiff(beforeText, null)
+      else if (beforeText !== null && afterText !== null) {
+        diff =
+          entry.type === 'gitlink'
+            ? pointerDiff(beforeText, afterText)
+            : entry.old.objectId && entry.new.objectId
+              ? await retainedBlobDiff(data.root, entry.old.objectId, entry.new.objectId)
+              : null
+      }
+      availability = diff
+        ? diff.tooLarge
+          ? 'too-large'
+          : diff.unavailable
+            ? 'unavailable'
+            : 'available'
+        : entry.text.changes
+      if (diff && !diff.tooLarge && !diff.unavailable) hunks = diff.hunks
     }
+    await verifyFrozenState(tool, identity, data)
     return {
       identity: data.identity,
       reviewRevision,

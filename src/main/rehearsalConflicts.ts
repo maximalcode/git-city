@@ -88,6 +88,19 @@ async function sandboxFile(
 const revision = (bytes: Buffer, stages: string): string =>
   createHash('sha256').update(bytes).update(stages).digest('hex')
 
+const errorMessage = (error: unknown): string =>
+  error instanceof Error ? error.message : String(error)
+
+const partialSandboxSaveError = (error: unknown): Error =>
+  new Error(
+    `Sandbox file write/truncate failed; bytes may be partially saved. Editor draft retained. Refresh sandbox/review before trying again. ${errorMessage(error)}`
+  )
+
+const sandboxStageError = (error: unknown): Error =>
+  new Error(
+    `Sandbox file saved, but could not stage it. Editor draft retained. Refresh sandbox/review or resolve the sandbox lock externally before staging. ${errorMessage(error)}`
+  )
+
 export async function readRehearsalConflict(
   tool: string | undefined,
   identity: RehearsalIdentity,
@@ -193,20 +206,37 @@ export async function saveRehearsalConflict(
         throw new Error(
           'File changed on disk. Nothing was overwritten. Reload and review the current content.'
         )
-      await file.write(resolved, 0, resolved.length, 0)
-      await file.truncate(resolved.length)
+      try {
+        const written = await file.write(resolved, 0, resolved.length, 0)
+        if (written.bytesWritten !== resolved.length)
+          throw new Error(
+            `Only ${written.bytesWritten} of ${resolved.length} resolution bytes were written.`
+          )
+        await file.truncate(resolved.length)
+      } catch (error) {
+        throw partialSandboxSaveError(error)
+      }
     } finally {
       await file.close()
     }
-    await sandboxFile(tool, identity, path)
-    await runGit(root, ['--literal-pathspecs', 'add', '--', path])
+    try {
+      await sandboxFile(tool, identity, path)
+      await runGit(root, ['--literal-pathspecs', 'add', '--', path])
+    } catch (error) {
+      throw sandboxStageError(error)
+    }
   })
 }
 
 export const continueRehearsal = (
   tool: string | undefined,
-  identity: RehearsalIdentity
+  identity: RehearsalIdentity,
+  draftRefusal?: () => Promise<string | null>
 ): ReturnType<typeof rehearsalContinue> =>
   withRehearsalExecution(identity.origin_worktree, (execution) =>
-    withRehearsal(identity, () => rehearsalContinue(tool, identity, execution))
+    withRehearsal(identity, async () => {
+      const reason = await draftRefusal?.()
+      if (reason) return { kind: 'refused', message: reason }
+      return rehearsalContinue(tool, identity, execution)
+    })
   )

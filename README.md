@@ -92,12 +92,15 @@ across the city, so you see its blast radius at a glance.
 ## Rehearse before changing your checkout
 
 Merge, Rebase (including interactive plans), and single Cherry-pick can run in a
-retained sandbox. Review changes beside the city, resolve conflicts there, compare
-Before/After, and explicitly confirm **Apply** to adopt the checked result.
+retained sandbox. Inspect the complete changed-file list and frozen Changes,
+Before and After views in a resizable workspace, with an optional linked city.
+Resolve conflicts there and explicitly confirm **Apply** to adopt the result.
+Conflict drafts and deliberate hunk decisions survive navigation and restart;
+**Save and stage in sandbox** is a separate action.
 **Automatic / Ask / Off** is shared across linked worktrees. New repositories use
 Automatic; existing recent repositories receive a one-time choice.
 
-![Rehearse side panel beside the real repository city](docs/media/app-rehearsal.png)
+![Rehearse workspace reviewing changes in the real repository](docs/media/app-rehearsal.png)
 
 Keep results across restarts, stop previews, confirm discard, or use **Undo Apply**
 when the original worktree still permits it. Interrupted Apply/Undo blocks writes
@@ -136,6 +139,7 @@ Anything else that goes wrong on first run is in
 | `Enter` / `Space` on a graph commit | Show or hide commit actions  |
 | `/`                                 | Find a file and fly to it    |
 | `,`                                 | Settings                     |
+| `←` / `→` on the review divider     | Resize the review file list  |
 
 More shortcuts are on [the shortcuts page](docs/shortcuts.md), and the command
 palette lists every one of them without leaving the app.

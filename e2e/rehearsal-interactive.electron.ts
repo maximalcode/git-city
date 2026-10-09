@@ -77,6 +77,10 @@ for (const conflict of [false, true]) {
             await page.keyboard.press('Enter')
           }
           await editor.getByLabel('Resolved file text').fill(`resolved ${stop}\n`)
+          await expect(
+            editor.getByRole('button', { name: 'Save and stage in sandbox' })
+          ).toBeDisabled()
+          await editor.getByRole('button', { name: 'Confirm complete file resolution' }).click()
           await editor.getByRole('button', { name: 'Save and stage in sandbox' }).focus()
           await page.keyboard.press('Enter')
           await expect(editor.getByRole('button', { name: 'Continue rehearsal' })).toBeEnabled()

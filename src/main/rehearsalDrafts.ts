@@ -1,10 +1,11 @@
 import { randomUUID } from 'crypto'
-import { mkdir, readFile, realpath, rename, rm, writeFile } from 'fs/promises'
+import { mkdir, open, readFile, realpath, rename, rm } from 'fs/promises'
 import { dirname, isAbsolute } from 'path'
 import type {
   RehearsalDraftChoice,
   RehearsalDraftDiscardResult,
   RehearsalDraftKey,
+  RehearsalDraftListResult,
   RehearsalDraftPayload,
   RehearsalDraftReadResult,
   RehearsalDraftRecord,
@@ -110,16 +111,14 @@ function emptyFile(): DraftFile {
 }
 
 async function loadFile(file: string): Promise<LoadedFile> {
-  let raw: string
+  let raw: string | undefined
   try {
     raw = await readFile(file, 'utf8')
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT')
-      return { file: emptyFile(), status: 'ok' }
-    throw error
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
   }
   try {
-    const parsed: unknown = JSON.parse(raw)
+    const parsed: unknown = raw === undefined ? undefined : JSON.parse(raw)
     if (validFile(parsed)) return { file: parsed, status: 'ok' }
   } catch {
     /* Try the previous valid snapshot below. */
@@ -128,14 +127,19 @@ async function loadFile(file: string): Promise<LoadedFile> {
     const previous = JSON.parse(await readFile(file + '.previous', 'utf8')) as unknown
     if (validFile(previous)) {
       return {
-        file: { ...previous, unknown: [...(previous.unknown ?? []), raw] },
+        file: {
+          ...previous,
+          unknown: [...(previous.unknown ?? []), ...(raw === undefined ? [] : [raw])]
+        },
         status: 'unknown',
-        message: 'The latest draft store was incompatible; the previous valid drafts were restored.'
+        message:
+          'The latest draft store was missing or incompatible; the previous valid drafts were restored.'
       }
     }
   } catch {
     /* Both snapshots are unavailable or invalid. Preserve the next write's unknown marker. */
   }
+  if (raw === undefined) return { file: emptyFile(), status: 'ok' }
   return {
     file: { schema: 1, records: [], unknown: [raw] },
     status: 'unknown',
@@ -147,20 +151,45 @@ async function loadFile(file: string): Promise<LoadedFile> {
 async function persist(file: string, value: DraftFile): Promise<void> {
   await mkdir(dirname(file), { recursive: true })
   const output = JSON.stringify(value) + '\n'
+  let previous: string | null = null
   try {
     const current = await readFile(file, 'utf8')
-    await writeFile(file + '.previous', current, { encoding: 'utf8', mode: 0o600 })
+    try {
+      if (validFile(JSON.parse(current))) previous = current
+    } catch {
+      // An incompatible primary must never replace the last valid backup.
+      // loadFile has retained its uninterpreted bytes in value.unknown.
+    }
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+    previous = output
   }
+  if (previous !== null) await publishSnapshot(file + '.previous', previous)
+  await publishSnapshot(file, output)
+}
+
+async function publishSnapshot(file: string, output: string): Promise<void> {
   const temporary = `${file}.${process.pid}.${randomUUID()}.tmp`
   try {
-    await writeFile(temporary, output, { encoding: 'utf8', mode: 0o600 })
+    const handle = await open(temporary, 'wx', 0o600)
+    try {
+      await handle.writeFile(output, 'utf8')
+      await handle.sync()
+    } finally {
+      await handle.close()
+    }
     await rename(temporary, file)
-    // Keep a complete valid fallback even when this was the first write.
-    await writeFile(file + '.previous', output, { encoding: 'utf8', mode: 0o600 })
+    // Windows does not support opening a directory for fsync. The file itself
+    // is flushed on every platform before its atomic replacement is published.
+    if (process.platform !== 'win32') {
+      const directory = await open(dirname(file), 'r')
+      try {
+        await directory.sync()
+      } finally {
+        await directory.close()
+      }
+    }
   } finally {
-    // A failed rename must not leave an apparently durable half-write around.
     await rm(temporary, { force: true }).catch(() => {})
   }
 }
@@ -338,6 +367,24 @@ export async function writeRehearsalDraft(
       }
     }
     return { status: 'saved', record }
+  })
+}
+
+/** Includes saved drafts whose sandbox path was staged or removed externally. */
+export async function listRehearsalDrafts(
+  file: string,
+  identity: RehearsalIdentity
+): Promise<RehearsalDraftListResult> {
+  const key = await rehearsalDraftKey(identity, 'placeholder')
+  return serial(file, async () => {
+    const loaded = await loadFile(file)
+    return {
+      status: loaded.status === 'unknown' ? 'unknown' : 'saved',
+      records: loaded.file.records.filter((record) =>
+        sameKey(record.key, { ...key, path: record.key.path })
+      ),
+      message: loaded.message
+    }
   })
 }
 

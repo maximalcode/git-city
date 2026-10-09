@@ -1,4 +1,9 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import type {
+  GitCityApi,
+  RehearsalReviewFileResult,
+  RehearsalReviewFileView
+} from '../../../shared/types'
 import { runRepoRead, type QueryPatch } from './repoQuery'
 
 function collector(): { patches: QueryPatch<unknown>[]; emit: (p: QueryPatch<unknown>) => void } {
@@ -89,4 +94,140 @@ describe('runRepoRead', () => {
     expect(patches).toContainEqual({ data: null, error: 'no api' })
     expect(patches).toContainEqual({ loading: false })
   })
+
+  it('drops a late frozen-review response after the request key changes', async () => {
+    let finish!: (value: string) => void
+    const patches: string[] = []
+    const cancel = runRepoRead(
+      () => new Promise<string>((resolve) => (finish = resolve)),
+      (patch) => {
+        if (patch.data !== undefined && patch.data !== null) patches.push(patch.data)
+      }
+    )
+    cancel()
+    await Promise.resolve()
+    finish('old revision')
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(patches).toEqual([])
+  })
+
+  it('allows the current request to publish while an older request is cancelled', async () => {
+    let finishOld!: (value: string) => void
+    let finishCurrent!: (value: string) => void
+    const patches: string[] = []
+    const cancelOld = runRepoRead(
+      () => new Promise<string>((resolve) => (finishOld = resolve)),
+      (patch) => {
+        if (patch.data !== undefined && patch.data !== null) patches.push(patch.data)
+      }
+    )
+    cancelOld()
+    runRepoRead(
+      () => new Promise<string>((resolve) => (finishCurrent = resolve)),
+      (patch) => {
+        if (patch.data !== undefined && patch.data !== null) patches.push(patch.data)
+      }
+    )
+    await Promise.resolve()
+    finishOld('stale')
+    finishCurrent('current')
+    await Promise.resolve()
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(patches).toEqual(['current'])
+  })
+
+  it('drops a stale frozen-review bridge response when entry and view change', async () => {
+    let finishOld!: (value: RehearsalReviewFileResult) => void
+    const reviewFile = vi.fn<GitCityApi['rehearsalReviewFile']>()
+    reviewFile
+      .mockImplementationOnce(
+        () => new Promise<RehearsalReviewFileResult>((resolve) => (finishOld = resolve))
+      )
+      .mockResolvedValueOnce(reviewFileResult('new-entry', 'after'))
+
+    const identity = {
+      id: 'review-1',
+      repository: '/repo',
+      origin_worktree: '/repo',
+      repository_id: 'repo'
+    }
+    const received: string[] = []
+    const cancelOld = runRepoRead(
+      () =>
+        reviewFile(identity, 'revision-1', 'tracked-worktree', 'old-entry', 'before').then(
+          (result) => result.text ?? ''
+        ),
+      (patch) => {
+        if (patch.data !== undefined && patch.data !== null) received.push(patch.data)
+      }
+    )
+    await Promise.resolve()
+    cancelOld()
+
+    runRepoRead(
+      () =>
+        reviewFile(identity, 'revision-1', 'tracked-worktree', 'new-entry', 'after').then(
+          (result) => result.text ?? ''
+        ),
+      (patch) => {
+        if (patch.data !== undefined && patch.data !== null) received.push(patch.data)
+      }
+    )
+    finishOld(reviewFileResult('old-entry', 'before'))
+    await settle()
+
+    expect(received).toEqual(['new-entry:after'])
+    expect(reviewFile).toHaveBeenNthCalledWith(
+      1,
+      identity,
+      'revision-1',
+      'tracked-worktree',
+      'old-entry',
+      'before'
+    )
+    expect(reviewFile).toHaveBeenNthCalledWith(
+      2,
+      identity,
+      'revision-1',
+      'tracked-worktree',
+      'new-entry',
+      'after'
+    )
+  })
 })
+
+function reviewFileResult(
+  entryId: string,
+  view: RehearsalReviewFileView
+): RehearsalReviewFileResult {
+  const side = { present: true, mode: '100644', objectId: 'a'.repeat(40) }
+  return {
+    identity: {
+      id: 'review-1',
+      repository: '/repo',
+      origin_worktree: '/repo',
+      repository_id: 'repo'
+    },
+    reviewRevision: 'revision-1',
+    scopeId: 'tracked-worktree',
+    entryId,
+    view,
+    availability: 'available',
+    text: `${entryId}:${view}`,
+    hunks: [],
+    entry: {
+      entryId,
+      change: 'modified',
+      oldPath: 'file.txt',
+      newPath: 'file.txt',
+      old: side,
+      new: side,
+      binary: false,
+      type: 'text',
+      text: { changes: 'available', before: 'available', after: 'available' },
+      lines: { before: 1, after: 1, additions: 1, deletions: 1 }
+    }
+  }
+}

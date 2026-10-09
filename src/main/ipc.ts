@@ -1,4 +1,9 @@
 import { compareRehearsal } from './rehearsalComparison'
+import {
+  rehearsalReviewFile,
+  rehearsalReviewFiles,
+  rehearsalReviewSummary
+} from './rehearsalReview'
 import { resolveRehearsalTool } from './rehearsalBundle'
 import { inspectUndo, undoRehearsal } from './rehearsalUndo'
 import { listRehearsals, discardRehearsals } from './rehearsalManagement'
@@ -55,6 +60,31 @@ export function registerIpc(): void {
   ipcMain.handle('git-city:rehearsal-stop', (_event, repo) => stopRehearsal(repo))
   ipcMain.handle('git-city:rehearsal-comparison', (_event, identity: RehearsalIdentity) =>
     compareRehearsal(rehearsalTool(), identity)
+  )
+  ipcMain.handle('git-city:rehearsal-review-summary', (_event, identity: RehearsalIdentity) =>
+    rehearsalReviewSummary(rehearsalTool(), identity)
+  )
+  ipcMain.handle(
+    'git-city:rehearsal-review-files',
+    (
+      _event,
+      identity: RehearsalIdentity,
+      revision: string,
+      scopeId: string,
+      cursor?: string,
+      filter?: string
+    ) => rehearsalReviewFiles(rehearsalTool(), identity, revision, scopeId, cursor, filter)
+  )
+  ipcMain.handle(
+    'git-city:rehearsal-review-file',
+    (
+      _event,
+      identity: RehearsalIdentity,
+      revision: string,
+      scopeId: string,
+      entryId: string,
+      view
+    ) => rehearsalReviewFile(rehearsalTool(), identity, revision, scopeId, entryId, view)
   )
   ipcMain.handle('git-city:rehearsal-show', (_event, identity: RehearsalIdentity) =>
     rehearsalShow(rehearsalTool(), identity)

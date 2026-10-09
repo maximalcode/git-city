@@ -24,6 +24,26 @@ const api: GitCityApi = {
     ipcRenderer.invoke('git-city:rehearsal-conflict-save', identity, path, revision, text),
   rehearsalContinue: (identity) => ipcRenderer.invoke('git-city:rehearsal-continue', identity),
   rehearsalComparison: (identity) => ipcRenderer.invoke('git-city:rehearsal-comparison', identity),
+  rehearsalReviewSummary: (identity) =>
+    ipcRenderer.invoke('git-city:rehearsal-review-summary', identity),
+  rehearsalReviewFiles: (identity, revision, scopeId, cursor, filter) =>
+    ipcRenderer.invoke(
+      'git-city:rehearsal-review-files',
+      identity,
+      revision,
+      scopeId,
+      cursor,
+      filter
+    ),
+  rehearsalReviewFile: (identity, revision, scopeId, entryId, view) =>
+    ipcRenderer.invoke(
+      'git-city:rehearsal-review-file',
+      identity,
+      revision,
+      scopeId,
+      entryId,
+      view
+    ),
   rehearsalShow: (identity) => ipcRenderer.invoke('git-city:rehearsal-show', identity),
   checkGit: () => ipcRenderer.invoke('git-city:check-git'),
   selectFolder: () => ipcRenderer.invoke('git-city:select-folder'),

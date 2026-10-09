@@ -193,3 +193,203 @@ it('leaves the incomplete inventory total unknown instead of claiming zero', asy
   expect(files.entries).toEqual([])
   expect(files.total).toBeNull()
 })
+
+it('returns distinct committed-reference scopes with grouped aliases and explicit empty sides', async () => {
+  vi.mocked(rehearsalShow).mockResolvedValue({
+    kind: 'report',
+    report: {
+      ...report,
+      refs: [
+        { name: 'HEAD', before, after },
+        { name: 'refs/heads/main', before, after },
+        { name: 'refs/heads/deleted', before, after: undefined },
+        { name: 'refs/heads/created', before: undefined, after }
+      ],
+      drift: [
+        {
+          reference: 'refs/heads/main',
+          files: [],
+          commits_before: 1,
+          commits_after: 1,
+          replay: { changed: ['old'], dropped: [], added: ['new'], compared: false }
+        }
+      ]
+    }
+  })
+  const summary = await rehearsalReviewSummary('/tool', identity)
+  const committed = summary.scopes.filter((scope) => scope.kind === 'committed-reference')
+  expect(committed).toHaveLength(3)
+  expect(
+    committed.find((scope) => scope.refAliases.includes('refs/heads/main'))?.refAliases
+  ).toEqual(['HEAD', 'refs/heads/main'])
+  const deleted = committed.find((scope) => scope.refAliases.includes('refs/heads/deleted'))!
+  const created = committed.find((scope) => scope.refAliases.includes('refs/heads/created'))!
+  expect(deleted.after).toMatchObject({ kind: 'empty', commit: null })
+  expect(created.before).toMatchObject({ kind: 'empty', commit: null })
+  expect(
+    committed.find((scope) => scope.refAliases.includes('refs/heads/main'))?.replay
+  ).toMatchObject({
+    changed: ['old'],
+    added: ['new'],
+    compared: false
+  })
+  expect(summary.replayWarnings).toHaveLength(1)
+})
+
+it('preserves special file metadata and detected rename identity', async () => {
+  const symlinkObject = 'e'.repeat(40)
+  const gitlinkOld = 'f'.repeat(40)
+  const gitlinkNew = '1'.repeat(40)
+  const modeObject = '2'.repeat(40)
+  const renamedOld = '3'.repeat(40)
+  const renamedNew = '4'.repeat(40)
+  const specialRaw = [
+    `:000000 120000 ${'0'.repeat(40)} ${symlinkObject} A\0link\0`,
+    `:160000 160000 ${gitlinkOld} ${gitlinkNew} M\0submodule\0`,
+    `:100644 100755 ${modeObject} ${modeObject} M\0script.sh\0`,
+    `:100644 100644 ${renamedOld} ${renamedNew} R100\0old.txt\0new.txt\0`
+  ].join('')
+  vi.mocked(runGit).mockImplementation(async (_root, args) => {
+    if (args.includes('--path-format=absolute')) return '/sandbox/.git'
+    if (args.includes('diff-tree')) return specialRaw
+    if (args[1] === 'cat-file' && args[2] === '-s') return '5'
+    return ''
+  })
+  vi.mocked(runGitBuffer).mockImplementation(async (_root, args) => {
+    const object = args.at(-1)
+    return Buffer.from(object === symlinkObject ? '../target' : 'text\n')
+  })
+  const summary = await rehearsalReviewSummary('/tool', identity)
+  const files = await rehearsalReviewFiles(
+    '/tool',
+    identity,
+    summary.reviewRevision,
+    'tracked-worktree'
+  )
+  expect(files.entries).toHaveLength(4)
+  expect(files.entries.find((entry) => entry.type === 'symlink')).toMatchObject({
+    old: { present: false },
+    new: { mode: '120000' },
+    text: { after: 'available' }
+  })
+  expect(files.entries.find((entry) => entry.type === 'gitlink')).toMatchObject({
+    change: 'modified',
+    text: { before: 'available', after: 'available' }
+  })
+  expect(files.entries.find((entry) => entry.newPath === 'script.sh')).toMatchObject({
+    type: 'mode',
+    text: { changes: 'mode-only' }
+  })
+  expect(files.entries.find((entry) => entry.change === 'renamed')).toMatchObject({
+    oldPath: 'old.txt',
+    newPath: 'new.txt',
+    rename: 'detected'
+  })
+})
+
+it('pages the complete inventory at 200 and marks bounded rename detection', async () => {
+  const manyRaw = Array.from({ length: 401 }, (_, index) => {
+    const object = index.toString(16).padStart(40, '0')
+    return `:000000 100644 ${'0'.repeat(40)} ${object} A\0file-${index}.txt\0`
+  }).join('')
+  vi.mocked(runGit).mockImplementation(async (_root, args) => {
+    if (args.includes('--path-format=absolute')) return '/sandbox/.git'
+    if (args.includes('diff-tree')) return manyRaw
+    if (args[1] === 'cat-file' && args[2] === '-s') return '5'
+    return ''
+  })
+  vi.mocked(runGitBuffer).mockResolvedValue(Buffer.from('text\n'))
+  const summary = await rehearsalReviewSummary('/tool', identity)
+  expect(summary.notices).toContain(
+    'Rename detection was bounded for a large change set; complete add/delete entries remain visible.'
+  )
+  const files = await rehearsalReviewFiles(
+    '/tool',
+    identity,
+    summary.reviewRevision,
+    'tracked-worktree'
+  )
+  expect(files.total).toBe(401)
+  expect(files.entries).toHaveLength(200)
+  expect(files.nextCursor).toBeTruthy()
+  expect(files.entries[0].rename).toBe('limited')
+})
+
+it('keeps over-limit blobs and generated patches explicit', async () => {
+  vi.mocked(runGit).mockImplementation(async (_root, args) => {
+    if (args.includes('--path-format=absolute')) return '/sandbox/.git'
+    if (args.includes('diff-tree')) return raw
+    if (args[1] === 'cat-file' && args[2] === '-s') return String(2 * 1024 * 1024 + 1)
+    return ''
+  })
+  const summary = await rehearsalReviewSummary('/tool', identity)
+  const files = await rehearsalReviewFiles(
+    '/tool',
+    identity,
+    summary.reviewRevision,
+    'tracked-worktree'
+  )
+  expect(files.entries[0].text).toMatchObject({
+    before: 'too-large',
+    after: 'too-large',
+    changes: 'too-large'
+  })
+
+  const oldText = `${'a'.repeat(2 * 1024 * 1024)}\n`
+  const newText = `${'b'.repeat(2 * 1024 * 1024)}\n`
+  vi.mocked(runGit).mockImplementation(async (_root, args) => {
+    if (args.includes('--path-format=absolute')) return '/sandbox/.git'
+    if (args.includes('diff-tree')) return raw
+    if (args[1] === 'cat-file' && args[2] === '-s') return String(2 * 1024 * 1024)
+    return ''
+  })
+  vi.mocked(runGitBuffer).mockImplementation(async (_root, args) =>
+    Buffer.from(args.at(-1) === oldObject ? oldText : newText)
+  )
+  const large = await rehearsalReviewSummary('/tool', identity)
+  const largeFiles = await rehearsalReviewFiles(
+    '/tool',
+    identity,
+    large.reviewRevision,
+    'tracked-worktree'
+  )
+  expect(largeFiles.entries[0].text.changes).toBe('too-large')
+  const largeChanges = await rehearsalReviewFile(
+    '/tool',
+    identity,
+    large.reviewRevision,
+    'tracked-worktree',
+    largeFiles.entries[0].entryId,
+    'changes'
+  )
+  expect(largeChanges.availability).toBe('too-large')
+  expect(largeChanges.hunks).toEqual([])
+})
+
+it('preserves a committed scope when one retained endpoint object is missing', async () => {
+  vi.mocked(rehearsalShow).mockResolvedValue({
+    kind: 'report',
+    report: {
+      ...report,
+      refs: [
+        { name: 'HEAD', before, after },
+        { name: 'refs/heads/missing', before, after }
+      ]
+    }
+  })
+  vi.mocked(runGit).mockImplementation(async (_root, args) => {
+    if (args.includes('--path-format=absolute')) return '/sandbox/.git'
+    if (args.includes('cat-file') && args.includes('-e')) throw new Error('missing object')
+    if (args.includes('diff-tree')) return raw
+    if (args[1] === 'cat-file' && args[2] === '-s') return '5'
+    return ''
+  })
+  const summary = await rehearsalReviewSummary('/tool', identity)
+  const scope = summary.scopes.find((item) => item.refAliases.includes('refs/heads/missing'))!
+  expect(scope.available).toBe(false)
+  expect(scope.unavailableReason).toContain('not replaced')
+  const files = await rehearsalReviewFiles('/tool', identity, summary.reviewRevision, scope.scopeId)
+  expect(files.complete).toBe(false)
+  expect(files.total).toBeNull()
+  expect(files.entries).toEqual([])
+})

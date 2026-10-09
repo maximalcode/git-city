@@ -25,6 +25,7 @@ function name(entry: RehearsalReviewEntry): string {
 function status(entry: RehearsalReviewEntry): string {
   if (entry.change === 'added') return 'Added'
   if (entry.change === 'deleted') return 'Deleted'
+  if (entry.change === 'renamed') return 'Renamed'
   if (entry.change === 'typechange') return 'Type changed'
   return entry.binary ? 'Binary' : 'Modified'
 }
@@ -53,6 +54,7 @@ export function RehearsalReviewScopeSelector({
       {scopes.map((scope) => (
         <option key={scope.scopeId} value={scope.scopeId} disabled={!scope.available}>
           {scope.label}
+          {scope.replay ? ` · replay ${scope.replay.compared ? 'compared' : 'uncompared'}` : ''}
         </option>
       ))}
     </select>

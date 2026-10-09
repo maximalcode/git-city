@@ -177,7 +177,13 @@ shared layout and text inventory; unfinished results explain the missing After.
 city rendering caps, path filtering, and revision-bound Changes/Before/After
 content from retained Git objects. Live edits, untracked files, and staging
 selection are excluded; binary, mode-only, oversized, absent, and unavailable
-content remains explicitly labelled.
+content remains explicitly labelled. A completed rehearsal with affected refs
+also provides separate committed-reference scopes, groups true `HEAD` and
+current-branch aliases, preserves replay warnings, and shows explicit empty
+sides for created/deleted refs. Rename detection is bounded with truthful
+add/delete fallback; symlinks and gitlinks expose stored object metadata without
+following paths or executing repository code. Endpoint blobs are capped at 2 MiB
+and generated patches at 4 MiB, with over-limit state preserved in the inventory.
 
 Text conflicts support hunk choices, free editing, checked save-and-stage,
 external-edit refresh and repeated Continue. Binary conflicts support complete

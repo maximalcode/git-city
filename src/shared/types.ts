@@ -579,14 +579,22 @@ export type RehearsalReviewRevision = string
 export type RehearsalReviewCursor = string
 
 export type RehearsalReviewScopeKind = 'tracked-worktree' | 'committed-reference'
-export type RehearsalReviewChange = 'added' | 'modified' | 'deleted' | 'typechange'
+export type RehearsalReviewChange = 'added' | 'modified' | 'deleted' | 'renamed' | 'typechange'
 export type RehearsalReviewAvailability =
   'available' | 'absent' | 'binary' | 'mode-only' | 'too-large' | 'unavailable'
 
 export interface RehearsalReviewEndpoint {
-  kind: 'commit'
-  commit: string
-  provenance: 'original' | 'carried'
+  kind: 'commit' | 'empty'
+  commit: string | null
+  provenance: 'original' | 'carried' | 'synthetic-empty'
+}
+
+export interface RehearsalReviewReplay {
+  reference: string
+  changed: string[]
+  dropped: string[]
+  added: string[]
+  compared: boolean
 }
 
 export interface RehearsalReviewScope {
@@ -594,10 +602,12 @@ export interface RehearsalReviewScope {
   kind: RehearsalReviewScopeKind
   label: string
   refAliases: string[]
-  before: RehearsalReviewEndpoint
+  before: RehearsalReviewEndpoint | null
   after: RehearsalReviewEndpoint | null
   available: boolean
   unavailableReason?: string
+  replay?: RehearsalReviewReplay
+  renameDetectionLimited?: boolean
 }
 
 export interface RehearsalReviewSide {
@@ -615,6 +625,8 @@ export interface RehearsalReviewEntry {
   new: RehearsalReviewSide
   binary: boolean
   type: 'text' | 'binary' | 'mode' | 'symlink' | 'gitlink' | 'unknown'
+  /** Rename detection is bounded; limited means complete add/delete identity is retained. */
+  rename?: 'detected' | 'not-detected' | 'limited' | 'not-applicable'
   text: {
     changes: RehearsalReviewAvailability
     before: RehearsalReviewAvailability
@@ -638,6 +650,7 @@ export interface RehearsalReviewSummary {
   scopes: RehearsalReviewScope[]
   defaultScopeId: string | null
   notices: string[]
+  replayWarnings: RehearsalReviewReplay[]
   carried: { status: string; paths: string[]; included: boolean; reason?: string } | null
 }
 

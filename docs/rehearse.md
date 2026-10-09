@@ -33,12 +33,20 @@ area.
 
 Completed reports also offer **Frozen file review**. Open **Review changed files**
 to load the complete tracked-worktree inventory, filter it by path, and select a
-file. The **Changes**, **Before**, and **After** views read the retained Git
-objects from the rehearsal sandbox, so edits made later in the live checkout or
-sandbox cannot replace the result being inspected. Added and deleted sides are
-labelled as absent; binary, mode-only, oversized, and unavailable content stays
-visible with an explanation. Untracked files and the original staging selection
-are excluded from this scope.
+file. Results with affected references also expose separate committed-reference
+scopes; matching `HEAD` and current-branch aliases are grouped, while created
+and deleted references retain an explicit empty side. Replay changed, dropped,
+added, and uncompared warnings stay attached to their reference. The **Changes**,
+**Before**, and **After** views read retained Git objects from the rehearsal
+sandbox, so edits made later in the live checkout or sandbox cannot replace the
+result being inspected. Added and deleted sides are labelled as absent; binary,
+mode-only, executable-bit, symlink, gitlink, renamed, oversized, and unavailable
+content stays visible with an explanation. Rename detection is bounded for very
+large changesets and leaves complete add/delete entries when it cannot safely
+pair paths. Endpoint blobs are limited to 2 MiB and generated patches to 4 MiB;
+over-limit content remains identifiable without being presented as a complete
+diff. Untracked files and the original staging selection are excluded from the
+tracked-worktree scope.
 
 **Compare city** opens the frozen **Before** and **After** views when a finished
 result has an available After. They use the same layout and provide a text

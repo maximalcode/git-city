@@ -12,6 +12,7 @@ import type {
   RehearsalReviewFileView,
   RehearsalReviewFilesResult,
   RehearsalReviewScope,
+  RehearsalReviewReplay,
   RehearsalReviewSummary
 } from '../shared/types'
 import { rehearsalComparisonKey } from '../shared/rehearsalComparison'
@@ -20,8 +21,12 @@ import { rehearsalShow } from './rehearsal'
 import { resolveRehearsalEndpoints } from './rehearsalComparison'
 import { withRehearsal } from './rehearsalConflicts'
 
-const MAX_CONTENT_BYTES = 4 * 1024 * 1024
-const PAGE_SIZE = 100
+export const REHEARSAL_REVIEW_BLOB_LIMIT = 2 * 1024 * 1024
+export const REHEARSAL_REVIEW_PATCH_LIMIT = 4 * 1024 * 1024
+export const REHEARSAL_REVIEW_PAGE_SIZE = 200
+const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904'
+const RENAME_DETECTION_ENTRY_LIMIT = 400
+const BLOB_READ_CONCURRENCY = 4
 
 const inside = (parent: string, child: string): boolean => {
   const path = relative(parent, child)
@@ -40,6 +45,7 @@ type RawEntry = {
 
 type BlobText =
   | { kind: 'text'; text: string; lines: number }
+  | { kind: 'pointer'; text: string; lines: 1 }
   | { kind: 'binary' }
   | { kind: 'too-large' }
   | { kind: 'missing' }
@@ -51,7 +57,10 @@ type ReviewData = {
   scope: RehearsalReviewScope
   entries: RehearsalReviewEntry[]
   root: string
+  scopes: Map<string, { scope: RehearsalReviewScope; entries: RehearsalReviewEntry[] }>
 }
+
+type ScopeData = { scope: RehearsalReviewScope; entries: RehearsalReviewEntry[] }
 
 function identityOf(report: RehearsalReport): RehearsalIdentity {
   return {
@@ -62,19 +71,68 @@ function identityOf(report: RehearsalReport): RehearsalIdentity {
   }
 }
 
-function revisionOf(report: RehearsalReport, endpoints: string[]): string {
+function revisionOf(
+  report: RehearsalReport,
+  endpoints: string[],
+  scopeKeys: string[] = []
+): string {
   return createHash('sha256')
     .update(rehearsalComparisonKey(report))
     .update('\0')
+    .update(JSON.stringify(report.drift))
+    .update('\0')
     .update(endpoints.join('\0'))
+    .update('\0')
+    .update(scopeKeys.join('\0'))
     .digest('hex')
 }
 
+function replayFor(report: RehearsalReport, aliases: string[]): RehearsalReviewReplay | undefined {
+  const drift = report.drift.find((item) => aliases.includes(item.reference))
+  if (!drift) return undefined
+  return {
+    reference: drift.reference,
+    changed: drift.replay.changed,
+    dropped: drift.replay.dropped,
+    added: drift.replay.added,
+    compared: drift.replay.compared
+  }
+}
+
+function scopeKey(before: string | null, after: string | null): string {
+  return `${before ?? ''}\0${after ?? ''}`
+}
+
+function scopeIdFor(reference: string, before: string | null, after: string | null): string {
+  return createHash('sha256')
+    .update('committed-reference\0')
+    .update(reference)
+    .update('\0')
+    .update(before ?? '')
+    .update('\0')
+    .update(after ?? '')
+    .digest('hex')
+    .slice(0, 24)
+}
+
+function commitId(value: string | undefined, label: string): string | null {
+  if (value === undefined) return null
+  if (!/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(value))
+    throw new Error(`Frozen review ${label} endpoint is invalid. Refresh the result.`)
+  return value
+}
+
 function endpoint(
-  commit: string,
+  commit: string | null,
   report: RehearsalReport,
   before: boolean
 ): RehearsalReviewScope['before'] {
+  if (!commit)
+    return {
+      kind: 'empty',
+      commit: null,
+      provenance: 'synthetic-empty'
+    }
   const carried = !!report.carried && (before || report.carried.status === 'restored')
   return { kind: 'commit', commit, provenance: carried ? 'carried' : 'original' }
 }
@@ -119,7 +177,13 @@ function parseRawDiff(output: string): RawEntry[] {
   return entries
 }
 
-async function rawDiff(root: string, before: string, after: string): Promise<RawEntry[]> {
+async function rawDiff(
+  root: string,
+  before: string | null,
+  after: string | null,
+  detectRenames: boolean
+): Promise<RawEntry[]> {
+  if (!before && !after) return []
   const output = await runGit(root, [
     '--no-replace-objects',
     '-c',
@@ -127,12 +191,12 @@ async function rawDiff(root: string, before: string, after: string): Promise<Raw
     'diff-tree',
     '--no-ext-diff',
     '--no-textconv',
-    '--no-renames',
+    detectRenames ? '--find-renames=50%' : '--no-renames',
     '-r',
     '--raw',
     '-z',
-    before,
-    after,
+    before ?? EMPTY_TREE,
+    after ?? EMPTY_TREE,
     '--'
   ])
   return parseRawDiff(output)
@@ -167,17 +231,18 @@ async function blobText(
   objectId: string | null,
   mode: string | null
 ): Promise<BlobText> {
-  if (!objectId || !mode || mode === '120000' || mode === '160000') return { kind: 'missing' }
+  if (!objectId || !mode) return { kind: 'missing' }
   if (!/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(objectId)) return { kind: 'missing' }
+  if (mode === '160000') return { kind: 'pointer', text: objectId, lines: 1 }
   const size = Number(
     (await runGit(root, ['--no-replace-objects', 'cat-file', '-s', objectId])).trim()
   )
   if (!Number.isSafeInteger(size) || size < 0) return { kind: 'missing' }
-  if (size > MAX_CONTENT_BYTES) return { kind: 'too-large' }
+  if (size > REHEARSAL_REVIEW_BLOB_LIMIT) return { kind: 'too-large' }
   const bytes = await runGitBuffer(
     root,
     ['--no-replace-objects', 'cat-file', 'blob', objectId],
-    MAX_CONTENT_BYTES
+    REHEARSAL_REVIEW_BLOB_LIMIT
   )
   if (!bytes) return { kind: 'missing' }
   if (bytes.includes(0)) return { kind: 'binary' }
@@ -189,16 +254,21 @@ async function blobText(
 function availability(value: BlobText, present: boolean): RehearsalReviewAvailability {
   if (!present) return 'absent'
   if (value.kind === 'text') return 'available'
+  if (value.kind === 'pointer') return 'available'
   if (value.kind === 'binary') return 'binary'
   if (value.kind === 'too-large') return 'too-large'
   return 'unavailable'
 }
 
+function contentText(value: BlobText): string | null {
+  return value.kind === 'text' || value.kind === 'pointer' ? value.text : null
+}
+
 function textDiff(
   before: string,
   after: string
-): { hunks: DiffHunk[]; additions: number; deletions: number } {
-  if (before === after) return { hunks: [], additions: 0, deletions: 0 }
+): { hunks: DiffHunk[]; additions: number; deletions: number; tooLarge: boolean } {
+  if (before === after) return { hunks: [], additions: 0, deletions: 0, tooLarge: false }
   const oldLines = before.length ? before.split(/\r?\n/) : []
   const newLines = after.length ? after.split(/\r?\n/) : []
   if (oldLines.at(-1) === '') oldLines.pop()
@@ -207,22 +277,26 @@ function textDiff(
     ...oldLines.map((text) => ({ kind: 'del' as const, text })),
     ...newLines.map((text) => ({ kind: 'add' as const, text }))
   ]
+  const hunk = {
+    header: `@@ -1,${oldLines.length} +1,${newLines.length} @@`,
+    lines
+  }
+  const patchBytes =
+    Buffer.byteLength(hunk.header) +
+    lines.reduce((size, line) => size + Buffer.byteLength(line.text) + 2, 0)
   return {
-    hunks: [
-      {
-        header: `@@ -1,${oldLines.length} +1,${newLines.length} @@`,
-        lines
-      }
-    ],
+    hunks: patchBytes > REHEARSAL_REVIEW_PATCH_LIMIT ? [] : [hunk],
     additions: newLines.length,
-    deletions: oldLines.length
+    deletions: oldLines.length,
+    tooLarge: patchBytes > REHEARSAL_REVIEW_PATCH_LIMIT
   }
 }
 
 async function makeEntry(
   root: string,
   scopeId: string,
-  raw: RawEntry
+  raw: RawEntry,
+  renameDetectionLimited = false
 ): Promise<RehearsalReviewEntry> {
   const old = side(raw.oldMode, raw.oldId)
   const newer = side(raw.newMode, raw.newId)
@@ -232,25 +306,20 @@ async function makeEntry(
   const type = entryType(raw.oldMode, raw.newMode, binary)
   const oldAvailable = availability(oldText, old.present)
   const newAvailable = availability(newText, newer.present)
-  const sameText =
-    oldText.kind === 'text' && newText.kind === 'text' && oldText.text === newText.text
+  const oldContent = contentText(oldText)
+  const newContent = contentText(newText)
+  const sameText = oldContent !== null && newContent !== null && oldContent === newContent
   const modeOnly =
-    sameText &&
-    raw.oldMode !== raw.newMode &&
-    oldText.kind === 'text' &&
-    newText.kind === 'text' &&
-    oldText.text === newText.text
-  const changes = binary
+    sameText && raw.oldMode !== raw.newMode && oldContent !== null && newContent !== null
+  const baseChanges = binary
     ? 'binary'
-    : type === 'symlink' || type === 'gitlink'
-      ? 'unavailable'
-      : modeOnly
-        ? 'mode-only'
-        : oldText.kind === 'too-large' || newText.kind === 'too-large'
-          ? 'too-large'
-          : oldText.kind === 'text' || newText.kind === 'text'
-            ? 'available'
-            : 'unavailable'
+    : modeOnly
+      ? 'mode-only'
+      : oldText.kind === 'too-large' || newText.kind === 'too-large'
+        ? 'too-large'
+        : oldContent !== null || newContent !== null
+          ? 'available'
+          : 'unavailable'
   const key = createHash('sha256')
     .update(scopeId)
     .update('\0')
@@ -262,32 +331,42 @@ async function makeEntry(
     .update('\0')
     .update(raw.newId)
     .digest('hex')
-  const diff =
-    oldText.kind === 'text' && newText.kind === 'text'
-      ? textDiff(oldText.text, newText.text)
-      : { additions: null, deletions: null }
-  return {
-    entryId: key,
-    change:
-      raw.status[0] === 'A'
-        ? 'added'
-        : raw.status[0] === 'D'
-          ? 'deleted'
+  const diff = oldContent !== null && newContent !== null ? textDiff(oldContent, newContent) : null
+  const changes = diff?.tooLarge ? 'too-large' : baseChanges
+  const change =
+    raw.status[0] === 'A'
+      ? 'added'
+      : raw.status[0] === 'D'
+        ? 'deleted'
+        : raw.status.startsWith('R') || raw.status.startsWith('C')
+          ? 'renamed'
           : raw.oldMode !== raw.newMode && raw.oldId === raw.newId
             ? 'typechange'
-            : 'modified',
+            : 'modified'
+  const rename =
+    raw.status.startsWith('R') || raw.status.startsWith('C')
+      ? 'detected'
+      : raw.status[0] === 'A' || raw.status[0] === 'D'
+        ? renameDetectionLimited
+          ? 'limited'
+          : 'not-applicable'
+        : 'not-detected'
+  return {
+    entryId: key,
+    change,
     oldPath: raw.oldPath,
     newPath: raw.newPath,
     old,
     new: newer,
     binary,
     type,
+    rename,
     text: { changes, before: oldAvailable, after: newAvailable },
     lines: {
-      before: oldText.kind === 'text' ? oldText.lines : null,
-      after: newText.kind === 'text' ? newText.lines : null,
-      additions: diff.additions,
-      deletions: diff.deletions
+      before: oldContent !== null ? linesOf(oldContent) : null,
+      after: newContent !== null ? linesOf(newContent) : null,
+      additions: diff && !diff.tooLarge ? diff.additions : null,
+      deletions: diff && !diff.tooLarge ? diff.deletions : null
     }
   }
 }
@@ -301,6 +380,70 @@ async function readReport(
   return result.report
 }
 
+async function mapBounded<T, R>(
+  values: T[],
+  map: (value: T) => Promise<R>,
+  concurrency: number
+): Promise<R[]> {
+  const results = new Array<R>(values.length)
+  let next = 0
+  const worker = async (): Promise<void> => {
+    while (true) {
+      const index = next++
+      if (index >= values.length) return
+      results[index] = await map(values[index])
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, values.length) }, worker))
+  return results
+}
+
+async function inventoryRaw(
+  root: string,
+  before: string | null,
+  after: string | null
+): Promise<{ entries: RawEntry[]; renameLimited: boolean }> {
+  const complete = await rawDiff(root, before, after, false)
+  if (complete.length > RENAME_DETECTION_ENTRY_LIMIT)
+    return { entries: complete, renameLimited: true }
+  try {
+    return { entries: await rawDiff(root, before, after, true), renameLimited: false }
+  } catch {
+    return { entries: complete, renameLimited: true }
+  }
+}
+
+async function retainedCommitAvailable(root: string, commit: string | null): Promise<boolean> {
+  if (!commit) return true
+  try {
+    await runGit(root, ['--no-replace-objects', 'cat-file', '-e', `${commit}^{commit}`])
+    return true
+  } catch {
+    return false
+  }
+}
+
+function referenceScopes(report: RehearsalReport): Array<{
+  aliases: string[]
+  before: string | null
+  after: string | null
+}> {
+  const groups = new Map<
+    string,
+    { aliases: string[]; before: string | null; after: string | null }
+  >()
+  for (const ref of report.refs) {
+    const before = commitId(ref.before, `${ref.name} before`)
+    const after = commitId(ref.after, `${ref.name} after`)
+    if (!before && !after) continue
+    const key = scopeKey(before, after)
+    const group = groups.get(key) ?? { aliases: [], before, after }
+    group.aliases.push(ref.name)
+    groups.set(key, group)
+  }
+  return [...groups.values()].filter((group) => group.aliases.some((alias) => alias !== 'HEAD'))
+}
+
 async function loadData(
   tool: string | undefined,
   identity: RehearsalIdentity
@@ -308,7 +451,11 @@ async function loadData(
   const report = await readReport(tool, identity)
   const root = await validateSandbox(report)
   const endpoints = await resolveRehearsalEndpoints(report)
-  const revision = revisionOf(report, endpoints)
+  const additional = referenceScopes(report)
+  const additionalKeys = additional.map(
+    (group) => `${group.aliases.join(',')}\0${group.before ?? ''}\0${group.after ?? ''}`
+  )
+  const revision = revisionOf(report, endpoints, additionalKeys)
   const before = endpoints[0]
   const after = endpoints[1] ?? null
   const scope: RehearsalReviewScope = {
@@ -319,20 +466,71 @@ async function loadData(
     before: endpoint(before, report, true),
     after: after ? endpoint(after, report, false) : null,
     available: true,
-    unavailableReason: after ? undefined : 'This rehearsal has no finished After endpoint.'
+    unavailableReason: after ? undefined : 'This rehearsal has no finished After endpoint.',
+    replay: replayFor(report, ['HEAD']),
+    renameDetectionLimited: false
   }
-  const raw = after ? await rawDiff(root, before, after) : []
-  const entries = await Promise.all(raw.map((item) => makeEntry(root, scope.scopeId, item)))
+  const scopes: ScopeData[] = []
+  const defaultRaw = await inventoryRaw(root, before, after)
+  scope.renameDetectionLimited = defaultRaw.renameLimited
+  const entries = await mapBounded(
+    defaultRaw.entries,
+    (item) => makeEntry(root, scope.scopeId, item, defaultRaw.renameLimited),
+    BLOB_READ_CONCURRENCY
+  )
+  scopes.push({ scope, entries })
+  for (const group of additional) {
+    const aliases = [...group.aliases].sort()
+    const id = scopeIdFor(aliases[0], group.before, group.after)
+    const replay = replayFor(report, aliases)
+    const committedScope: RehearsalReviewScope = {
+      scopeId: id,
+      kind: 'committed-reference',
+      label: `Reference ${aliases.join(', ')}`,
+      refAliases: aliases,
+      before: endpoint(group.before, report, true),
+      after: group.after ? endpoint(group.after, report, false) : endpoint(null, report, false),
+      available: true,
+      replay,
+      renameDetectionLimited: false
+    }
+    const endpointsAvailable =
+      (await retainedCommitAvailable(root, group.before)) &&
+      (await retainedCommitAvailable(root, group.after))
+    committedScope.available = endpointsAvailable
+    if (!endpointsAvailable)
+      committedScope.unavailableReason =
+        'A retained reference object is unavailable; this scope was not replaced with a live reference.'
+    const raw = endpointsAvailable
+      ? await inventoryRaw(root, group.before, group.after)
+      : { entries: [], renameLimited: false }
+    committedScope.renameDetectionLimited = raw.renameLimited
+    const committedEntries = await mapBounded(
+      raw.entries,
+      (item) => makeEntry(root, id, item, raw.renameLimited),
+      BLOB_READ_CONCURRENCY
+    )
+    scopes.push({ scope: committedScope, entries: committedEntries })
+  }
   const current = await readReport(tool, identity)
   const currentRoot = await validateSandbox(current)
   const currentEndpoints = await resolveRehearsalEndpoints(current)
   if (
     rehearsalComparisonKey(current) !== rehearsalComparisonKey(report) ||
+    JSON.stringify(current.drift) !== JSON.stringify(report.drift) ||
     currentEndpoints.join('\0') !== endpoints.join('\0') ||
     currentRoot !== root
   )
     throw new Error('Rehearsal changed during review. Refresh the result.')
-  return { report, identity: identityOf(report), revision, scope, entries, root }
+  return {
+    report,
+    identity: identityOf(report),
+    revision,
+    scope,
+    entries,
+    root,
+    scopes: new Map(scopes.map((item) => [item.scope.scopeId, item]))
+  }
 }
 
 function decodeCursor(
@@ -381,16 +579,28 @@ export async function rehearsalReviewSummary(
     ]
     if (!complete)
       notices.push('After is withheld until the rehearsal has a finished, conflict-free result.')
+    if ([...data.scopes.values()].some((item) => item.scope.renameDetectionLimited))
+      notices.push(
+        'Rename detection was bounded for a large change set; complete add/delete entries remain visible.'
+      )
     return {
       identity: data.identity,
       reviewRevision: data.revision,
       toolResultRevision: null,
       complete,
-      afterAvailable: data.scope.after !== null,
-      afterReason: data.scope.after ? null : 'No finished After endpoint is available.',
-      scopes: [data.scope],
+      afterAvailable: data.scope.after?.kind === 'commit',
+      afterReason:
+        data.scope.after?.kind === 'commit' ? null : 'No finished After endpoint is available.',
+      scopes: [...data.scopes.values()].map((item) => item.scope),
       defaultScopeId: data.scope.scopeId,
       notices,
+      replayWarnings: data.report.drift.map((drift) => ({
+        reference: drift.reference,
+        changed: drift.replay.changed,
+        dropped: drift.replay.dropped,
+        added: drift.replay.added,
+        compared: drift.replay.compared
+      })),
       carried: data.report.carried
         ? {
             status: data.report.carried.status,
@@ -417,9 +627,13 @@ export async function rehearsalReviewFiles(
     const data = await loadData(tool, identity)
     if (data.revision !== reviewRevision)
       throw new Error('Review result changed. Refresh the summary.')
-    if (data.scope.scopeId !== scopeId)
-      throw new Error('Review scope is unavailable. Refresh the summary.')
-    if (data.report.outcome !== 'clean' || data.scope.after === null)
+    const selectedScope = data.scopes.get(scopeId)
+    if (!selectedScope) throw new Error('Review scope is unavailable. Refresh the summary.')
+    if (
+      data.report.outcome !== 'clean' ||
+      selectedScope.scope.after === null ||
+      !selectedScope.scope.available
+    )
       return {
         identity: data.identity,
         reviewRevision,
@@ -432,12 +646,12 @@ export async function rehearsalReviewFiles(
       }
     const needle = (filter ?? '').trim().toLocaleLowerCase()
     const all = needle
-      ? data.entries.filter((entry) =>
+      ? selectedScope.entries.filter((entry) =>
           `${entry.oldPath ?? ''}\n${entry.newPath ?? ''}`.toLocaleLowerCase().includes(needle)
         )
-      : data.entries
+      : selectedScope.entries
     const offset = decodeCursor(cursor, reviewRevision, scopeId, needle)
-    const entries = all.slice(offset, offset + PAGE_SIZE)
+    const entries = all.slice(offset, offset + REHEARSAL_REVIEW_PAGE_SIZE)
     const nextCursor =
       offset + entries.length < all.length
         ? encodeCursor(reviewRevision, scopeId, needle, offset + entries.length)
@@ -469,9 +683,9 @@ export async function rehearsalReviewFile(
     const data = await loadData(tool, identity)
     if (data.revision !== reviewRevision)
       throw new Error('Review result changed. Refresh the summary.')
-    if (data.scope.scopeId !== scopeId)
-      throw new Error('Review scope is unavailable. Refresh the summary.')
-    const entry = data.entries.find((candidate) => candidate.entryId === entryId)
+    const selectedScope = data.scopes.get(scopeId)
+    if (!selectedScope) throw new Error('Review scope is unavailable. Refresh the summary.')
+    const entry = selectedScope.entries.find((candidate) => candidate.entryId === entryId)
     if (!entry) throw new Error('Review file is unavailable. Refresh the file list.')
     const before = await blobText(data.root, entry.old.objectId, entry.old.mode)
     const after = await blobText(data.root, entry.new.objectId, entry.new.mode)
@@ -480,15 +694,21 @@ export async function rehearsalReviewFile(
     let hunks: DiffHunk[] = []
     if (view === 'before') {
       availability = availabilityOf(before, entry.old.present)
-      if (before.kind === 'text') text = before.text
+      text = contentText(before)
     } else if (view === 'after') {
-      availability = data.scope.after ? availabilityOf(after, entry.new.present) : 'unavailable'
-      if (data.scope.after && after.kind === 'text') text = after.text
+      availability =
+        selectedScope.scope.after?.kind === 'commit'
+          ? availabilityOf(after, entry.new.present)
+          : entry.new.present
+            ? 'unavailable'
+            : 'absent'
+      if (selectedScope.scope.after?.kind === 'commit') text = contentText(after)
     } else if (entry.text.changes === 'mode-only') {
       availability = 'mode-only'
-    } else if (before.kind === 'text' && after.kind === 'text') {
-      availability = 'available'
-      hunks = textDiff(before.text, after.text).hunks
+    } else if (contentText(before) !== null && contentText(after) !== null) {
+      const diff = textDiff(contentText(before)!, contentText(after)!)
+      availability = diff.tooLarge ? 'too-large' : 'available'
+      hunks = diff.hunks
     } else {
       availability = entry.text.changes
     }

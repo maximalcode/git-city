@@ -5,7 +5,7 @@ import {
   rehearsalReviewSummary
 } from './rehearsalReview'
 import { rehearsalShow } from './rehearsal'
-import { runGit, runGitBuffer } from './git/exec'
+import { runGit, runGitBuffer, runGitResult } from './git/exec'
 import type { RehearsalReport } from '../shared/types'
 
 vi.mock('fs/promises', () => ({ realpath: vi.fn(async (path: string) => path) }))
@@ -13,7 +13,15 @@ vi.mock('./rehearsal', () => ({ rehearsalShow: vi.fn() }))
 vi.mock('./rehearsalComparison', () => ({
   resolveRehearsalEndpoints: vi.fn(async () => ['a'.repeat(40), 'b'.repeat(40)])
 }))
-vi.mock('./git/exec', () => ({ runGit: vi.fn(), runGitBuffer: vi.fn() }))
+vi.mock('./git/exec', () => ({
+  runGit: vi.fn(),
+  runGitBuffer: vi.fn(),
+  runGitResult: vi.fn(async () => ({
+    code: 0,
+    stdout: '4b825dc642cb6eb9a060e54bf8d69288fbee4904\n',
+    stderr: ''
+  }))
+}))
 
 const before = 'a'.repeat(40)
 const after = 'b'.repeat(40)
@@ -202,6 +210,7 @@ it('returns distinct committed-reference scopes with grouped aliases and explici
       refs: [
         { name: 'HEAD', before, after },
         { name: 'refs/heads/main', before, after },
+        { name: 'refs/heads/alias', before, after },
         { name: 'refs/heads/deleted', before, after: undefined },
         { name: 'refs/heads/created', before: undefined, after }
       ],
@@ -218,10 +227,13 @@ it('returns distinct committed-reference scopes with grouped aliases and explici
   })
   const summary = await rehearsalReviewSummary('/tool', identity)
   const committed = summary.scopes.filter((scope) => scope.kind === 'committed-reference')
-  expect(committed).toHaveLength(3)
+  expect(committed).toHaveLength(4)
   expect(
     committed.find((scope) => scope.refAliases.includes('refs/heads/main'))?.refAliases
   ).toEqual(['HEAD', 'refs/heads/main'])
+  expect(
+    committed.find((scope) => scope.refAliases.includes('refs/heads/alias'))?.refAliases
+  ).toEqual(['refs/heads/alias'])
   const deleted = committed.find((scope) => scope.refAliases.includes('refs/heads/deleted'))!
   const created = committed.find((scope) => scope.refAliases.includes('refs/heads/created'))!
   expect(deleted.after).toMatchObject({ kind: 'empty', commit: null })
@@ -415,4 +427,30 @@ it('does not replace a missing tracked endpoint with live worktree content', asy
     'tracked-worktree'
   )
   expect(files).toMatchObject({ complete: false, total: null, entries: [] })
+})
+
+it('derives the empty tree in the repository object format', async () => {
+  const emptyTreeSha256 = 'e'.repeat(64)
+  vi.mocked(runGitResult).mockResolvedValue({
+    code: 0,
+    stdout: `${emptyTreeSha256}\n`,
+    stderr: ''
+  })
+  vi.mocked(rehearsalShow).mockResolvedValue({
+    kind: 'report',
+    report: {
+      ...report,
+      refs: [
+        { name: 'HEAD', before, after },
+        { name: 'refs/heads/deleted', before, after: undefined }
+      ]
+    }
+  })
+  await rehearsalReviewSummary('/tool', identity)
+  expect(
+    vi
+      .mocked(runGit)
+      .mock.calls.filter(([, args]) => args.includes('diff-tree'))
+      .some(([, args]) => args.includes(emptyTreeSha256))
+  ).toBe(true)
 })

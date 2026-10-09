@@ -12,11 +12,12 @@ import type {
   RehearsalReviewFileView,
   RehearsalReviewFilesResult,
   RehearsalReviewScope,
+  RehearsalReviewScopeKind,
   RehearsalReviewReplay,
   RehearsalReviewSummary
 } from '../shared/types'
 import { rehearsalComparisonKey } from '../shared/rehearsalComparison'
-import { runGit, runGitBuffer } from './git/exec'
+import { runGit, runGitBuffer, runGitResult } from './git/exec'
 import { rehearsalShow } from './rehearsal'
 import { resolveRehearsalEndpoints } from './rehearsalComparison'
 import { withRehearsal } from './rehearsalConflicts'
@@ -24,7 +25,6 @@ import { withRehearsal } from './rehearsalConflicts'
 export const REHEARSAL_REVIEW_BLOB_LIMIT = 2 * 1024 * 1024
 export const REHEARSAL_REVIEW_PATCH_LIMIT = 4 * 1024 * 1024
 export const REHEARSAL_REVIEW_PAGE_SIZE = 200
-const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904'
 const RENAME_DETECTION_ENTRY_LIMIT = 400
 const BLOB_READ_CONCURRENCY = 4
 
@@ -125,7 +125,8 @@ function commitId(value: string | undefined, label: string): string | null {
 function endpoint(
   commit: string | null,
   report: RehearsalReport,
-  before: boolean
+  before: boolean,
+  kind: RehearsalReviewScopeKind = 'tracked-worktree'
 ): RehearsalReviewScope['before'] {
   if (!commit)
     return {
@@ -133,7 +134,10 @@ function endpoint(
       commit: null,
       provenance: 'synthetic-empty'
     }
-  const carried = !!report.carried && (before || report.carried.status === 'restored')
+  const carried =
+    kind === 'tracked-worktree' &&
+    !!report.carried &&
+    (before || report.carried.status === 'restored')
   return { kind: 'commit', commit, provenance: carried ? 'carried' : 'original' }
 }
 
@@ -184,6 +188,7 @@ async function rawDiff(
   detectRenames: boolean
 ): Promise<RawEntry[]> {
   if (!before && !after) return []
+  const emptyTree = before && after ? null : await emptyTreeObject(root)
   const output = await runGit(root, [
     '--no-replace-objects',
     '-c',
@@ -195,11 +200,24 @@ async function rawDiff(
     '-r',
     '--raw',
     '-z',
-    before ?? EMPTY_TREE,
-    after ?? EMPTY_TREE,
+    before ?? emptyTree!,
+    after ?? emptyTree!,
     '--'
   ])
   return parseRawDiff(output)
+}
+
+/** Resolve the empty tree in the repository's object format (SHA-1 or SHA-256). */
+async function emptyTreeObject(root: string): Promise<string> {
+  const result = await runGitResult(
+    root,
+    ['--no-replace-objects', 'hash-object', '-t', 'tree', '--stdin'],
+    { input: '' }
+  )
+  const object = result.stdout.trim()
+  if (result.code !== 0 || !/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(object))
+    throw new Error('Frozen review could not resolve the repository empty tree.')
+  return object
 }
 
 function side(mode: string, objectId: string): RehearsalReviewEntry['old'] {
@@ -428,6 +446,9 @@ function referenceScopes(report: RehearsalReport): Array<{
   before: string | null
   after: string | null
 }> {
+  const currentAliases = new Set(['HEAD'])
+  if (report.checkout.kind === 'branch' && report.checkout.target)
+    currentAliases.add(`refs/heads/${report.checkout.target}`)
   const groups = new Map<
     string,
     { aliases: string[]; before: string | null; after: string | null }
@@ -436,12 +457,18 @@ function referenceScopes(report: RehearsalReport): Array<{
     const before = commitId(ref.before, `${ref.name} before`)
     const after = commitId(ref.after, `${ref.name} after`)
     if (!before && !after) continue
-    const key = scopeKey(before, after)
+    const key = currentAliases.has(ref.name)
+      ? `current\0${scopeKey(before, after)}`
+      : `ref\0${ref.name}\0${scopeKey(before, after)}`
     const group = groups.get(key) ?? { aliases: [], before, after }
     group.aliases.push(ref.name)
     groups.set(key, group)
   }
-  return [...groups.values()].filter((group) => group.aliases.some((alias) => alias !== 'HEAD'))
+  return [...groups.values()].filter(
+    (group) =>
+      group.aliases.some((alias) => alias !== 'HEAD') ||
+      (report.checkout.kind === 'detached' && group.aliases.includes('HEAD'))
+  )
 }
 
 async function loadData(
@@ -496,8 +523,10 @@ async function loadData(
       kind: 'committed-reference',
       label: `Reference ${aliases.join(', ')}`,
       refAliases: aliases,
-      before: endpoint(group.before, report, true),
-      after: group.after ? endpoint(group.after, report, false) : endpoint(null, report, false),
+      before: endpoint(group.before, report, true, 'committed-reference'),
+      after: group.after
+        ? endpoint(group.after, report, false, 'committed-reference')
+        : endpoint(null, report, false, 'committed-reference'),
       available: true,
       replay,
       renameDetectionLimited: false

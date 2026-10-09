@@ -190,6 +190,10 @@ Text conflicts support hunk choices, free editing, durable per-rehearsal drafts,
 checked save-and-stage, external-edit refresh and repeated Continue. Binary conflicts support
 complete
 Ours/Theirs versions; deletion/rename conflicts have external sandbox instructions.
+Each text section starts unreviewed. Explicit hunk or remaining-section choices and whole-file
+confirmation enable Save and stage; later edits invalidate the affected decision. Decisions
+survive navigation and restart with the draft, and external revisions require deliberate
+reconciliation. The complete assembled result can be inspected before saving.
 Apply confirms origin and consequences, rechecks state, then adopts exact reviewed
 objects. Stale results and local-work/foreign-checkout collisions are refused and
 retained. Carried tracked edits become unstaged; untracked files are not carried.

@@ -764,6 +764,13 @@
   padding: 3px 10px;
   font-size: 12px;
 }
+.rehearsal-panel .hunk-actions {
+  flex-wrap: wrap;
+}
+.rehearsal-panel .hunk-actions button {
+  flex: 0 1 auto;
+  min-width: 4rem;
+}
 .hunk-preview {
   padding: 4px 0;
 }

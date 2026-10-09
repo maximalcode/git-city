@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mkdtemp, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
+import { withRehearsal } from './rehearsalConflicts'
 import type { RehearsalDraftPayload, RehearsalIdentity } from '../shared/types'
 
 const electronState = vi.hoisted(() => ({ userData: '' }))
@@ -11,7 +12,10 @@ import {
   rehearsalDraftRead,
   rehearsalDraftWrite,
   rehearsalDraftDiscard,
-  rehearsalDraftsExist
+  rehearsalDraftsExist,
+  rehearsalDraftPersistenceFailed,
+  rehearsalDraftWritesPending,
+  waitForRehearsalDraftWrites
 } from './rehearsalDraftIpc'
 
 const identity: RehearsalIdentity = {
@@ -57,5 +61,61 @@ describe('rehearsal draft bridge adapter', () => {
     expect(removed.status).toBe('absent')
     expect((await rehearsalDraftRead(scopedIdentity, 'conflict.txt')).status).toBe('absent')
     expect(await rehearsalDraftsExist(scopedIdentity)).toBe(false)
+  })
+
+  it('counts writes waiting for rehearsal ownership in the native quit barrier', async () => {
+    root = await mkdtemp(join(tmpdir(), 'city-draft-ipc-'))
+    electronState.userData = root
+    const scopedIdentity = { ...identity, repository: root, origin_worktree: root }
+    let release!: () => void
+    let entered!: () => void
+    const enteredPromise = new Promise<void>((resolve) => {
+      entered = resolve
+    })
+    const barrier = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const held = withRehearsal(scopedIdentity, async () => {
+      entered()
+      await barrier
+    })
+    await enteredPromise
+    const storage = await import('./rehearsalDrafts')
+    const publish = vi.spyOn(storage, 'writeRehearsalDraft')
+    const pending = rehearsalDraftWrite(scopedIdentity, 'queued.txt', draft, null)
+    let drained = false
+    const quit = waitForRehearsalDraftWrites().then(() => {
+      drained = true
+    })
+    try {
+      expect(rehearsalDraftWritesPending()).toBe(true)
+      expect(publish).not.toHaveBeenCalled()
+      await Promise.resolve()
+      expect(drained).toBe(false)
+    } finally {
+      release()
+      await held
+      expect((await pending).status).toBe('saved')
+      await quit
+      publish.mockRestore()
+    }
+    expect(rehearsalDraftWritesPending()).toBe(false)
+    expect((await rehearsalDraftRead(scopedIdentity, 'queued.txt')).record?.whole_file_text).toBe(
+      draft.whole_file_text
+    )
+  })
+
+  it('keeps a failed draft pending when a different file saves successfully', async () => {
+    root = await mkdtemp(join(tmpdir(), 'city-draft-ipc-'))
+    electronState.userData = root
+    const scopedIdentity = { ...identity, repository: root, origin_worktree: root }
+    expect((await rehearsalDraftWrite(scopedIdentity, 'failed.txt', draft, 0)).status).toBe('error')
+    expect(rehearsalDraftPersistenceFailed()).toBe(true)
+    expect((await rehearsalDraftWrite(scopedIdentity, 'other.txt', draft, null)).status).toBe(
+      'saved'
+    )
+    expect(rehearsalDraftPersistenceFailed()).toBe(true)
+    await rehearsalDraftDiscard(scopedIdentity, 'failed.txt', null)
+    expect(rehearsalDraftPersistenceFailed()).toBe(false)
   })
 })

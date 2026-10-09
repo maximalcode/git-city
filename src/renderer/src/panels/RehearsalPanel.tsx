@@ -5,6 +5,7 @@ import RehearsalMode from './RehearsalMode'
 import RehearsalHistory from './RehearsalHistory'
 import RehearsalConflicts from './RehearsalConflicts'
 import RehearsalReviewPanel from './RehearsalReviewPanel'
+import { registerRehearsalNavigationGuard } from './rehearsalNavigation'
 import { useEffect, useRef, useState } from 'react'
 import { useStore } from '../store'
 import { bridge } from '../lib/bridge'
@@ -100,6 +101,9 @@ export default function RehearsalPanel(): React.JSX.Element | null {
     if (!(await guardConflictNavigation('close the rehearsal panel'))) return
     close()
   }
+  const navigationGuard = useRef(guardConflictNavigation)
+  navigationGuard.current = guardConflictNavigation
+  useEffect(() => registerRehearsalNavigationGuard((action) => navigationGuard.current(action)), [])
 
   useEffect(() => {
     if (blocked) recoveryHeading.current?.focus()

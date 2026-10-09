@@ -38,6 +38,7 @@ import type {
 import { DEFAULT_THEME_ID } from './city/themes'
 import { DEFAULT_MODE, isViewMode, type ViewMode } from './city/modes'
 import { bridge, cleanError } from './lib/bridge'
+import { requestRehearsalNavigation } from './panels/rehearsalNavigation'
 import { repoWarning, type RepoWarning } from './lib/repoScale'
 import { opMessage } from '../../shared/opMessages'
 import { snapshotAtCommit } from '../../shared/snapshots'
@@ -471,7 +472,7 @@ export interface GitCityState extends RehearsalManagementState, RehearsalCompari
   setHelpOpen(open: boolean): void
   openCommit(hash: string): void
   closeCommit(): void
-  backToWelcome(): void
+  backToWelcome(): Promise<void>
 
   // live actions
   setPanel(panel: Panel): void
@@ -910,6 +911,12 @@ export const useStore = create<GitCityState>((set, get, api) => ({
   openPath: async (path: string) => {
     const api = bridge()
     if (!api) return
+    if (get().repoPath && get().repoPath !== path) {
+      const action = get().worktrees.some((worktree) => worktree.path === path)
+        ? 'switch worktrees'
+        : 'open another repository'
+      if (!(await requestRehearsalNavigation(action))) return
+    }
     // Probe the size first: a monorepo can take minutes to replay, and a
     // progress bar with no sense of scale reads as a hang (#12). Cheap enough
     // (two counting calls) that the common case is unaffected.
@@ -937,6 +944,7 @@ export const useStore = create<GitCityState>((set, get, api) => ({
     const api = bridge()
     const pending = get().pendingRepo
     if (!api || !pending) return
+    if (!(await requestRehearsalNavigation('switch repositories'))) return
     set({ pendingRepo: null })
     await loadRepo(set, get, () => api.analyzeRepo(pending.path), pending.path)
   },
@@ -953,6 +961,7 @@ export const useStore = create<GitCityState>((set, get, api) => ({
   openUrl: async (url: string) => {
     const api = bridge()
     if (!api) return
+    if (!(await requestRehearsalNavigation('open the cloned repository'))) return
     set({ screen: 'loading', error: null, progress: null })
     try {
       const path = await api.cloneRepo(url)
@@ -1062,7 +1071,8 @@ export const useStore = create<GitCityState>((set, get, api) => ({
   setHelpOpen: (helpOpen) => set({ helpOpen }),
   openCommit: (hash) => set({ commitDetailHash: hash, paletteOpen: false }),
   closeCommit: () => set({ commitDetailHash: null }),
-  backToWelcome: () => {
+  backToWelcome: async () => {
+    if (!(await requestRehearsalNavigation('return to the welcome screen'))) return
     void bridge()?.watchStop()
     lastFingerprint = ''
     set({

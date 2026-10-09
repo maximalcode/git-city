@@ -3086,8 +3086,11 @@ body:not(:has(.rehearsal-panel)) .rehearsal-recovery {
 .rehearsal-review-layout {
   align-items: stretch;
 }
-.rehearsal-review-files {
+.rehearsal-review-inventory {
   flex: 0 1 42%;
+  min-width: 0;
+}
+.rehearsal-review-files {
   min-width: 0;
 }
 .rehearsal-review-file {
@@ -3126,7 +3129,7 @@ body:not(:has(.rehearsal-panel)) .rehearsal-recovery {
   .rehearsal-review-layout {
     display: block;
   }
-  .rehearsal-review-files {
+  .rehearsal-review-inventory {
     margin-bottom: 12px;
   }
 }

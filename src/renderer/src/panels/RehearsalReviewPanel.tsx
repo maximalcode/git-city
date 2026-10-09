@@ -3,7 +3,9 @@ import type {
   RehearsalReport,
   RehearsalReviewEntry,
   RehearsalReviewFileResult,
-  RehearsalReviewFileView
+  RehearsalReviewFileView,
+  RehearsalReviewIdentity,
+  RehearsalReviewScope
 } from '../../../shared/types'
 import { bridge } from '../lib/bridge'
 import { useRepoQuery } from '../lib/repoQuery'
@@ -26,6 +28,103 @@ function status(entry: RehearsalReviewEntry): string {
   return entry.binary ? 'Binary' : 'Modified'
 }
 
+/** Controlled seam for R3/R4 scope ownership. R2 renders one scope inline. */
+export interface RehearsalReviewScopeSelectorProps {
+  scopes: RehearsalReviewScope[]
+  selectedScopeId: string | null
+  disabled?: boolean
+  onSelectScope: (scopeId: string) => void
+}
+
+export function RehearsalReviewScopeSelector({
+  scopes,
+  selectedScopeId,
+  disabled = false,
+  onSelectScope
+}: RehearsalReviewScopeSelectorProps): React.JSX.Element {
+  return (
+    <select
+      aria-label="Review scope"
+      value={selectedScopeId ?? ''}
+      disabled={disabled}
+      onChange={(event) => onSelectScope(event.target.value)}
+    >
+      {scopes.map((scope) => (
+        <option key={scope.scopeId} value={scope.scopeId} disabled={!scope.available}>
+          {scope.label}
+        </option>
+      ))}
+    </select>
+  )
+}
+
+export interface RehearsalReviewFileInventoryProps {
+  identity: RehearsalReviewIdentity
+  reviewRevision: string
+  scopeId: string
+  entries: RehearsalReviewEntry[]
+  selectedEntryId: string | null
+  total: number | null
+  nextCursor: string | null
+  filter: string
+  loading: boolean
+  onFilterChange: (filter: string) => void
+  onApplyFilter: () => void
+  onSelectEntry: (entryId: string) => void
+  onLoadMore: () => void
+}
+
+/** Controlled, complete-inventory presentation seam for the later workspace. */
+export function RehearsalReviewFileInventory({
+  entries,
+  selectedEntryId,
+  total,
+  nextCursor,
+  filter,
+  loading,
+  onFilterChange,
+  onApplyFilter,
+  onSelectEntry,
+  onLoadMore
+}: RehearsalReviewFileInventoryProps): React.JSX.Element {
+  return (
+    <div className="rehearsal-review-inventory">
+      <label>
+        Filter files
+        <input
+          value={filter}
+          onChange={(event) => onFilterChange(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') onApplyFilter()
+          }}
+          placeholder="Path contains…"
+        />
+      </label>
+      <div className="rehearsal-review-files" role="listbox" aria-label="Changed files">
+        <p>{total === null ? 'Changed file count unavailable' : `${total} changed files`}</p>
+        {entries.map((entry) => (
+          <button
+            role="option"
+            aria-selected={selectedEntryId === entry.entryId}
+            className="rehearsal-review-file"
+            key={entry.entryId}
+            onClick={() => onSelectEntry(entry.entryId)}
+          >
+            <span>{name(entry)}</span>
+            <small>{status(entry)}</small>
+          </button>
+        ))}
+        {nextCursor && (
+          <button onClick={onLoadMore} disabled={loading}>
+            Load more files
+          </button>
+        )}
+        {total === 0 && entries.length === 0 && <p className="empty">No changes in this scope.</p>}
+      </div>
+    </div>
+  )
+}
+
 function Hunks({ file }: { file: RehearsalReviewFileResult }): React.JSX.Element {
   if (file.hunks.length === 0) return <p className="empty">No text changes to show.</p>
   return (
@@ -43,6 +142,61 @@ function Hunks({ file }: { file: RehearsalReviewFileResult }): React.JSX.Element
           ))}
         </div>
       ))}
+    </div>
+  )
+}
+
+export interface RehearsalReviewContentProps {
+  identity: RehearsalReviewIdentity
+  reviewRevision: string
+  scopeId: string
+  entry: RehearsalReviewEntry | null
+  file: RehearsalReviewFileResult | null
+  view: RehearsalReviewFileView
+  afterAvailable: boolean
+  loading: boolean
+  onSelectView: (view: RehearsalReviewFileView) => void
+}
+
+/** Controlled content/view seam; retrieval remains revision-bound in R2. */
+export function RehearsalReviewContent({
+  entry,
+  file,
+  view,
+  afterAvailable,
+  onSelectView
+}: RehearsalReviewContentProps): React.JSX.Element {
+  return (
+    <div className="rehearsal-review-content" aria-live="polite">
+      {entry && (
+        <>
+          <h4>{name(entry)}</h4>
+          <div role="tablist" aria-label="Frozen file view">
+            {(['changes', 'before', 'after'] as const).map((candidate) => (
+              <button
+                role="tab"
+                aria-selected={view === candidate}
+                disabled={candidate === 'after' && !afterAvailable}
+                key={candidate}
+                onClick={() => onSelectView(candidate)}
+              >
+                {candidate[0].toUpperCase() + candidate.slice(1)}
+              </button>
+            ))}
+          </div>
+          {file && file.availability !== 'available' && file.availability !== 'absent' && (
+            <p role="status">
+              {file.availability === 'binary'
+                ? 'Binary file — no text content.'
+                : `Content ${file.availability}.`}
+            </p>
+          )}
+          {file?.availability === 'absent' && <p className="empty">This side is absent.</p>}
+          {file?.text !== null && file?.text !== undefined && <pre>{file.text}</pre>}
+          {view === 'changes' && file && <Hunks file={file} />}
+        </>
+      )}
+      {!entry && <p className="empty">Select a changed file to inspect its retained content.</p>}
     </div>
   )
 }
@@ -190,82 +344,36 @@ export default function RehearsalReviewPanel({
             <>
               <p className="rehearsal-review-notice">{summary.notices[0]}</p>
               {!summary.afterAvailable && <p role="alert">⚠ {summary.afterReason}</p>}
-              <label>
-                Filter files
-                <input
-                  value={filter}
-                  onChange={(event) => setFilter(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter') loadFiles(filter)
-                  }}
-                  placeholder="Path contains…"
-                />
-              </label>
               <div className="rehearsal-review-layout">
-                <div className="rehearsal-review-files" role="listbox" aria-label="Changed files">
-                  <p>
-                    {files?.total === null
-                      ? 'Changed file count unavailable'
-                      : `${files?.total ?? fileEntries.length} changed files`}
-                  </p>
-                  {fileEntries.map((entry) => (
-                    <button
-                      role="option"
-                      aria-selected={selected?.entryId === entry.entryId}
-                      className="rehearsal-review-file"
-                      key={entry.entryId}
-                      onClick={() => choose(entry)}
-                    >
-                      <span>{name(entry)}</span>
-                      <small>{status(entry)}</small>
-                    </button>
-                  ))}
-                  {nextCursor && (
-                    <button onClick={loadMore} disabled={loading}>
-                      Load more files
-                    </button>
-                  )}
-                  {files && files.entries.length === 0 && (
-                    <p className="empty">No changes in this scope.</p>
-                  )}
-                </div>
-                <div className="rehearsal-review-content" aria-live="polite">
-                  {selected && (
-                    <>
-                      <h4>{name(selected)}</h4>
-                      <div role="tablist" aria-label="Frozen file view">
-                        {(['changes', 'before', 'after'] as const).map((candidate) => (
-                          <button
-                            role="tab"
-                            aria-selected={view === candidate}
-                            disabled={candidate === 'after' && !summary.afterAvailable}
-                            key={candidate}
-                            onClick={() => selectView(candidate)}
-                          >
-                            {candidate[0].toUpperCase() + candidate.slice(1)}
-                          </button>
-                        ))}
-                      </div>
-                      {file &&
-                        file.availability !== 'available' &&
-                        file.availability !== 'absent' && (
-                          <p role="status">
-                            {file.availability === 'binary'
-                              ? 'Binary file — no text content.'
-                              : `Content ${file.availability}.`}
-                          </p>
-                        )}
-                      {file?.availability === 'absent' && (
-                        <p className="empty">This side is absent.</p>
-                      )}
-                      {file?.text !== null && file?.text !== undefined && <pre>{file.text}</pre>}
-                      {view === 'changes' && file && <Hunks file={file} />}
-                    </>
-                  )}
-                  {!selected && (
-                    <p className="empty">Select a changed file to inspect its retained content.</p>
-                  )}
-                </div>
+                <RehearsalReviewFileInventory
+                  identity={reviewIdentity}
+                  reviewRevision={summary.reviewRevision}
+                  scopeId={scopeId ?? ''}
+                  entries={fileEntries}
+                  selectedEntryId={selectedEntryId}
+                  total={files?.total === null ? null : (files?.total ?? fileEntries.length)}
+                  nextCursor={nextCursor}
+                  filter={filter}
+                  loading={loading}
+                  onFilterChange={setFilter}
+                  onApplyFilter={() => loadFiles(filter)}
+                  onSelectEntry={(entryId) => {
+                    const entry = fileEntries.find((candidate) => candidate.entryId === entryId)
+                    if (entry) choose(entry)
+                  }}
+                  onLoadMore={loadMore}
+                />
+                <RehearsalReviewContent
+                  identity={reviewIdentity}
+                  reviewRevision={summary.reviewRevision}
+                  scopeId={scopeId ?? ''}
+                  entry={selected}
+                  file={file}
+                  view={view}
+                  afterAvailable={summary.afterAvailable}
+                  loading={loading}
+                  onSelectView={selectView}
+                />
               </div>
             </>
           )}

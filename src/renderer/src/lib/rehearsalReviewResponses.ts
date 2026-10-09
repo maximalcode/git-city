@@ -56,3 +56,11 @@ export function validateRehearsalReviewFileResponse(
     throw new Error('Frozen review content response is stale.')
   return response
 }
+
+/** Keep the last authoritative count while a revision-bound page is pending. */
+export function authoritativeRehearsalReviewTotal(
+  response: Pick<RehearsalReviewFilesResult, 'total'> | null,
+  knownTotal: number | null
+): number | null {
+  return response ? response.total : knownTotal
+}

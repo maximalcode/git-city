@@ -5,7 +5,10 @@ import type {
   RehearsalReviewFileView
 } from '../../../shared/types'
 import { runRepoRead, type QueryPatch } from './repoQuery'
-import { validateRehearsalReviewFileResponse } from './rehearsalReviewResponses'
+import {
+  authoritativeRehearsalReviewTotal,
+  validateRehearsalReviewFileResponse
+} from './rehearsalReviewResponses'
 
 function collector(): { patches: QueryPatch<unknown>[]; emit: (p: QueryPatch<unknown>) => void } {
   const patches: QueryPatch<unknown>[] = []
@@ -215,6 +218,13 @@ describe('runRepoRead', () => {
         'after'
       )
     ).toThrow('stale')
+  })
+
+  it('keeps an established review total while a later page is pending', () => {
+    expect(authoritativeRehearsalReviewTotal(null, null)).toBeNull()
+    expect(authoritativeRehearsalReviewTotal(null, 101)).toBe(101)
+    expect(authoritativeRehearsalReviewTotal({ total: 0 }, 101)).toBe(0)
+    expect(authoritativeRehearsalReviewTotal({ total: null }, 101)).toBeNull()
   })
 })
 

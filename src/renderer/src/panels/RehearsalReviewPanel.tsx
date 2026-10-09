@@ -10,6 +10,7 @@ import type {
 import { bridge } from '../lib/bridge'
 import { useRepoQuery } from '../lib/repoQuery'
 import {
+  authoritativeRehearsalReviewTotal,
   validateRehearsalReviewFileResponse,
   validateRehearsalReviewFilesResponse,
   validateRehearsalReviewSummaryResponse
@@ -354,7 +355,7 @@ export default function RehearsalReviewPanel({
                   scopeId={scopeId ?? ''}
                   entries={fileEntries}
                   selectedEntryId={selectedEntryId}
-                  total={files ? files.total : knownTotal}
+                  total={authoritativeRehearsalReviewTotal(files, knownTotal)}
                   nextCursor={nextCursor}
                   filter={filter}
                   loading={loading}

@@ -1,8 +1,10 @@
 # U1 — Apply only the exact publicly identified rehearsal result
 
+Published issue: [maximalcode/git-rehearse#118](https://github.com/maximalcode/git-rehearse/issues/118)
+
 ## Parent
 
-Git City #195; publish to maximalcode/git-rehearse after the strict contract is approved. Status: draft, not an implementation issue yet.
+https://github.com/maximalcode/git-city/issues/195; publish to maximalcode/git-rehearse. Status: approved implementation contract.
 
 ## What to build
 
@@ -26,7 +28,7 @@ This is a result revision, not a secret capability or user-authorization token. 
 
 ## Blocked by
 
-None after product approval. This is its own git-rehearse integration branch/PR, not a Git City worker commit.
+None — the product contract is approved. This is its own git-rehearse integration branch/PR, not a Git City worker commit.
 
 ## Validation
 

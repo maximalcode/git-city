@@ -1,8 +1,10 @@
 # R2 — Inspect a complete frozen text change from the rehearsal panel
 
+Published issue: [maximalcode/git-city#196](https://github.com/maximalcode/git-city/issues/196)
+
 ## Parent
 
-Git City #195; source finding #191. Status: draft awaiting approval.
+https://github.com/maximalcode/git-city/issues/195; source finding #191. Status: approved; ready-for-agent subject to declared blockers.
 
 ## What to build
 
@@ -23,7 +25,7 @@ From an existing completed rehearsal, select a changed text file and inspect its
 
 ## Blocked by
 
-None — read-only review can use pinned git-rehearse 1.3.0. R7 binds Apply to the new expected-result contract when that strict option is approved.
+None — read-only review can use pinned git-rehearse 1.3.0. R7 binds Apply to the new expected-result contract after the approved compatible tool release is available.
 
 ## Owned behavior and validation
 

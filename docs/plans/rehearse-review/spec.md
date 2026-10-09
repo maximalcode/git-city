@@ -1,11 +1,11 @@
 # Connected Rehearse review workspace
 
-Status: complete planning draft for owner confirmation; not yet ready for implementation.
+Status: owner-approved specification; ready-for-agent subject to the published dependency graph and upstream release gate.
 Parent: https://github.com/maximalcode/git-city/issues/195
 Source findings: #191 (connected review), #193 (lost drafts), #194 (implicit conflict decisions).
 Inspected base: develop at 8e1988bcb441cd184150b031e321e79d4152d5e3, equivalent release content to v0.9.2.
 
-The owner requested a plan executable by `implement-spec`. The working recommendations awaiting confirmation are: review-first layout; include the necessary draft/conflict/status improvements; retain drafts across restart; preserve explicit Apply without mandatory per-file acknowledgement. The remaining product backlog from #192 is excluded.
+The owner requested a plan executable by `implement-spec`. The owner approved these decisions: review-first layout; include the necessary draft/conflict/status improvements; retain drafts across restart; preserve explicit Apply without mandatory per-file acknowledgement; require strict tool-owned matching of the reviewed result at Apply. The remaining product backlog from #192 is excluded.
 
 ## Problem Statement
 
@@ -69,7 +69,7 @@ The existing English product vocabulary remains: Rehearse, Apply, Keep, Discard 
 
 ### Boundary and source of truth
 
-- Git City owns local review presentation and draft persistence; the pinned git-rehearse tool continues to own execution, retained results, Apply, Undo and recovery. No new runtime dependency, scene mode or server is required. Read-only review works on the current tool; the recommended strict Apply contract requires the separately planned upstream extension and compatible release.
+- Git City owns local review presentation and draft persistence; the pinned git-rehearse tool continues to own execution, retained results, Apply, Undo and recovery. No new runtime dependency, scene mode or server is required. Read-only review works on the current tool; the approved strict Apply contract requires the separately planned upstream extension and compatible release.
 - Reuse a single main-process resolver for immutable rehearsal endpoints, shared by city comparison and content review. Keep the existing isolation, worktree identity, snapshot ancestry and report recheck protections.
 - Renderer requests identify the rehearsal, a review revision, scope and file entry. They do not choose a filesystem repository path, arbitrary revision or unchecked pathspec. A review revision binds canonical identity, completeness, relevant report/replay metadata and resolved endpoint objects.
 - A summary/inventory response and every file response carry the same revision. Validate before and after reads; stale responses are discarded. Refresh replaces the snapshot atomically. Retained-object failure is an unavailable state, never a live-file fallback.
@@ -115,7 +115,7 @@ The existing English product vocabulary remains: Rehearse, Apply, Keep, Discard 
 - After a run, lead with operation result, target/worktree and changed-file count. Preserve actionable replay/conflict warnings. Keep full refs, signature details and technical data available through disclosure.
 - State tests not run when no bound test evidence exists; preserve the hook/signature limitations without multiplying persistent warning banners. This feature introduces no test/hook runner or semantic risk score.
 - Apply remains explicitly confirmed and backend guarded. Missing visual coverage or a binary diff is explained, not automatically treated as code failure. No extra checkbox implies that clicking means code correctness.
-- A confirmation cannot silently adopt a newly refreshed result while naming the old one. Under the recommended strict contract, the tool exposes authoritative frozen endpoints plus an opaque result revision, compares the expected revision under rehearsal ownership before effects, and applies that same candidate. Git City requires that capability without silent fallback. App-side review and confirmation checks supplement this contract; they do not pretend to lock external processes. The separate upstream delivery gate and narrower alternative are detailed in the runbook; the owner must choose one before readiness.
+- A confirmation cannot silently adopt a newly refreshed result while naming the old one. Under the approved strict contract, the tool exposes authoritative frozen endpoints plus an opaque result revision, compares the expected revision under rehearsal ownership before effects, and applies that same candidate. Git City requires that capability without silent fallback. App-side review and confirmation checks supplement this contract; they do not pretend to lock external processes. The separate upstream delivery gate is detailed in the runbook. An app-only v1.3.0 precheck is not an accepted substitute.
 - Explain carried-work Undo limits before Apply when relevant. After refusal, offer a fresh rehearsal against the same target, inspection of affected work or opening the correct worktree as supported; never force, stash, reset or rerun Apply automatically. Recovery locks take precedence.
 
 ## Testing Decisions
@@ -139,4 +139,4 @@ The illustrative review-first and city-first concepts were tested at 320, 360, 7
 
 The product evidence and source anchors are in #192; the draft-loss reproduction is #193 and the conflict-choice proposal is #194. #191 remains an open source finding covered by this specification, not a duplicate parallel implementation ticket. The old integration umbrella #141 and unrelated native-test classification #180 are not implicit prerequisites or extra scope.
 
-Before dispatch, approve the concrete ticket graph, settle the pending product choices and Apply revision boundary, publish the remaining child issues with native dependencies, and mark the spec/tickets ready-for-agent. Execution follows the separate runbook in this plan; each worker starts from the current integration tip, not from this historical inspected commit.
+The owner approved the product choices, ticket breakdown, test seams and strict Apply boundary. Dispatch uses the published child issues and verified native dependencies; the upstream compatible-release gate remains a real blocker for the final Apply slice. Execution follows the separate runbook in this plan; each worker starts from the current integration tip, not from this historical inspected commit.

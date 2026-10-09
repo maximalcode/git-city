@@ -1,8 +1,10 @@
 # R3 — Review every affected scope and non-text change honestly
 
+Published issue: [maximalcode/git-city#197](https://github.com/maximalcode/git-city/issues/197)
+
 ## Parent
 
-Git City #195; source finding #191. Status: draft awaiting approval.
+https://github.com/maximalcode/git-city/issues/195; source finding #191. Status: approved; ready-for-agent subject to declared blockers.
 
 ## What to build
 
@@ -22,7 +24,7 @@ Extend the usable frozen review to multiple affected references and special file
 
 ## Blocked by
 
-R2 — consumes its settled review revision, inventory and file-content contract.
+R2 ([maximalcode/git-city#196](https://github.com/maximalcode/git-city/issues/196)) — consumes its settled review revision, inventory and file-content contract.
 
 ## Owned behavior and validation
 

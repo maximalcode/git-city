@@ -1,8 +1,10 @@
 # R7 — Explain the preview and confirm exactly the reviewed result
 
+Published issue: [maximalcode/git-city#200](https://github.com/maximalcode/git-city/issues/200)
+
 ## Parent
 
-Git City #195. Status: draft awaiting approval.
+https://github.com/maximalcode/git-city/issues/195. Status: approved; ready-for-agent subject to declared blockers.
 
 ## What to build
 
@@ -14,7 +16,7 @@ Make result scope and verification limits understandable, and carry the displaye
 - [ ] Completed summary leads with operation outcome, affected branch/worktree and real changed-file count. Full ref/hash detail and consequential replay warnings remain available.
 - [ ] Git completion, content availability, tests not run, skipped hooks and unverified signatures are distinct facts. Use concise disclosure rather than a wall of duplicate warnings.
 - [ ] Confirmation identifies origin, action, refs/local work and displayed review revision. Refresh or change while it is open invalidates the pending confirmation rather than replacing its subject silently.
-- [ ] Under the recommended strict contract, Apply passes the tool's expected result revision; git-rehearse checks it under ownership before any effects and retains that checked result through adoption. A changed carried snapshot with unchanged public carry status is also refused.
+- [ ] Under the approved strict contract, Apply passes the tool's expected result revision; git-rehearse checks it under ownership before any effects and retains that checked result through adoption. A changed carried snapshot with unchanged public carry status is also refused.
 - [ ] App-side admission serializes relevant editing/Continue/Apply consistently and checks its complete review revision. It never impersonates tool lock files or claims an in-memory lock excludes external processes.
 - [ ] Existing recovery, stale state, foreign-worktree occupancy, local-work/collision, no-op and tool-availability guards remain. Missing expected-revision capability gives a clear compatibility refusal, never silent downgrade.
 - [ ] Explain carried-work Undo limitations before Apply; refused actions show the relevant reason and safe supported next action, without automatic stash/reset/force/retry.
@@ -25,11 +27,11 @@ Make result scope and verification limits understandable, and carry the displaye
 
 ## Blocked by
 
-R3 — complete review scope/revision semantics.
-R4 — final workspace summary/action surface.
-U2 — published compatible tool artifacts for strict conditional Apply.
+R3 ([maximalcode/git-city#197](https://github.com/maximalcode/git-city/issues/197)) — complete review scope/revision semantics.
+R4 ([maximalcode/git-city#198](https://github.com/maximalcode/git-city/issues/198)) — final workspace summary/action surface.
+U2 ([maximalcode/git-rehearse#119](https://github.com/maximalcode/git-rehearse/issues/119)) — published compatible tool artifacts for strict conditional Apply.
 
-If the owner chooses the explicitly narrower v1.3.0 plan, rewrite this ticket before publishing: retain app-side revision/admission checks, document the external-process check-to-use gap, remove atomic claims and the U2 dependency. Do not mix those two contracts during implementation.
+The owner approved strict conditional Apply. A v1.3.0-only app-side check is not an accepted fallback.
 
 ## Owned behavior and validation
 

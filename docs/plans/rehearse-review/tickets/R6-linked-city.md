@@ -1,8 +1,10 @@
 # R6 — Select the same frozen change in the list, diff and city
 
+Published issue: [maximalcode/git-city#199](https://github.com/maximalcode/git-city/issues/199)
+
 ## Parent
 
-Git City #195; source finding #191. Status: draft awaiting approval.
+https://github.com/maximalcode/git-city/issues/195; source finding #191. Status: approved; ready-for-agent subject to declared blockers.
 
 ## What to build
 
@@ -22,8 +24,8 @@ Use the existing city to locate and select changed files in a rehearsal while re
 
 ## Blocked by
 
-R3 — complete scopes, entry identities and special-file semantics.
-R4 — settled review-local selection and workspace scene host.
+R3 ([maximalcode/git-city#197](https://github.com/maximalcode/git-city/issues/197)) — complete scopes, entry identities and special-file semantics.
+R4 ([maximalcode/git-city#198](https://github.com/maximalcode/git-city/issues/198)) — settled review-local selection and workspace scene host.
 
 ## Owned behavior and validation
 

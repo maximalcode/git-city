@@ -4,35 +4,35 @@ Owner-facing scope and acceptance: [specification](spec.md).
 Execution boundary, ownership and validation: [runbook](runbook.md).
 GitHub planning/spec issue: https://github.com/maximalcode/git-city/issues/195.
 
-This is a reviewed draft awaiting the owner's product choices and approval of the ticket breakdown. Do not dispatch workers from this version or mark its issues ready-for-agent.
+The owner approved this independently reviewed plan. Implementation uses the published GitHub issues and their native blocking edges; the upstream release gate remains unresolved until compatible artifacts exist.
 
-## Recommended product choices
+## Approved product choices
 
 1. Implement the connected local review workspace and necessary draft/conflict/status protections. Leave the wider 22-item backlog outside this package.
 2. Default to review-first, with optional city context.
 3. Persist conflict drafts locally across restart, separately from explicit sandbox save/stage.
 4. Keep explicit Apply without mandatory per-file checkboxes.
-5. Require atomic expected-result matching by git-rehearse for the strict reviewed-result guarantee. The alternative is a narrower 1.3.0-compatible plan that explicitly retains the external-process race limitation.
+5. Require atomic expected-result matching by git-rehearse for the strict reviewed-result guarantee. An app-only 1.3.0 precheck is not an accepted fallback.
 
 ## Ticket graph
 
-Stable draft IDs become GitHub issue IDs only after approval. Existing #193 and #194 are reused rather than duplicated. #191 remains the source finding covered by the complete spec.
+The stable planning IDs map to the GitHub issues below. Existing #193 and #194 are reused rather than duplicated. #191 remains the source finding covered by the complete spec.
 
-| Draft | Deliverable                                                                       | Existing issue             | Blocked by                                  |
-| ----- | --------------------------------------------------------------------------------- | -------------------------- | ------------------------------------------- |
-| U1    | Conditional Apply of the publicly identified result, checked under tool ownership | To resolve in git-rehearse | None                                        |
-| U2    | Publish compatible tool artifacts and verify retained-data compatibility          | To resolve in git-rehearse | U1 plus authorized upstream merge/release   |
-| R1    | Preserve conflict drafts across navigation, external refresh and restart          | #193                       | None                                        |
-| R2    | Read a complete frozen text change end to end                                     | New                        | None; tool 1.3.0 supports read-only work    |
-| R3    | Review all affected scopes and non-text/edge-case changes                         | New                        | R2                                          |
-| R4    | Use a wide, accessible content-review workspace                                   | New                        | R1, R2                                      |
-| R5    | Resolve conflicts through explicit, efficient decisions                           | #194                       | R1                                          |
-| R6    | Select the same change in list, diff and city                                     | New                        | R3, R4                                      |
-| R7    | Understand scope/check status and confirm the exact result                        | New                        | R3, R4, U2 for strict expected-result Apply |
+| Slice | Deliverable                                                      | Published issue                                                                        | Blocked by                                                                                                                                                                                                                                             |
+| ----- | ---------------------------------------------------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| U1    | apply only the exact publicly identified rehearsal result        | [maximalcode/git-rehearse#118](https://github.com/maximalcode/git-rehearse/issues/118) | None                                                                                                                                                                                                                                                   |
+| U2    | deliver a compatible conditional-Apply tool bundle               | [maximalcode/git-rehearse#119](https://github.com/maximalcode/git-rehearse/issues/119) | [maximalcode/git-rehearse#118](https://github.com/maximalcode/git-rehearse/issues/118); authorized upstream merge/release                                                                                                                              |
+| R1    | preserve unsaved Rehearse conflict drafts across file navigation | [maximalcode/git-city#193](https://github.com/maximalcode/git-city/issues/193)         | None                                                                                                                                                                                                                                                   |
+| R2    | inspect a complete frozen text change from the rehearsal panel   | [maximalcode/git-city#196](https://github.com/maximalcode/git-city/issues/196)         | None                                                                                                                                                                                                                                                   |
+| R3    | review every affected scope and non-text change honestly         | [maximalcode/git-city#197](https://github.com/maximalcode/git-city/issues/197)         | [maximalcode/git-city#196](https://github.com/maximalcode/git-city/issues/196)                                                                                                                                                                         |
+| R4    | review and resolve in a wide keyboard-accessible workspace       | [maximalcode/git-city#198](https://github.com/maximalcode/git-city/issues/198)         | [maximalcode/git-city#193](https://github.com/maximalcode/git-city/issues/193), [maximalcode/git-city#196](https://github.com/maximalcode/git-city/issues/196)                                                                                         |
+| R5    | make unreviewed Rehearse conflict hunks explicit                 | [maximalcode/git-city#194](https://github.com/maximalcode/git-city/issues/194)         | [maximalcode/git-city#193](https://github.com/maximalcode/git-city/issues/193)                                                                                                                                                                         |
+| R6    | select the same frozen change in the list, diff and city         | [maximalcode/git-city#199](https://github.com/maximalcode/git-city/issues/199)         | [maximalcode/git-city#197](https://github.com/maximalcode/git-city/issues/197), [maximalcode/git-city#198](https://github.com/maximalcode/git-city/issues/198)                                                                                         |
+| R7    | explain the preview and confirm exactly the reviewed result      | [maximalcode/git-city#200](https://github.com/maximalcode/git-city/issues/200)         | [maximalcode/git-city#197](https://github.com/maximalcode/git-city/issues/197), [maximalcode/git-city#198](https://github.com/maximalcode/git-city/issues/198), [maximalcode/git-rehearse#119](https://github.com/maximalcode/git-rehearse/issues/119) |
 
 The Git City implementation frontier initially contains R1 and R2. R5 and R3 become independent when their blockers integrate. R4 waits for the draft lifecycle interface and review contract; R6/R7 wait for the final scope/selection interface. Coordinator-owned complete acceptance is a completion gate, not a separate horizontally sliced testing ticket.
 
-For the strict recommendation, U1/U2 are a separate upstream integration branch and release gate, not fictitious commits in Git City's branch. Read-only/UI work can progress alongside them, but R7 and final acceptance cannot be called complete until the compatible bundle exists. A single-repository `implement-spec` invocation cannot manufacture that external completion.
+For the approved strict contract, U1/U2 are a separate upstream integration branch and release gate, not fictitious commits in Git City's branch. Read-only/UI work can progress alongside them, but R7 and final acceptance cannot be called complete until the compatible bundle exists. A single-repository `implement-spec` invocation cannot manufacture that external completion.
 
 ## Concrete acceptance walkthrough
 
@@ -47,8 +47,8 @@ For the strict recommendation, U1/U2 are a separate upstream integration branch 
 9. Confirm Apply with the reviewed result identity. A changed result is refused before effects under the strict tool contract; the adopted bytes/objects match the accepted result.
 10. Complete the same workflow by keyboard at laptop size; optional city never hides the content or primary actions. Leaving review restores the live workspace.
 
-## Publication after approval
+## Publication and execution
 
-Publish the final spec as #195 with ready-for-agent. Preserve source issue #191's body and link the approved plan. Add R1–R7 as native sub-issues, reuse #193/#194 with approved criteria, and add native blocking edges using issue database IDs. U1/U2 belong to git-rehearse; record the cross-repository dependency using supported native links or an explicit blocking reference if the platform cannot express it.
+The approved spec is #195. Preserve source issue #191's body and link this plan. R1–R7 are native sub-issues, reusing #193/#194 with the approved criteria. Native issue dependencies express all blocking edges, including the cross-repository release dependency.
 
-Only after those IDs and edges are verified should the runbook receive the final `implement-spec` invocation. Planning approval does not itself start implementation, merge PRs or publish a new version.
+Planning approval does not itself start implementation, merge PRs or publish a new version. U1 is the next independent upstream implementation; R1/R2 can start in parallel in a separate Git City integration run. Final Git City completion waits for U2.

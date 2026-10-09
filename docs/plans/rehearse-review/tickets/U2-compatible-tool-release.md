@@ -1,16 +1,18 @@
 # U2 — Deliver a compatible conditional-Apply tool bundle
 
+Published issue: [maximalcode/git-rehearse#119](https://github.com/maximalcode/git-rehearse/issues/119)
+
 ## Parent
 
-Git City #195; upstream release dependency in maximalcode/git-rehearse. Status: draft/external delivery gate.
+https://github.com/maximalcode/git-city/issues/195; upstream release dependency in maximalcode/git-rehearse. Status: approved external delivery gate; execution requires upstream merge/release authorization.
 
 ## What to deliver
 
-A published compatible tool release containing U1 with verified binaries for all four Git City package targets, plus sufficient metadata and retained-data compatibility evidence for Git City's pin.
+A published compatible tool release containing U1 ([maximalcode/git-rehearse#118](https://github.com/maximalcode/git-rehearse/issues/118)) with verified binaries for all four Git City package targets, plus sufficient metadata and retained-data compatibility evidence for Git City's pin.
 
 ## Acceptance criteria
 
-- [ ] U1 is merged and validated under the upstream repository's release process; choose the release number from actual versioning rules/current state, never from this draft.
+- [ ] U1 ([maximalcode/git-rehearse#118](https://github.com/maximalcode/git-rehearse/issues/118)) is merged and validated under the upstream repository's release process; choose the release number from actual versioning rules/current state, never from a planning placeholder.
 - [ ] Conditional Apply and frozen endpoint descriptors are available in public JSON/CLI for the released build; incompatible/old retained data is preserved and clearly handled.
 - [ ] macOS arm64/x64, Linux x64 and Windows x64 artifacts are published and verified, with archive and executable digests plus the exact source revision.
 - [ ] Compatibility/upgrade scenarios include retained completed and conflicted rehearsals, carried tracked work, and interrupted recovery metadata supported by current policy.
@@ -19,7 +21,7 @@ A published compatible tool release containing U1 with verified binaries for all
 
 ## Blocked by
 
-U1 and authorized upstream merge/release. This gate is explicitly unresolved in the draft and cannot be bypassed by a Git City `implement-spec` run.
+U1 ([maximalcode/git-rehearse#118](https://github.com/maximalcode/git-rehearse/issues/118)) and authorized upstream merge/release. This gate remains unresolved until the compatible release exists and cannot be bypassed by a Git City `implement-spec` run.
 
 ## Completion boundary
 

@@ -1,8 +1,10 @@
 # R1 — Preserve conflict drafts across navigation and restart
 
+Published issue: [maximalcode/git-city#193](https://github.com/maximalcode/git-city/issues/193)
+
 ## Parent
 
-Git City #195; reuse existing #193. Status: draft awaiting approval.
+https://github.com/maximalcode/git-city/issues/195; reuse existing #193. Status: approved; ready-for-agent subject to declared blockers.
 
 ## What to build
 

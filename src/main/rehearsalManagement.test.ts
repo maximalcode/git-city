@@ -6,6 +6,10 @@ import { runGit } from './git/exec'
 import { rehearseMerge, rehearsalShow, runRehearsalTool } from './rehearsal'
 import { listRehearsals, discardRehearsals } from './rehearsalManagement'
 import { stopRehearsal } from './rehearsalProcess'
+import { rehearsalDraftRead, rehearsalDraftWrite } from './rehearsalDraftIpc'
+
+const electronState = vi.hoisted(() => ({ userData: '' }))
+vi.mock('electron', () => ({ app: { getPath: () => electronState.userData } }))
 
 vi.mock('fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof import('fs/promises')>()
@@ -18,6 +22,7 @@ let repo: string
 async function fixture(): Promise<void> {
   root = await mkdtemp(join(tmpdir(), 'git-city-management-'))
   repo = join(root, 'repo')
+  electronState.userData = join(root, 'user-data')
   vi.stubEnv('GIT_REHEARSE_CACHE_DIR', join(root, 'cache'))
   await runGit(root, ['init', '-b', 'main', repo])
   for (const [key, value] of [
@@ -57,6 +62,28 @@ describe.skipIf(!tool)('real CLI rehearsal management', () => {
     ).toBe(true)
     expect(inventory.bytes).toBeGreaterThan(0)
     expect(inventory.freeBytes).toBeGreaterThan(0)
+    // Discard owns both the retained CLI result and this app's matching drafts.
+    // Real local stores must remain separate for two retained rehearsals.
+    for (const entry of inventory.entries) {
+      expect(
+        (
+          await rehearsalDraftWrite(
+            entry,
+            'file.txt',
+            {
+              base_revision: 'retained-buffer',
+              base_content: 'base\n',
+              mode: 'whole-file',
+              whole_file_text: `draft for ${entry.id}\n`,
+              choices: {},
+              edits: {},
+              acknowledged_hunks: []
+            },
+            null
+          )
+        ).status
+      ).toBe('saved')
+    }
     // `show` reserves the CLI execution lock too: our overlapping reads must
     // not mistake one another for an external execution or return metadata-only reports.
     const simultaneous = await Promise.all([
@@ -85,6 +112,10 @@ describe.skipIf(!tool)('real CLI rehearsal management', () => {
     ])
     expect(mixed.discarded).toEqual([inventory.entries[0].id])
     expect(mixed.failures).toHaveLength(1)
+    expect((await rehearsalDraftRead(inventory.entries[0], 'file.txt')).status).toBe('absent')
+    expect(
+      (await rehearsalDraftRead(inventory.entries[1], 'file.txt')).record?.whole_file_text
+    ).toBe(`draft for ${inventory.entries[1].id}\n`)
     expect((await listRehearsals(tool, repo)).entries.map((entry) => entry.id)).toEqual([
       inventory.entries[1].id
     ])

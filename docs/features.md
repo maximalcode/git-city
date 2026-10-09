@@ -179,8 +179,9 @@ content from retained Git objects. Live edits, untracked files, and staging
 selection are excluded; binary, mode-only, oversized, absent, and unavailable
 content remains explicitly labelled.
 
-Text conflicts support hunk choices, free editing, checked save-and-stage,
-external-edit refresh and repeated Continue. Binary conflicts support complete
+Text conflicts support hunk choices, free editing, durable per-rehearsal drafts,
+checked save-and-stage, external-edit refresh and repeated Continue. Binary conflicts support
+complete
 Ours/Theirs versions; deletion/rename conflicts have external sandbox instructions.
 Apply confirms origin and consequences, rechecks state, then adopts exact reviewed
 objects. Stale results and local-work/foreign-checkout collisions are refused and

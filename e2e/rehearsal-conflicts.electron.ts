@@ -86,13 +86,24 @@ test('keyboard sandbox conflict resolution preserves the original until checked 
     await expect(editor.getByRole('alert')).toContainText('Nothing was overwritten')
     await press('Refresh sandbox')
     await expect(editor.getByText('external resolution', { exact: true })).toBeVisible()
+    await expect(
+      editor.getByRole('group', { name: 'Conflict content' }).getByRole('alert')
+    ).toContainText('saved draft is based on sandbox revision')
+    await editor.getByRole('button', { name: 'Start from current sandbox', exact: true }).click()
     await app.focus('away')
     await expect.poll(() => page.evaluate(() => document.hasFocus())).toBe(false)
     await writeFile(join(retained.sandbox, 'file.txt'), 'changed while outside the app\n')
     await app.focus('back')
     await expect.poll(() => page.evaluate(() => document.hasFocus())).toBe(true)
     await expect(editor.getByText('changed while outside the app', { exact: true })).toBeVisible()
-    await expect(editor.getByRole('alert')).toContainText('File reloaded after external changes')
+    await expect(
+      editor.getByText(
+        '⚠ File reloaded after external changes. Review the current content before saving.',
+        {
+          exact: true
+        }
+      )
+    ).toBeVisible()
     await press('Edit whole file')
     await editor.getByLabel('Resolved file text').focus()
     await page.keyboard.press(process.platform === 'darwin' ? 'Meta+a' : 'Control+a')
@@ -129,6 +140,87 @@ test('keyboard sandbox conflict resolution preserves the original until checked 
     )
     for (const rehearsal of listing.rehearsals)
       execFileSync(tool!, ['--json', 'discard', rehearsal.id], { cwd: root })
+    await rm(root, { recursive: true, force: true })
+    await rm(userData, { recursive: true, force: true })
+  }
+})
+
+test('durable conflict drafts survive file navigation, panel close and restart', async () => {
+  const tool = process.env.GIT_CITY_REHEARSE_BIN
+  expect(tool, 'Set GIT_CITY_REHEARSE_BIN to a compatible real executable').toBeTruthy()
+  const userData = await mkdtemp(join(tmpdir(), 'git-city-draft-user-data-'))
+  const root = await mkdtemp(join(tmpdir(), 'git-city-draft-electron-'))
+  const git = (...args: string[]): string =>
+    execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim()
+  git('init', '-b', 'main')
+  git('config', 'user.name', 'Test')
+  git('config', 'user.email', 'test@example.invalid')
+  git('config', 'commit.gpgSign', 'false')
+  await writeFile(join(root, 'one.txt'), 'base one\n')
+  await writeFile(join(root, 'two.txt'), 'base two\n')
+  git('add', '.')
+  git('commit', '-m', 'base')
+  git('checkout', '-b', 'topic')
+  await writeFile(join(root, 'one.txt'), 'topic one\n')
+  await writeFile(join(root, 'two.txt'), 'topic two\n')
+  git('commit', '-am', 'topic')
+  git('checkout', 'main')
+  await writeFile(join(root, 'one.txt'), 'main one\n')
+  await writeFile(join(root, 'two.txt'), 'main two\n')
+  git('commit', '-am', 'main')
+  const app = await launchNativeFocusApp(root, userData, tool!)
+  try {
+    const page = app.page
+    await page.getByRole('button', { name: 'Open a local repository…' }).click()
+    await page.getByRole('button', { name: 'Rehearse panel' }).click()
+    const target = page.getByLabel('Branch or commit to merge into the current checkout')
+    await target.fill('topic')
+    await page.keyboard.press('Enter')
+    const editor = page.getByRole('region', { name: 'Sandbox conflict editor' })
+    await expect(editor).toBeVisible()
+    const edit = async (path: string, text: string): Promise<void> => {
+      await editor.getByRole('button', { name: `Resolve ${path}`, exact: true }).click()
+      await editor.getByRole('button', { name: 'Edit whole file', exact: true }).click()
+      const field = editor.getByLabel('Resolved file text')
+      await field.fill(text)
+      await expect(editor).toContainText('Editor draft saved locally')
+    }
+    await edit('one.txt', 'draft one\n')
+    await edit('two.txt', 'draft two\n')
+    await page.getByRole('button', { name: 'Close rehearsal panel' }).click()
+    await page.getByRole('button', { name: 'Rehearse panel' }).click()
+    await editor.getByRole('button', { name: 'Resolve one.txt', exact: true }).click()
+    await expect(editor.getByLabel('Resolved file text')).toHaveValue('draft one\n')
+    await page.getByRole('button', { name: 'Close rehearsal panel' }).click()
+    await app.close()
+
+    const restarted = await launchNativeFocusApp(root, userData, tool!)
+    try {
+      await restarted.page.getByRole('button', { name: 'Open a local repository…' }).click()
+      await restarted.page.getByRole('button', { name: 'Rehearse panel' }).click()
+      const restartedEditor = restarted.page.getByRole('region', {
+        name: 'Sandbox conflict editor'
+      })
+      await restartedEditor.getByRole('button', { name: 'Resolve two.txt', exact: true }).click()
+      await expect(restartedEditor.getByLabel('Resolved file text')).toHaveValue('draft two\n')
+    } finally {
+      await restarted.close()
+    }
+  } finally {
+    try {
+      await app.close()
+    } catch {
+      /* The restart branch already closed the first process. */
+    }
+    try {
+      const listing = JSON.parse(
+        execFileSync(tool!, ['--json', 'list'], { cwd: root, encoding: 'utf8' })
+      )
+      for (const rehearsal of listing.rehearsals)
+        execFileSync(tool!, ['--json', 'discard', rehearsal.id], { cwd: root })
+    } catch {
+      /* cleanup is best effort after a failed launch */
+    }
     await rm(root, { recursive: true, force: true })
     await rm(userData, { recursive: true, force: true })
   }

@@ -95,7 +95,14 @@ conflicts, follow the displayed sandbox path and external staging instructions.
 the file; stale editor contents cannot silently overwrite a changed file.
 Once all unmerged paths are resolved, **Continue rehearsal** runs the remaining
 operation. Resolve each new conflict stop until the report is complete.
-Save editor text before closing or selecting another rehearsal.
+Editor choices and whole-file text are saved locally as a durable draft while you work. Draft
+persistence is separate from **Save and stage in sandbox**: switching files, rehearsals or
+worktrees, closing the panel, and restarting Git City restore the last acknowledged draft for the
+same rehearsal identity and conflict path. A pending or failed draft save is shown in the editor;
+keep the panel open and retry before abandoning it. If the sandbox changes externally, Git City
+keeps the old draft and the new sandbox revision separate and asks you to discard the old draft or
+start from the current content. Saving and staging still checks the sandbox revision, and a
+successful save clears only that exact draft.
 
 ## Apply and local work
 

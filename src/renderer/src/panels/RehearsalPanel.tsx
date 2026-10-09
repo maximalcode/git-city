@@ -20,6 +20,8 @@ export default function RehearsalPanel(): React.JSX.Element | null {
   const configured = availability.configured || !!modeSetting
   const available = availability.available
   const [confirmApply, setConfirmApply] = useState<RehearsalReport | null>(null)
+  const [conflictDirty, setConflictDirty] = useState(false)
+  const conflictAbandon = useRef<(() => Promise<boolean>) | null>(null)
   const applyTrigger = useRef<HTMLButtonElement>(null)
   const wasConfirming = useRef(false)
   const cancelApply = useRef<HTMLButtonElement>(null)
@@ -80,6 +82,22 @@ export default function RehearsalPanel(): React.JSX.Element | null {
   const openPanel = useStore((s) => s.openRehearsal)
   const close = useStore((s) => s.closeRehearsal)
   const rehearse = useStore((s) => s.rehearse)
+  const requestClose = async (): Promise<void> => {
+    if (!conflictDirty) {
+      close()
+      return
+    }
+    if (
+      !window.confirm(
+        'This rehearsal has a saved conflict draft. Abandon it and close the rehearsal panel?'
+      )
+    )
+      return
+    const abandoned = conflictAbandon.current ? await conflictAbandon.current() : false
+    if (!abandoned) return
+    setConflictDirty(false)
+    close()
+  }
 
   useEffect(() => {
     if (blocked) recoveryHeading.current?.focus()
@@ -222,7 +240,7 @@ export default function RehearsalPanel(): React.JSX.Element | null {
             if (event.key === 'Escape' && !event.defaultPrevented) {
               event.preventDefault()
               if (confirming) setConfirmApply(null)
-              else close()
+              else void requestClose()
             }
           }}
         >
@@ -232,7 +250,7 @@ export default function RehearsalPanel(): React.JSX.Element | null {
               <h2 id="rehearsal-title" ref={heading} tabIndex={-1}>
                 Rehearse {interactive ? 'interactive rebase' : action}
               </h2>
-              <button aria-label="Close rehearsal panel" onClick={close}>
+              <button aria-label="Close rehearsal panel" onClick={() => void requestClose()}>
                 ×
               </button>
             </div>
@@ -330,6 +348,10 @@ export default function RehearsalPanel(): React.JSX.Element | null {
                 key={`${repo}:${result.report.id}`}
                 report={result.report}
                 blocked={!!blocked}
+                onDirtyStateChange={setConflictDirty}
+                onAbandonAvailable={(abandon) => {
+                  conflictAbandon.current = abandon
+                }}
               />
             )}
             <details
@@ -416,7 +438,9 @@ export default function RehearsalPanel(): React.JSX.Element | null {
                   {stopping ? 'Stopping…' : 'Stop rehearsal'}
                 </button>
               )}
-              <button onClick={close}>{running ? 'Keep and close' : 'Keep for later'}</button>
+              <button onClick={() => void requestClose()}>
+                {running ? 'Keep and close' : 'Keep for later'}
+              </button>
               {!running && report && (
                 <button
                   className="primary"

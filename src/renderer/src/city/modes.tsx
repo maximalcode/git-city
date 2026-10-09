@@ -8,6 +8,7 @@ import { buildFarmModel, farmTargets, type FarmModel } from '../layout/farm'
 import { cacheByLayout } from './modelCache'
 import CityScene from './CityScene'
 import FarmScene from './FarmScene'
+import type { RehearsalReviewMarker } from './rehearsalMarkers'
 
 /**
  * The registry of view modes.
@@ -35,6 +36,11 @@ export interface SceneProps {
   snapshot: Snapshot
   hotspots: string[]
   reviewPaths: string[]
+  /** Optional frozen-review metadata for status-specific markers. */
+  reviewMarkers?: RehearsalReviewMarker[]
+  /** Review-local selection; omitted in the live scene so global selection remains intact. */
+  selectedPath?: string | null
+  onSelectPath?: (path: string) => void
 }
 
 /** What the shell needs from a mode once its model and targets are built. */

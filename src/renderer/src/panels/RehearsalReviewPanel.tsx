@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { RehearsalReviewScopeSelector } from './RehearsalReviewScopeSelector'
+import RehearsalCityComparison from './RehearsalCityComparison'
 import type {
   RehearsalReport,
   RehearsalReviewEntry,
@@ -13,6 +14,8 @@ export {
 } from './RehearsalReviewScopeSelector'
 import { bridge } from '../lib/bridge'
 import { useRepoQuery } from '../lib/repoQuery'
+import { useStore } from '../store'
+import { reviewChangeLabel, reviewEntryMarkers, reviewEntryPaths } from '../city/rehearsalMarkers'
 import {
   authoritativeRehearsalReviewTotal,
   validateRehearsalReviewFileResponse,
@@ -27,11 +30,8 @@ function name(entry: RehearsalReviewEntry): string {
 }
 
 function status(entry: RehearsalReviewEntry): string {
-  if (entry.change === 'added') return 'Added'
-  if (entry.change === 'deleted') return 'Deleted'
-  if (entry.change === 'renamed') return 'Renamed'
-  if (entry.change === 'typechange') return 'Type changed'
-  return entry.binary ? 'Binary' : 'Modified'
+  if (entry.change === 'modified' && entry.binary) return 'Binary'
+  return reviewChangeLabel(entry.change)
 }
 
 export interface RehearsalReviewFileInventoryProps {
@@ -170,7 +170,7 @@ export function RehearsalReviewContent({
           )}
           {file?.availability === 'absent' && <p className="empty">This side is absent.</p>}
           {file?.text !== null && file?.text !== undefined && <pre>{file.text}</pre>}
-          {view === 'changes' && file && <Hunks file={file} />}
+          {view === 'changes' && file?.availability === 'available' && <Hunks file={file} />}
         </>
       )}
       {!entry && <p className="empty">Select a changed file to inspect its retained content.</p>}
@@ -214,6 +214,8 @@ export default function RehearsalReviewPanel({
     window.localStorage.setItem('git-city.review.city-visible', String(cityVisible))
   }, [cityVisible])
   const api = bridge()
+  const clearRehearsalComparison = useStore((s) => s.clearRehearsalComparison)
+  const rehearsalComparison = useStore((s) => s.rehearsalComparison)
   const { id, repository, repository_id, origin_worktree } = report
   const reviewIdentity = useMemo(
     () => ({ id, repository, repository_id, origin_worktree }),
@@ -286,6 +288,20 @@ export default function RehearsalReviewPanel({
   const file = fileQuery.loading ? null : fileQuery.data
   const loading = summaryQuery.loading || filesQuery.loading || fileQuery.loading
   const error = summaryQuery.error || filesQuery.error || fileQuery.error
+  const reviewPaths = useMemo(
+    () => [...new Set(fileEntries.flatMap(reviewEntryPaths))],
+    [fileEntries]
+  )
+  const reviewMarkers = useMemo(() => reviewEntryMarkers(fileEntries), [fileEntries])
+  const selectedPath = selected ? (selected.newPath ?? selected.oldPath) : null
+  const selectedScope = summary?.scopes.find((candidate) => candidate.scopeId === scopeId) ?? null
+  // The legacy city comparison bridge resolves the retained worktree endpoints
+  // only. Never display that result while a committed-reference scope is
+  // selected; its frozen text endpoints remain the authoritative review.
+  const cityScopeSupported = selectedScope?.kind === 'tracked-worktree'
+  useEffect(() => {
+    if (!cityScopeSupported && rehearsalComparison) clearRehearsalComparison()
+  }, [cityScopeSupported, rehearsalComparison, clearRehearsalComparison])
 
   // Replacing a report revision invalidates the inventory and pending content,
   // while a harmless refresh keeps a surviving selection by entry ID.
@@ -301,9 +317,10 @@ export default function RehearsalReviewPanel({
       setNextCursor(null)
       setKnownTotal(null)
       previousRevision.current = null
+      clearRehearsalComparison()
     }
     previousIdentity.current = identityKey
-  }, [identityKey])
+  }, [clearRehearsalComparison, identityKey])
 
   useEffect(() => {
     if (summary && !summary.scopes.some((scope) => scope.scopeId === selectedScopeId))
@@ -390,6 +407,11 @@ export default function RehearsalReviewPanel({
     setView(nextView)
   }
 
+  const toggleCity = (): void => {
+    if (cityVisible) clearRehearsalComparison()
+    setCityVisible((visible) => !visible)
+  }
+
   return (
     <section
       className="rehearsal-review-panel rehearsal-review-workspace"
@@ -421,13 +443,10 @@ export default function RehearsalReviewPanel({
                     setSelectedScopeId(nextScope)
                     setSelectedEntryId(null)
                     setFileCursor(null)
+                    clearRehearsalComparison()
                   }}
                 />
-                <button
-                  type="button"
-                  aria-pressed={cityVisible}
-                  onClick={() => setCityVisible((visible) => !visible)}
-                >
+                <button type="button" aria-pressed={cityVisible} onClick={toggleCity}>
                   {cityVisible ? 'Hide city context' : 'Show city context'}
                 </button>
                 <span role="status" aria-live="polite">
@@ -436,10 +455,25 @@ export default function RehearsalReviewPanel({
               </div>
               {cityVisible && (
                 <div className="rehearsal-review-city-slot" aria-label="Optional rehearsal city">
-                  <p>City context follows the selected review file.</p>
-                  <p className="rehearsal-review-city-note">
-                    Use Compare city below to open the shared before/after scene.
-                  </p>
+                  {cityScopeSupported ? (
+                    <RehearsalCityComparison
+                      report={report}
+                      reviewPaths={reviewPaths}
+                      reviewMarkers={reviewMarkers}
+                      selectedPath={selectedPath}
+                      onSelectPath={(path) => {
+                        const entry = fileEntries.find(
+                          (candidate) => candidate.oldPath === path || candidate.newPath === path
+                        )
+                        if (entry) choose(entry)
+                      }}
+                    />
+                  ) : (
+                    <p className="rehearsal-review-city-note" role="status">
+                      City context is unavailable for a committed-reference scope; its frozen text
+                      endpoints remain available below.
+                    </p>
+                  )}
                 </div>
               )}
               <div

@@ -15,6 +15,7 @@ import Hotspots from './Hotspots'
 import Highlight from './Highlight'
 import StatusOverlay from './StatusOverlay'
 import ConstructionSites from './ConstructionSites'
+import type { RehearsalReviewMarker } from './rehearsalMarkers'
 
 /** Shortest a hover/select/status box may be drawn over a field. */
 const MARKER_FLOOR = 1.2
@@ -33,6 +34,9 @@ export default function FarmScene({
   snapshot,
   hotspots = [],
   reviewPaths = [],
+  reviewMarkers = [],
+  selectedPath,
+  onSelectPath,
   liveWorktree = true
 }: {
   model: FarmModel
@@ -40,6 +44,9 @@ export default function FarmScene({
   snapshot: Snapshot
   hotspots?: string[]
   reviewPaths?: string[]
+  reviewMarkers?: RehearsalReviewMarker[]
+  selectedPath?: string | null
+  onSelectPath?: (path: string) => void
   liveWorktree?: boolean
 }): React.JSX.Element {
   const theme = getTheme(useStore((s) => s.themeId))
@@ -67,6 +74,14 @@ export default function FarmScene({
   )
   const beacons = useMemo(() => anchorsFor(hotspots), [anchorsFor, hotspots])
   const reviewBeacons = useMemo(() => anchorsFor(reviewPaths), [anchorsFor, reviewPaths])
+  const reviewMarkerBeacons = useMemo(
+    () =>
+      reviewMarkers.flatMap((marker) => {
+        const position = anchorsFor([marker.path])[0]
+        return position ? [{ position, change: marker.change }] : []
+      }),
+    [anchorsFor, reviewMarkers]
+  )
 
   return (
     <group>
@@ -106,18 +121,29 @@ export default function FarmScene({
         <meshStandardMaterial color={theme.grass} roughness={1} />
       </mesh>
 
-      <Fields model={model} targets={targets} theme={theme} />
+      <Fields model={model} targets={targets} theme={theme} onSelectPath={onSelectPath} />
       <Farmstead model={model} />
       <Livestock model={model} />
       <Tractors model={model} />
       {/* crop stands a fraction of a building's height, so both marker layers
           get a floor — otherwise a selected field is a bright smear on the soil
           rather than a box you can see from the default camera */}
-      {liveWorktree && <Highlight model={model} targets={targets} floor={MARKER_FLOOR} />}
+      {(liveWorktree || selectedPath !== undefined) && (
+        <Highlight
+          model={model}
+          targets={targets}
+          floor={MARKER_FLOOR}
+          selectedPath={selectedPath}
+        />
+      )}
       {liveWorktree && <StatusOverlay model={model} targets={targets} floor={MARKER_FLOOR} />}
       {liveWorktree && <ConstructionSites model={model} size={size} />}
       <Hotspots anchors={beacons} />
-      <Hotspots anchors={reviewBeacons} color="#6ec8ff" />
+      {reviewMarkers.length > 0 ? (
+        <Hotspots markers={reviewMarkerBeacons} />
+      ) : (
+        <Hotspots anchors={reviewBeacons} color="#6ec8ff" />
+      )}
       {liveWorktree && <Effects citySize={size} />}
     </group>
   )

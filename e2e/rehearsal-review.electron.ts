@@ -49,6 +49,13 @@ test('reviews immutable Changes, Before and After content for same-line, added a
     await page.setViewportSize({ width: 960, height: 700 })
     await page.getByRole('button', { name: 'Open a local repository…' }).click()
     await page.getByRole('button', { name: 'Got it', exact: true }).click()
+    await page.getByRole('button', { name: 'Settings' }).click()
+    await page
+      .getByText('Reduce motion', { exact: true })
+      .locator('..')
+      .getByRole('checkbox')
+      .check()
+    await page.getByRole('button', { name: 'Close' }).click()
     await page.getByRole('button', { name: 'Rehearse panel' }).click()
     await expandRehearsal(page, /Rehearse again|Choose rehearsal target/)
     await page.getByLabel('Branch or commit to merge into the current checkout').fill('topic')
@@ -135,6 +142,25 @@ test('reviews immutable Changes, Before and After content for same-line, added a
     await expect(review.getByText('This side is absent.', { exact: true })).toBeVisible()
     await review.getByRole('tab', { name: 'After', exact: true }).click()
     await expect(review.locator('pre')).toHaveText('new file\n')
+
+    // R6: the optional city is the same review context. Its status markers are
+    // textual and shape/color differentiated in the scene, while endpoint
+    // absence remains explicit in the selected file review.
+    await review.getByRole('button', { name: 'Show city context', exact: true }).click()
+    const city = review.getByRole('region', { name: 'Rehearsal city comparison' })
+    await expect(city.getByRole('button', { name: 'Compare city', exact: true })).toBeVisible()
+    await city.getByRole('button', { name: 'Compare city', exact: true }).click()
+    await expect(city.getByRole('button', { name: 'Before', exact: true })).toBeVisible()
+    await expect(page.locator('canvas:not(.minimap canvas)')).toHaveCount(1)
+    await expect(city.getByLabel('Review change markers')).toContainText('Modified')
+    await expect(city.getByLabel('Review change markers')).toContainText('Added')
+    await expect(city.getByLabel('Review change markers')).toContainText('Deleted')
+    await added.click()
+    await city.getByRole('button', { name: 'Before', exact: true }).click()
+    await expect(city.getByText(/absent from the Before endpoint/)).toBeVisible()
+    await city.getByRole('button', { name: 'After', exact: true }).click()
+    await expect(city.getByText(/absent from the Before endpoint/)).toHaveCount(0)
+    await page.screenshot({ path: 'test-results/rehearsal-review-city-960x700.png' })
 
     const deleted = review.getByRole('option').filter({ hasText: 'deleted.txt' })
     await deleted.click()

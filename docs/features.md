@@ -50,6 +50,11 @@ lights the city lights the farm too, and a test holds that together.
 has an always-visible legend, and the encoding is identical in both view modes.
 See [what the colours mean](colour-modes.md).
 
+**Linked rehearsal city review.** Frozen Before and After scenes share the
+review layout and camera context. Changed-file markers select the corresponding
+retained file, including both sides of a rename, while absent or unrepresentable
+files explain why their text review remains the source of truth.
+
 **Time of day**, decoupled from the theme. Drag the sun from night through noon
 to dusk and the key light and shadows follow. Or leave _sky follows commit time_
 on, the default, and the sun tracks each commit's local hour. Scrubbing history

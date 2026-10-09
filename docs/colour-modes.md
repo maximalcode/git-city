@@ -8,6 +8,15 @@ legend in the bottom-right always describes the one in use.
 The same six apply to the farm, where a field is a file and the crop's growth
 stands in for the line count.
 
+## Frozen review markers
+
+When a rehearsal review opens its optional city context, the scene keeps the
+active colour encoding for repository files and adds a change marker legend:
+**Added**, **Modified**, **Deleted**, **Renamed**, and **Type changed**. Marker
+selection is linked to the retained file review. A same-size change is still
+marked as **Modified** even when its building or field has the same height;
+added and deleted files retain their explicit absent endpoint in the text views.
+
 ## Language — the default
 
 Each programming language gets its own colour, the way GitHub's language bars

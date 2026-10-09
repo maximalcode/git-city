@@ -18,6 +18,7 @@ import ConstructionSites from './ConstructionSites'
 import Effects from './Effects'
 import SkyDome from './SkyDome'
 import Traffic from './Traffic'
+import type { RehearsalReviewMarker } from './rehearsalMarkers'
 
 /** Everything city-specific inside the Canvas: lights, ground, districts,
  *  streets, buildings, traffic and the git-op effects. */
@@ -27,6 +28,9 @@ export default function CityScene({
   snapshot,
   hotspots = [],
   reviewPaths = [],
+  reviewMarkers = [],
+  selectedPath,
+  onSelectPath,
   liveWorktree = true
 }: {
   model: CityModel
@@ -34,6 +38,9 @@ export default function CityScene({
   snapshot: Snapshot
   hotspots?: string[]
   reviewPaths?: string[]
+  reviewMarkers?: RehearsalReviewMarker[]
+  selectedPath?: string | null
+  onSelectPath?: (path: string) => void
   liveWorktree?: boolean
 }): React.JSX.Element {
   const theme = getTheme(useStore((s) => s.themeId))
@@ -62,6 +69,14 @@ export default function CityScene({
   )
   const beacons = useMemo(() => anchorsFor(hotspots), [anchorsFor, hotspots])
   const reviewBeacons = useMemo(() => anchorsFor(reviewPaths), [anchorsFor, reviewPaths])
+  const reviewMarkerBeacons = useMemo(
+    () =>
+      reviewMarkers.flatMap((marker) => {
+        const position = anchorsFor([marker.path])[0]
+        return position ? [{ position, change: marker.change }] : []
+      }),
+    [anchorsFor, reviewMarkers]
+  )
 
   return (
     <group>
@@ -105,14 +120,20 @@ export default function CityScene({
       <Roads model={model} />
       <StreetDetail model={model} />
       <StreetLife model={model} />
-      <Buildings model={model} targets={targets} />
+      <Buildings model={model} targets={targets} onSelectPath={onSelectPath} />
       <RoofClutter model={model} targets={targets} />
-      {liveWorktree && <Highlight model={model} targets={targets} />}
+      {(liveWorktree || selectedPath !== undefined) && (
+        <Highlight model={model} targets={targets} selectedPath={selectedPath} />
+      )}
       {liveWorktree && <StatusOverlay model={model} targets={targets} />}
       {liveWorktree && <ConstructionSites model={model} size={size} />}
       <Traffic model={model} snapshot={snapshot} />
       <Hotspots anchors={beacons} />
-      <Hotspots anchors={reviewBeacons} color="#6ec8ff" />
+      {reviewMarkers.length > 0 ? (
+        <Hotspots markers={reviewMarkerBeacons} />
+      ) : (
+        <Hotspots anchors={reviewBeacons} color="#6ec8ff" />
+      )}
       {liveWorktree && <Effects citySize={size} />}
     </group>
   )

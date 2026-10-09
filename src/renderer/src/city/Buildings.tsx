@@ -15,9 +15,10 @@ const MIN_VISIBLE = 0.05
 interface Props {
   model: CityModel
   targets: Targets
+  onSelectPath?: (path: string) => void
 }
 
-export default function Buildings({ model, targets }: Props): React.JSX.Element {
+export default function Buildings({ model, targets, onSelectPath }: Props): React.JSX.Element {
   const meshRef = useRef<InstancedMesh>(null!)
   const setHovered = useStore((s) => s.setHovered)
   const setSelected = useStore((s) => s.setSelected)
@@ -117,7 +118,9 @@ export default function Buildings({ model, targets }: Props): React.JSX.Element 
     e.stopPropagation()
     const id = e.instanceId
     if (id === undefined || anim.heights[id] < MIN_VISIBLE) return
-    setSelected(model.paths[id])
+    const path = model.paths[id]
+    if (onSelectPath) onSelectPath(path)
+    else setSelected(path)
   }
 
   // double-click jumps straight into the file's diff (single click still selects)
@@ -125,7 +128,9 @@ export default function Buildings({ model, targets }: Props): React.JSX.Element 
     e.stopPropagation()
     const id = e.instanceId
     if (id === undefined || anim.heights[id] < MIN_VISIBLE) return
-    setSelected(model.paths[id])
+    const path = model.paths[id]
+    if (onSelectPath) onSelectPath(path)
+    else setSelected(path)
     setDiffOpen(true)
   }
 

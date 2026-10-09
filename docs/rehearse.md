@@ -59,7 +59,12 @@ result has an available After. They use the same layout and provide a text
 inventory of files and line counts. Stopped, incomplete, failed, and unresolved
 results explain when an After view is unavailable. While the comparison is
 open, the live scene is paused so the comparison is the only active 3D scene in
-the main workspace. **Return to live city** leaves the comparison.
+the main workspace. Changed files are marked in the frozen scene, including
+both endpoints of a rename; selecting a marker selects the matching file in the
+review list. If a selected file is absent from an endpoint, or cannot be
+represented by the city layout, the scene says so while the retained text views
+remain available. **Return to live city** leaves the comparison and restores the
+live scene context without reusing the frozen selection.
 
 ![The Rehearse panel beside the city](media/app-rehearsal.png)
 

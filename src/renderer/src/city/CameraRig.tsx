@@ -8,6 +8,16 @@ import { cameraHeading } from '../lib/cameraHeading'
 const UP = new Vector3(0, 1, 0)
 const offsetScratch = new Vector3() // reused every frame during the intro orbit
 
+interface CameraView {
+  position: Vector3
+  target: Vector3
+}
+
+// The live canvas is intentionally unmounted while a frozen review owns the
+// single WebGL surface. Keep its view outside React/R3F so returning to live
+// restores the user's framing rather than starting another intro/fly-to.
+const cameraViews = new Map<string, CameraView>()
+
 /**
  * Thin wrapper around three's own MapControls (pan/zoom/orbit above the scene).
  * Used instead of @react-three/drei's version so the app has no dependency on
@@ -25,17 +35,22 @@ export default function CameraRig({
   worldSize,
   resolveFocus,
   maxPolarAngle = Math.PI * 0.47,
-  focusDistance
+  focusDistance,
+  selectedPath,
+  cacheKey
 }: {
   worldSize: number
   resolveFocus: (path: string) => Vector3 | null
   maxPolarAngle?: number
   focusDistance?: number
+  selectedPath?: string | null
+  cacheKey?: string
 }): null {
   const camera = useThree((s) => s.camera)
   const gl = useThree((s) => s.gl)
   const scene = useThree((s) => s.scene)
-  const selected = useStore((s) => s.selected)
+  const liveSelected = useStore((s) => s.selected)
+  const selected = selectedPath === undefined ? liveSelected : selectedPath
   const reduceMotion = useStore((s) => s.reduceMotion)
 
   const controls = useMemo(() => new MapControls(camera, gl.domElement), [camera, gl])
@@ -43,6 +58,7 @@ export default function CameraRig({
   // "Reduce motion" skips the cinematic intro orbit entirely
   const intro = useRef(!reduceMotion)
   const tween = useRef<{ target: Vector3; pos: Vector3 } | null>(null)
+  const restoredView = useRef(false)
 
   // Create once. dispose() detaches the DOM listeners, so it must run ONLY on
   // unmount — never when worldSize changes (a view-mode switch changes it,
@@ -53,7 +69,15 @@ export default function CameraRig({
     controls.enableDamping = true
     controls.dampingFactor = 0.08
     controls.minDistance = 8
-    controls.target.set(0, 0, 0)
+    const cached = cacheKey ? cameraViews.get(cacheKey) : undefined
+    if (cached) {
+      camera.position.copy(cached.position)
+      controls.target.copy(cached.target)
+      intro.current = false
+      restoredView.current = true
+    } else {
+      controls.target.set(0, 0, 0)
+    }
     const stopAuto = (): void => {
       intro.current = false
       tween.current = null
@@ -61,6 +85,12 @@ export default function CameraRig({
     controls.addEventListener('start', stopAuto)
     return () => {
       controls.removeEventListener('start', stopAuto)
+      if (cacheKey) {
+        cameraViews.set(cacheKey, {
+          position: camera.position.clone(),
+          target: controls.target.clone()
+        })
+      }
       controls.dispose()
       // DEV probe: a view-mode switch must NOT reach here (see e2e). If this
       // increments on a switch, the controls were torn down and the camera dies.
@@ -69,7 +99,7 @@ export default function CameraRig({
         w.__gitCityRigDisposes = (w.__gitCityRigDisposes ?? 0) + 1
       }
     }
-  }, [controls])
+  }, [camera, cacheKey, controls])
 
   // Someone reacting to the motion they can see, by ticking "Reduce motion",
   // was watching the camera keep orbiting: the flag was only read when the rig
@@ -112,15 +142,25 @@ export default function CameraRig({
 
   // fly-to when the selection changes to something the scene can locate
   useEffect(() => {
+    if (restoredView.current) {
+      restoredView.current = false
+      return
+    }
     if (!selected) return
     const center = resolveFocus(selected)
     if (!center) return
     // keep the current view direction, just re-frame at a closer distance
     const dir = new Vector3().subVectors(camera.position, controls.target).normalize()
     const dist = focusDistance ?? Math.max(22, worldSize * 0.28)
+    if (reduceMotion) {
+      controls.target.copy(center)
+      camera.position.copy(center).addScaledVector(dir, dist)
+      tween.current = null
+      return
+    }
     intro.current = false
     tween.current = { target: center, pos: new Vector3().copy(center).addScaledVector(dir, dist) }
-  }, [selected, resolveFocus, worldSize, focusDistance, camera, controls])
+  }, [selected, resolveFocus, worldSize, focusDistance, camera, controls, reduceMotion])
 
   useFrame((_, dt) => {
     if (intro.current) {

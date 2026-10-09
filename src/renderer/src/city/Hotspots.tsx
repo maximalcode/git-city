@@ -1,6 +1,7 @@
 import { useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { Group, Mesh, MeshBasicMaterial } from 'three'
+import type { RehearsalReviewChange } from '../../../shared/types'
 
 /**
  * Pulsing beacons over the repo's activity hotspots (the files churning most
@@ -11,29 +12,50 @@ import { Group, Mesh, MeshBasicMaterial } from 'three'
  */
 export default function Hotspots({
   anchors,
-  color = '#ffb347'
+  color = '#ffb347',
+  markers
 }: {
-  anchors: [number, number, number][]
+  anchors?: [number, number, number][]
   color?: string
+  markers?: { position: [number, number, number]; change: RehearsalReviewChange }[]
 }): React.JSX.Element | null {
-  if (anchors.length === 0) return null
+  if ((anchors?.length ?? 0) === 0 && (!markers || markers.length === 0)) return null
   return (
     <group>
-      {anchors.map((a, i) => (
+      {anchors?.map((a, i) => (
         <Beacon key={i} position={a} phase={i * 0.7} color={color} />
+      ))}
+      {markers?.map((marker, i) => (
+        <Beacon
+          key={`review-${marker.position[0]}-${marker.position[2]}-${i}`}
+          position={marker.position}
+          phase={i * 0.7}
+          color={reviewColor(marker.change)}
+          change={marker.change}
+        />
       ))}
     </group>
   )
 }
 
+function reviewColor(change: RehearsalReviewChange): string {
+  if (change === 'added') return '#66d99a'
+  if (change === 'deleted') return '#ff7070'
+  if (change === 'renamed') return '#c995ff'
+  if (change === 'typechange') return '#ffc266'
+  return '#6ec8ff'
+}
+
 function Beacon({
   position,
   phase,
-  color
+  color = '#ffb347',
+  change
 }: {
   position: [number, number, number]
   phase: number
-  color: string
+  color?: string
+  change?: RehearsalReviewChange
 }): React.JSX.Element {
   const cone = useRef<Group>(null)
   const ring = useRef<Mesh>(null)
@@ -57,7 +79,15 @@ function Beacon({
       {/* bobbing marker cone (apex down) */}
       <group ref={cone} position={[0, 2.2, 0]}>
         <mesh rotation={[Math.PI, 0, 0]}>
-          <coneGeometry args={[0.7, 1.6, 5]} />
+          {change === 'deleted' ? (
+            <sphereGeometry args={[0.72, 8, 4]} />
+          ) : change === 'renamed' ? (
+            <octahedronGeometry args={[0.8]} />
+          ) : change === 'typechange' ? (
+            <torusGeometry args={[0.52, 0.18, 8, 12]} />
+          ) : (
+            <coneGeometry args={[change === 'added' ? 0.85 : 0.7, 1.6, 5]} />
+          )}
           <meshBasicMaterial color={color} toneMapped={false} transparent opacity={0.9} />
         </mesh>
       </group>

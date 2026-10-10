@@ -25,6 +25,12 @@ The current Git City bundle remains v1.3.0. Passing its existing Apply, Undo and
 package checks does not establish strict binding to an expected result revision.
 No merge or release is included in this partial implementation.
 
+Native Electron captures at `16215aa41f2955f775d54895cd3c70d42692b7bf` on
+macOS arm64 show the [active city comparison at 960×700](media/rehearse-review-city-960x700.png)
+and [frozen file review at 1280×800](media/rehearse-review-1280x800.png).
+These use real Git fixtures; the README capture uses a clean clone of this
+repository. They document R1–R6 and do not establish the pending strict Apply guarantee.
+
 The additional verification seams are:
 
 | Requirement | Verification source |
@@ -34,7 +40,7 @@ The additional verification seams are:
 | Frozen objects, exact Git hunks, complete paged scopes and honest unavailable content | `src/main/rehearsalReview.git.test.ts`, `src/main/rehearsalReview.contract.test.ts`, `e2e/rehearsal-review.electron.ts`, `e2e/rehearsal-review-scopes.e2e.ts` |
 | Identity/refresh races, retained selection and visible errors | `e2e/rehearsal-review-identity.e2e.ts`, `e2e/rehearsal-review-refresh.e2e.ts` |
 | Real building picks beyond a page/filter, endpoint-aware rename paths, one scene and restored live context | `e2e/rehearsal-review-identity.e2e.ts`, `e2e/rehearsal-review.electron.ts`, `src/renderer/src/city/rehearsalMarkers.test.ts` |
-| Keyboard selection/resizing at 960×700 and 1280×800, reduced motion and existing mode switching | `e2e/rehearsal-review-scopes.e2e.ts`, `e2e/rehearsal-review.electron.ts`, `e2e/mode-switch.e2e.ts` |
+| Keyboard selection/resizing at 960×700 and 1280×800, reduced motion and existing mode switching | `e2e/rehearsal-review-scopes.e2e.ts`, `e2e/rehearsal-review.electron.ts`, `e2e/mode-switch.e2e.ts`, `e2e/rehearsal-panel-focus.e2e.ts` |
 
 The complete acceptance scenarios and remaining cross-repository gate are in the
 [approved execution runbook](plans/rehearse-review/runbook.md#acceptance-evidence-matrix).

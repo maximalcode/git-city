@@ -42,6 +42,30 @@ function status(entry: ReviewEntry): string {
   return reviewChangeLabel(entry.change)
 }
 
+/** Keep the current entry controls mounted while its selected bytes load. */
+function contentEntry(summary: RehearsalReviewEntrySummary): RehearsalReviewEntry {
+  const mode = summary.new.mode ?? summary.old.mode
+  const type =
+    mode === '120000'
+      ? 'symlink'
+      : mode === '160000'
+        ? 'gitlink'
+        : summary.old.mode !== summary.new.mode && summary.old.objectId === summary.new.objectId
+          ? 'mode'
+          : 'text'
+  return {
+    ...summary,
+    binary: false,
+    type,
+    text: {
+      changes: 'unavailable',
+      before: summary.old.present ? 'unavailable' : 'absent',
+      after: summary.new.present ? 'unavailable' : 'absent'
+    },
+    lines: { before: null, after: null, additions: null, deletions: null }
+  }
+}
+
 export interface RehearsalReviewFileInventoryProps {
   identity: RehearsalReviewIdentity
   reviewRevision: string
@@ -372,9 +396,34 @@ export default function RehearsalReviewPanel({
       )
     }
   )
-  const file = fileQuery.loading ? null : fileQuery.data
-  const selected = file?.entry ?? null
+  // A content read is allowed to replace only the bytes, never the controls
+  // that own focus. Query state can retain a prior response while its new
+  // request is starting, so require every public identity component to match
+  // before showing that response. The current change-map summary keeps the
+  // file heading and tabs mounted while the current bytes are unavailable.
+  const file = useMemo(() => {
+    const candidate = fileQuery.data
+    if (!candidate || !summary || !scopeId || !selectedEntryId) return null
+    if (
+      candidate.identity.id !== reviewIdentity.id ||
+      candidate.identity.repository !== reviewIdentity.repository ||
+      candidate.identity.repository_id !== reviewIdentity.repository_id ||
+      candidate.identity.origin_worktree !== reviewIdentity.origin_worktree ||
+      candidate.reviewRevision !== summary.reviewRevision ||
+      candidate.scopeId !== scopeId ||
+      candidate.entryId !== selectedEntryId ||
+      candidate.view !== view
+    )
+      return null
+    return fileQuery.loading ? null : candidate
+  }, [fileQuery.data, fileQuery.loading, reviewIdentity, scopeId, selectedEntryId, summary, view])
+  const selectedSummaryEntry = useMemo(
+    () => (selectedSummary ? contentEntry(selectedSummary) : null),
+    [selectedSummary]
+  )
+  const selected = file?.entry ?? selectedSummaryEntry
   const loading = summaryQuery.loading || filesQuery.loading || fileQuery.loading
+  const inventoryLoading = summaryQuery.loading || filesQuery.loading
   const error = summaryQuery.error || filesQuery.error || fileQuery.error
   const reviewPaths = useMemo(
     () => [...new Set(changeEntries.flatMap((entry) => reviewEntryPaths(entry)))],
@@ -576,7 +625,9 @@ export default function RehearsalReviewPanel({
                 <RehearsalReviewScopeSelector
                   scopes={summary.scopes}
                   selectedScopeId={scopeId}
-                  disabled={loading}
+                  // Scope metadata remains valid while file bytes are being
+                  // read, so keep the native select enabled and focused.
+                  disabled={summaryQuery.loading}
                   onSelectScope={(nextScope) => {
                     setSelectedScopeId(nextScope)
                     setSelectedEntryId(null)
@@ -624,7 +675,7 @@ export default function RehearsalReviewPanel({
                   total={authoritativeRehearsalReviewTotal(files, knownTotal)}
                   nextCursor={nextCursor}
                   filter={filter}
-                  loading={loading}
+                  loading={inventoryLoading}
                   onFilterChange={setFilter}
                   onApplyFilter={() => loadFiles(filter)}
                   onSelectEntry={(entryId) => {

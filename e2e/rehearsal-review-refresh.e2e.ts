@@ -275,7 +275,7 @@ test('late content from an older revision cannot replace the current revision', 
   await expect(review.locator('pre')).toHaveText('file-000.txt:after:revision-2')
 })
 
-test('blocks scope switching while a file is pending, then loads the selected scope', async ({
+test('keeps scope switching available while a file is pending, then loads the selected scope', async ({
   page
 }) => {
   await mountReview(page)
@@ -292,13 +292,6 @@ test('blocks scope switching while a file is pending, then loads the selected sc
     state.delayNextFile()
   })
   await files.getByRole('option', { name: /file-001\.txt/ }).click()
-  await expect(scope).toBeDisabled()
-
-  await page.evaluate(() => {
-    const state = (window as unknown as { reviewFixture: any }).reviewFixture
-    state.resolveDelayedFile()
-  })
-  await expect(review.locator('pre')).toHaveText('file-001.txt:changes:revision-1')
   await expect(scope).toBeEnabled()
 
   await scope.focus()
@@ -311,5 +304,12 @@ test('blocks scope switching while a file is pending, then loads the selected sc
     'aria-selected',
     'true'
   )
+  await expect(review.locator('pre')).toHaveText('topic-file-000.txt:changes:revision-1')
+  // The cancelled tracked-file response must not replace the newly selected
+  // committed-reference scope when it eventually resolves.
+  await page.evaluate(() => {
+    const state = (window as unknown as { reviewFixture: any }).reviewFixture
+    state.resolveDelayedFile()
+  })
   await expect(review.locator('pre')).toHaveText('topic-file-000.txt:changes:revision-1')
 })

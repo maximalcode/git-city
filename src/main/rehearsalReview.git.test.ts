@@ -1,6 +1,4 @@
-import { chmodSync } from 'fs'
 import { rm } from 'fs/promises'
-import { join } from 'path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { makeTempRepo, type FixtureRepo } from './git/fixtures'
 import {
@@ -55,7 +53,7 @@ function fixture(
   } else if (after === null) {
     sandbox.git('rm', '--', path)
   } else if (options.modeOnly) {
-    chmodSync(join(sandbox.path, path), 0o755)
+    sandbox.git('update-index', '--chmod=+x', '--', path)
   } else {
     sandbox.write(path, after)
   }
@@ -63,7 +61,10 @@ function fixture(
     sandbox.write('.gitattributes', '*.txt binary\n')
     sandbox.git('config', 'color.ui', 'always')
   }
-  sandbox.commitAll('after')
+  // Keep the explicit index mode; re-staging with `git add -A` can erase it
+  // on platforms whose worktree does not expose executable bits.
+  if (options.modeOnly) sandbox.git('commit', '-m', 'after')
+  else sandbox.commitAll('after')
   const afterId = sandbox.git('rev-parse', 'HEAD').trim()
   const identity = {
     id: `review-${path}`,

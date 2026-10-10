@@ -128,6 +128,17 @@ test('keyboard city comparison stays with its frozen rehearsal when switching re
       comparison.getByRole('button', { name: 'Compare city', exact: true })
     ).toBeFocused()
     await expect(page.locator('canvas:not(.minimap canvas)')).toHaveCount(1)
+    await page.waitForFunction(() => {
+      const scene = window as unknown as {
+        __gitCitySceneCanvas?: HTMLCanvasElement
+        __gitCityCam?: unknown
+      }
+      return (
+        scene.__gitCitySceneCanvas?.isConnected &&
+        !scene.__gitCitySceneCanvas.closest('.rehearsal-city') &&
+        !!scene.__gitCityCam
+      )
+    })
     const liveCameraAfter = await page.evaluate(() => {
       const camera = (
         window as unknown as {

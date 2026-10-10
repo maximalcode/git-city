@@ -5,6 +5,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join, resolve } from 'path'
 import { discardFixtureRehearsals } from './rehearsal-fixture-cleanup'
+import { expectFrozenReview } from './rehearsal-review-assertions'
 
 for (const [entryKind, conflict] of [
   ['branches', false],
@@ -108,6 +109,7 @@ for (const [entryKind, conflict] of [
           })
         ).toBeVisible()
         expect(git('rev-parse', 'HEAD')).toBe(before)
+        await expectFrozenReview(page, root, 'file.txt', 'original\n', 'preview\n')
         await expandRehearsal(page, /^Technical details$/)
         await expect(page.getByText(/Repository hooks were not run/)).toBeVisible()
         await page.keyboard.press('Escape')

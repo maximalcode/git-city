@@ -4,6 +4,7 @@ import { execFileSync } from 'child_process'
 import { mkdtemp, readFile, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join, resolve } from 'path'
+import { discardFixtureRehearsals } from './rehearsal-fixture-cleanup'
 
 test('real Electron merge preview preserves the original and supports keyboard keep/reopen', async () => {
   const tool = process.env.GIT_CITY_REHEARSE_BIN
@@ -132,7 +133,7 @@ test('real Electron merge preview preserves the original and supports keyboard k
     await expect(page.getByRole('button', { name: 'Apply rehearsal', exact: true })).toBeFocused()
     await page.keyboard.press('Enter')
     await expect(page.getByText('The checked rehearsal was applied.')).toBeVisible()
-    await expect(page.locator('.rehearsal-panel [aria-live="polite"]')).toBeFocused()
+    await expect(page.locator('.rehearsal-panel [aria-live="polite"][aria-busy]')).toBeFocused()
     expect(git('rev-parse', 'HEAD^2')).toBe(git('rev-parse', 'topic'))
     expect(await readFile(join(root, 'file.txt'), 'utf8')).toBe('preview\n')
     const appliedHead = git('rev-parse', 'HEAD')
@@ -168,11 +169,7 @@ test('real Electron merge preview preserves the original and supports keyboard k
     } catch {
       /* no pending recovery */
     }
-    const listing = JSON.parse(
-      execFileSync(tool!, ['--json', 'list'], { cwd: root, encoding: 'utf8' })
-    )
-    for (const rehearsal of listing.rehearsals)
-      execFileSync(tool!, ['--json', 'discard', rehearsal.id], { cwd: root })
+    await discardFixtureRehearsals(tool!, root)
     await rm(root, { recursive: true, force: true })
     await rm(userData, { recursive: true, force: true })
   }

@@ -22,8 +22,41 @@ const api: GitCityApi = {
     ipcRenderer.invoke('git-city:rehearsal-conflict-read', identity, path),
   rehearsalConflictSave: (identity, path, revision, text) =>
     ipcRenderer.invoke('git-city:rehearsal-conflict-save', identity, path, revision, text),
+  rehearsalDraftRead: (identity, path) =>
+    ipcRenderer.invoke('git-city:rehearsal-draft-read', identity, path),
+  rehearsalDraftList: (identity) => ipcRenderer.invoke('git-city:rehearsal-draft-list', identity),
+  rehearsalDraftWrite: (identity, path, payload, expectedDraftRevision) =>
+    ipcRenderer.invoke(
+      'git-city:rehearsal-draft-write',
+      identity,
+      path,
+      payload,
+      expectedDraftRevision
+    ),
+  rehearsalDraftDiscard: (identity, path, expectedDraftRevision) =>
+    ipcRenderer.invoke('git-city:rehearsal-draft-discard', identity, path, expectedDraftRevision),
   rehearsalContinue: (identity) => ipcRenderer.invoke('git-city:rehearsal-continue', identity),
   rehearsalComparison: (identity) => ipcRenderer.invoke('git-city:rehearsal-comparison', identity),
+  rehearsalReviewSummary: (identity) =>
+    ipcRenderer.invoke('git-city:rehearsal-review-summary', identity),
+  rehearsalReviewFiles: (identity, revision, scopeId, cursor, filter) =>
+    ipcRenderer.invoke(
+      'git-city:rehearsal-review-files',
+      identity,
+      revision,
+      scopeId,
+      cursor,
+      filter
+    ),
+  rehearsalReviewFile: (identity, revision, scopeId, entryId, view) =>
+    ipcRenderer.invoke(
+      'git-city:rehearsal-review-file',
+      identity,
+      revision,
+      scopeId,
+      entryId,
+      view
+    ),
   rehearsalShow: (identity) => ipcRenderer.invoke('git-city:rehearsal-show', identity),
   checkGit: () => ipcRenderer.invoke('git-city:check-git'),
   selectFolder: () => ipcRenderer.invoke('git-city:select-folder'),

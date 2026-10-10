@@ -4,6 +4,8 @@ import { execFileSync } from 'child_process'
 import { mkdtemp, readFile, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join, resolve } from 'path'
+import { discardFixtureRehearsals } from './rehearsal-fixture-cleanup'
+import { expectFrozenReview } from './rehearsal-review-assertions'
 
 for (const conflict of [false, true]) {
   test(`keyboard interactive plan ${conflict ? 'continues repeated conflicts' : 'reorders, squashes and drops'} before Apply`, async () => {
@@ -66,22 +68,57 @@ for (const conflict of [false, true]) {
       await page.keyboard.press('Enter')
       await expandRehearsal(page, /^Review changes$/)
       await expect(page.getByRole('region', { name: 'Rehearsed plan' })).toContainText('drop')
+      const retainedId = page.getByText('Kept rehearsal:', { exact: false }).locator('code')
+      const stoppedId = conflict ? await retainedId.textContent() : null
       if (conflict) {
+        expect(stoppedId).toBeTruthy()
         for (let stop = 0; stop < 2; stop++) {
           const editor = page.getByRole('region', { name: 'Sandbox conflict editor' })
           await expect(editor).toBeVisible()
+          await expect(retainedId).toHaveText(stoppedId!)
           await expect(page.getByRole('button', { name: 'Apply', exact: true })).toBeDisabled()
+          const review = page.getByRole('region', { name: 'Frozen rehearsal review' })
+          const stoppedReview = await page.evaluate(
+            async ({ root, stoppedId }) => {
+              const listing = await window.gitCity.rehearsalList(root)
+              const identity = listing.entries.find((item) => item.id === stoppedId)
+              if (!identity) throw new Error('The stopped rehearsal is missing')
+              return window.gitCity.rehearsalReviewSummary(identity)
+            },
+            { root, stoppedId }
+          )
+          expect(stoppedReview.identity.id).toBe(stoppedId)
+          expect(stoppedReview.afterAvailable).toBe(false)
+          expect(stoppedReview.afterReason).toBeTruthy()
+          await expect(review.getByText(stoppedReview.afterReason!, { exact: false })).toBeVisible()
+          await expect(review.getByRole('tab', { name: 'After', exact: true })).toHaveCount(0)
           for (const name of ['Resolve file', 'Edit whole file']) {
             await expect(editor.getByRole('button', { name, exact: true })).toBeEnabled()
             await editor.getByRole('button', { name, exact: true }).focus()
             await page.keyboard.press('Enter')
+            if (name === 'Resolve file') {
+              await expect(
+                editor.getByRole('heading', { name: 'Section 1: Unreviewed' })
+              ).toBeVisible()
+              await editor.getByRole('button', { name: 'Both', exact: true }).focus()
+              await page.keyboard.press('Enter')
+              await expect(editor.locator('.seg-theirs')).toHaveText(`${stop + 2}\n`)
+            }
           }
           await editor.getByLabel('Resolved file text').fill(`resolved ${stop}\n`)
+          await expect(
+            editor.getByRole('button', { name: 'Save and stage in sandbox' })
+          ).toBeDisabled()
+          await editor.getByRole('button', { name: 'Confirm complete file resolution' }).click()
           await editor.getByRole('button', { name: 'Save and stage in sandbox' }).focus()
           await page.keyboard.press('Enter')
           await expect(editor.getByRole('button', { name: 'Continue rehearsal' })).toBeEnabled()
           await editor.getByRole('button', { name: 'Continue rehearsal' }).focus()
           await page.keyboard.press('Enter')
+          await expect(page.locator('.rehearsal-panel [aria-busy]')).toHaveAttribute(
+            'aria-busy',
+            'false'
+          )
           await expandRehearsal(page, /^Review changes$/)
           await expect(page.getByRole('region', { name: 'Rehearsed plan' })).toContainText('drop')
         }
@@ -97,7 +134,15 @@ for (const conflict of [false, true]) {
         await expect(
           page.getByLabel('Interactive plan base (Root includes the root commit)')
         ).toHaveValue('root')
+        const retainedId = page.getByText('Kept rehearsal:', { exact: false }).locator('code')
+        const previousId = await retainedId.textContent()
+        expect(previousId).toBeTruthy()
         await page.getByRole('button', { name: 'Rehearse', exact: true }).click()
+        await expect(retainedId).not.toHaveText(previousId!)
+        await expect(page.locator('.rehearsal-panel [aria-busy]')).toHaveAttribute(
+          'aria-busy',
+          'false'
+        )
         await expect(page.getByRole('heading', { name: 'Rebase preview completed' })).toBeVisible()
         await expandRehearsal(page, /^Review changes$/)
         await expect(page.getByRole('region', { name: 'Rehearsed plan' })).toContainText('drop')
@@ -109,6 +154,15 @@ for (const conflict of [false, true]) {
         .locator('code')
         .textContent()
       expect(reviewedId).toBeTruthy()
+      const frozenId = await expectFrozenReview(
+        page,
+        root,
+        conflict ? 'file' : 'file1',
+        conflict ? '3\n' : '1\n',
+        conflict ? 'resolved 1\n' : null
+      )
+      expect(frozenId).toBe(reviewedId)
+      if (conflict) expect(frozenId).toBe(stoppedId)
       const report = JSON.parse(
         execFileSync(tool, ['--json', 'show', reviewedId!], {
           cwd: root,
@@ -120,6 +174,7 @@ for (const conflict of [false, true]) {
         encoding: 'utf8'
       }).trim()
       await page.keyboard.press('Escape')
+      await expect(page.locator('.rehearsal-panel')).toBeHidden()
       await expect(
         conflict ? entry : page.getByRole('button', { name: 'Rehearse panel' })
       ).toBeFocused()
@@ -138,16 +193,7 @@ for (const conflict of [false, true]) {
       await page.screenshot({ path: `test-results/rehearsal-interactive-${conflict}.png` })
     } finally {
       await app.close()
-      const listing = JSON.parse(
-        execFileSync(tool, ['--json', 'list'], { cwd: root, encoding: 'utf8' })
-      )
-      // Closing Electron can leave its read-only recovery inspection finishing.
-      // Wait for that process to release the journal before cleaning fixtures.
-      for (const item of listing.rehearsals) {
-        await expect(() =>
-          execFileSync(tool, ['--json', 'discard', item.id], { cwd: root, stdio: 'pipe' })
-        ).toPass({ timeout: 30_000 })
-      }
+      await discardFixtureRehearsals(tool, root)
       await rm(root, { recursive: true, force: true })
       await rm(userData, { recursive: true, force: true })
     }

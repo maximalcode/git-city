@@ -1,4 +1,10 @@
+import { registerRehearsalDraftQuitBarrier } from './rehearsalDraftQuit'
 import { compareRehearsal } from './rehearsalComparison'
+import {
+  rehearsalReviewFile,
+  rehearsalReviewFiles,
+  rehearsalReviewSummary
+} from './rehearsalReview'
 import { resolveRehearsalTool } from './rehearsalBundle'
 import { inspectUndo, undoRehearsal } from './rehearsalUndo'
 import { listRehearsals, discardRehearsals } from './rehearsalManagement'
@@ -6,8 +12,16 @@ import { stopRehearsal } from './rehearsalProcess'
 import {
   readRehearsalConflict,
   saveRehearsalConflict,
-  continueRehearsal
+  continueRehearsal,
+  withRehearsal
 } from './rehearsalConflicts'
+import {
+  rehearsalDraftDiscard,
+  rehearsalDraftRead,
+  rehearsalDraftList,
+  rehearsalDraftWrite,
+  rehearsalDraftsExist
+} from './rehearsalDraftIpc'
 import { applyRehearsal, inspectRecovery, recoverRehearsal } from './rehearsalRecovery'
 import { withRepositoryWrite } from './repositoryQueue'
 import { app, BrowserWindow, dialog, ipcMain } from 'electron'
@@ -29,6 +43,7 @@ import { withRepoLock } from './git/queue'
 import { registerOpsIpc } from './ipcOps'
 
 export function registerIpc(): void {
+  registerRehearsalDraftQuitBarrier()
   registerOpsIpc()
   ipcMain.handle('git-city:rehearsal-mode', (_event, repo, known, choice) =>
     getRehearsalMode(repo, known, choice)
@@ -56,8 +71,33 @@ export function registerIpc(): void {
   ipcMain.handle('git-city:rehearsal-comparison', (_event, identity: RehearsalIdentity) =>
     compareRehearsal(rehearsalTool(), identity)
   )
+  ipcMain.handle('git-city:rehearsal-review-summary', (_event, identity: RehearsalIdentity) =>
+    rehearsalReviewSummary(rehearsalTool(), identity)
+  )
+  ipcMain.handle(
+    'git-city:rehearsal-review-files',
+    (
+      _event,
+      identity: RehearsalIdentity,
+      revision: string,
+      scopeId: string,
+      cursor?: string,
+      filter?: string
+    ) => rehearsalReviewFiles(rehearsalTool(), identity, revision, scopeId, cursor, filter)
+  )
+  ipcMain.handle(
+    'git-city:rehearsal-review-file',
+    (
+      _event,
+      identity: RehearsalIdentity,
+      revision: string,
+      scopeId: string,
+      entryId: string,
+      view
+    ) => rehearsalReviewFile(rehearsalTool(), identity, revision, scopeId, entryId, view)
+  )
   ipcMain.handle('git-city:rehearsal-show', (_event, identity: RehearsalIdentity) =>
-    rehearsalShow(rehearsalTool(), identity)
+    withRehearsal(identity, () => rehearsalShow(rehearsalTool(), identity))
   )
 
   ipcMain.handle('git-city:rehearsal-conflict-read', (_event, identity, path) =>
@@ -66,8 +106,34 @@ export function registerIpc(): void {
   ipcMain.handle('git-city:rehearsal-conflict-save', (_event, identity, path, revision, text) =>
     saveRehearsalConflict(rehearsalTool(), identity, path, revision, text)
   )
-  ipcMain.handle('git-city:rehearsal-continue', (_event, identity) =>
-    continueRehearsal(rehearsalTool(), identity)
+  ipcMain.handle('git-city:rehearsal-draft-read', (_event, identity, path) =>
+    rehearsalDraftRead(identity, path)
+  )
+  ipcMain.handle('git-city:rehearsal-draft-list', (_event, identity) =>
+    rehearsalDraftList(identity)
+  )
+  ipcMain.handle(
+    'git-city:rehearsal-draft-write',
+    (_event, identity, path, payload, expectedDraftRevision) =>
+      rehearsalDraftWrite(identity, path, payload, expectedDraftRevision)
+  )
+  ipcMain.handle(
+    'git-city:rehearsal-draft-discard',
+    (_event, identity, path, expectedDraftRevision) =>
+      rehearsalDraftDiscard(identity, path, expectedDraftRevision)
+  )
+  ipcMain.handle('git-city:rehearsal-continue', (_event, identity: RehearsalReport) =>
+    continueRehearsal(rehearsalTool(), identity, async () => {
+      try {
+        return (await rehearsalDraftsExist(identity))
+          ? 'Resolve or discard the saved rehearsal editor draft before Continue.'
+          : null
+      } catch (error) {
+        return error instanceof Error
+          ? error.message
+          : 'Saved rehearsal drafts could not be inspected before Continue.'
+      }
+    })
   )
 
   ipcMain.handle('git-city:rehearsal-undo-status', (_event, repo: string) =>
@@ -77,7 +143,29 @@ export function registerIpc(): void {
     undoRehearsal(rehearsalTool(), repo, identity)
   )
   ipcMain.handle('git-city:rehearsal-apply', (_event, identity: RehearsalReport) =>
-    applyRehearsal(rehearsalTool(), identity)
+    withRehearsal(identity, async () => {
+      try {
+        if (await rehearsalDraftsExist(identity)) {
+          const recovery = await inspectRecovery(rehearsalTool(), identity.origin_worktree)
+          return {
+            kind: 'refused' as const,
+            message: 'Resolve or discard the saved rehearsal editor draft before Apply.',
+            recovery
+          }
+        }
+      } catch (error) {
+        const recovery = await inspectRecovery(rehearsalTool(), identity.origin_worktree)
+        return {
+          kind: 'refused' as const,
+          message:
+            error instanceof Error
+              ? error.message
+              : 'Saved rehearsal drafts could not be inspected before Apply.',
+          recovery
+        }
+      }
+      return applyRehearsal(rehearsalTool(), identity)
+    })
   )
   ipcMain.handle('git-city:rehearsal-recovery', (_event, repo: string) =>
     withRepositoryWrite(repo, () => inspectRecovery(rehearsalTool(), repo))

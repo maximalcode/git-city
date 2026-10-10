@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { GitCityApi, RehearsalEntry, RehearsalInventory } from '../../shared/types'
 import { setBridge } from './lib/bridge'
 import { useStore } from './store'
+import { getRehearsalDraftSession, rehearsalDraftSessionKey } from './panels/rehearsalDraftSessions'
 
 const first: RehearsalEntry = {
   id: 'first',
@@ -81,6 +82,10 @@ it('restores the current identity from preferences after clearing session state,
 })
 
 it('keeps partial discard failures visible and reloads non-selected retained data', async () => {
+  const removedKey = rehearsalDraftSessionKey(first, 'file.txt')
+  const keptKey = rehearsalDraftSessionKey({ ...first, id: 'missing' }, 'file.txt')
+  getRehearsalDraftSession(removedKey, 'base', '').raw = 'discarded draft'
+  getRehearsalDraftSession(keptKey, 'base', '').raw = 'retained draft'
   const rehearsalDiscard = vi.fn().mockResolvedValue({
     discarded: ['first'],
     failures: [{ id: 'missing', message: 'identity mismatch' }]
@@ -92,6 +97,8 @@ it('keeps partial discard failures visible and reloads non-selected retained dat
     rehearsalShow: vi.fn().mockResolvedValue(shown(second))
   } as unknown as GitCityApi)
   await useStore.getState().discardRehearsals('/repo', [first, { ...first, id: 'missing' }])
+  expect(getRehearsalDraftSession(removedKey, 'base', '').raw).toBeNull()
+  expect(getRehearsalDraftSession(keptKey, 'base', '').raw).toBe('retained draft')
   expect(rehearsalDiscard).toHaveBeenCalledExactlyOnceWith('/repo', [
     first,
     { ...first, id: 'missing' }

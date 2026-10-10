@@ -3,6 +3,7 @@ import { execFileSync } from 'child_process'
 import { mkdtemp, readFile, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join, resolve } from 'path'
+import { discardFixtureRehearsals } from './rehearsal-fixture-cleanup'
 
 for (const entry of ['merge', 'rebase', 'graph', 'detail', 'interactive'] as const) {
   test(`Automatic routes the existing ${entry} entry to a retained preview`, async () => {
@@ -89,11 +90,7 @@ for (const entry of ['merge', 'rebase', 'graph', 'detail', 'interactive'] as con
       await page.screenshot({ path: `test-results/mode-automatic-${entry}.png` })
     } finally {
       await app.close()
-      const list = JSON.parse(
-        execFileSync(tool, ['--json', 'list'], { cwd: root, encoding: 'utf8' })
-      )
-      for (const item of list.rehearsals)
-        execFileSync(tool, ['--json', 'discard', item.id], { cwd: root })
+      await discardFixtureRehearsals(tool, root)
       await rm(root, { recursive: true, force: true })
       await rm(userData, { recursive: true, force: true })
     }

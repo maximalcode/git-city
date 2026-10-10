@@ -1,9 +1,10 @@
 import RehearsalReportView, { RehearsalDetails } from './RehearsalReportView'
-import RehearsalCityComparison from './RehearsalCityComparison'
 import RehearsalUndo from './RehearsalUndo'
 import RehearsalMode from './RehearsalMode'
 import RehearsalHistory from './RehearsalHistory'
 import RehearsalConflicts from './RehearsalConflicts'
+import RehearsalReviewPanel from './RehearsalReviewPanel'
+import { registerRehearsalNavigationGuard } from './rehearsalNavigation'
 import { useEffect, useRef, useState } from 'react'
 import { useStore } from '../store'
 import { bridge } from '../lib/bridge'
@@ -19,10 +20,14 @@ export default function RehearsalPanel(): React.JSX.Element | null {
   const configured = availability.configured || !!modeSetting
   const available = availability.available
   const [confirmApply, setConfirmApply] = useState<RehearsalReport | null>(null)
+  const [conflictDirty, setConflictDirty] = useState(false)
+  const conflictAbandon = useRef<(() => Promise<boolean>) | null>(null)
+  const conflictPrepare = useRef<(() => Promise<boolean>) | null>(null)
   const applyTrigger = useRef<HTMLButtonElement>(null)
   const wasConfirming = useRef(false)
   const cancelApply = useRef<HTMLButtonElement>(null)
   const [draft, setDraft] = useState({ context: '', value: '' })
+  const lastPanelFocus = useRef<HTMLElement | null>(null)
   const returnFocus = useRef<HTMLElement | null>(null)
   const wasOpen = useRef(false)
   const submit = useRef<HTMLButtonElement>(null)
@@ -79,7 +84,40 @@ export default function RehearsalPanel(): React.JSX.Element | null {
   const openPanel = useStore((s) => s.openRehearsal)
   const close = useStore((s) => s.closeRehearsal)
   const rehearse = useStore((s) => s.rehearse)
+  const guardConflictNavigation = async (action: string): Promise<boolean> => {
+    if (!conflictDirty) {
+      return true
+    }
+    const ready = conflictPrepare.current ? await conflictPrepare.current() : false
+    if (ready) return true
+    if (!window.confirm(`This conflict draft could not be saved. Abandon it and ${action}?`))
+      return false
+    const abandoned = conflictAbandon.current ? await conflictAbandon.current() : false
+    if (!abandoned) return false
+    setConflictDirty(false)
+    return true
+  }
+  const requestClose = async (): Promise<void> => {
+    if (!(await guardConflictNavigation('close the rehearsal panel'))) return
+    close()
+  }
+  const navigationGuard = useRef(guardConflictNavigation)
+  navigationGuard.current = guardConflictNavigation
+  useEffect(() => registerRehearsalNavigationGuard((action) => navigationGuard.current(action)), [])
 
+  useEffect(() => {
+    const clearPanelFocus = (event: Event): void => {
+      const target = event.target
+      if (!(target instanceof Node) || !panel.current?.contains(target))
+        lastPanelFocus.current = null
+    }
+    document.addEventListener('focusin', clearPanelFocus, true)
+    document.addEventListener('pointerdown', clearPanelFocus, true)
+    return () => {
+      document.removeEventListener('focusin', clearPanelFocus, true)
+      document.removeEventListener('pointerdown', clearPanelFocus, true)
+    }
+  }, [])
   useEffect(() => {
     if (blocked) recoveryHeading.current?.focus()
     else if (wasBlocked.current) trigger.current?.focus()
@@ -122,6 +160,7 @@ export default function RehearsalPanel(): React.JSX.Element | null {
       }
       wasOpen.current = true
     } else {
+      lastPanelFocus.current = null
       if (wasOpen.current) {
         if (returnFocus.current?.isConnected) returnFocus.current.focus()
         else trigger.current?.focus()
@@ -136,11 +175,16 @@ export default function RehearsalPanel(): React.JSX.Element | null {
     const changed =
       previousStatus.current.result !== result || previousStatus.current.application !== application
     previousStatus.current = { result, application }
+    const active = document.activeElement
+    const focusWasLost =
+      !!lastPanelFocus.current &&
+      !lastPanelFocus.current.isConnected &&
+      (!active || active === document.body)
     if (
       changed &&
       open &&
-      panel.current?.contains(document.activeElement) &&
-      !document.activeElement?.closest('[aria-label="Undo Apply"]')
+      (panel.current?.contains(active) || focusWasLost) &&
+      !active?.closest('[aria-label="Undo Apply"]')
     )
       status.current?.focus()
   }, [result, application, open, busy])
@@ -214,6 +258,9 @@ export default function RehearsalPanel(): React.JSX.Element | null {
           id="rehearsal-panel"
           className="rehearsal-panel"
           aria-labelledby="rehearsal-title"
+          onFocusCapture={(event) => {
+            lastPanelFocus.current = event.target as HTMLElement
+          }}
           onKeyDown={(event) => {
             event.stopPropagation()
             // Native confirmation dialogs own Escape and their cancel event.
@@ -221,7 +268,7 @@ export default function RehearsalPanel(): React.JSX.Element | null {
             if (event.key === 'Escape' && !event.defaultPrevented) {
               event.preventDefault()
               if (confirming) setConfirmApply(null)
-              else close()
+              else void requestClose()
             }
           }}
         >
@@ -231,7 +278,7 @@ export default function RehearsalPanel(): React.JSX.Element | null {
               <h2 id="rehearsal-title" ref={heading} tabIndex={-1}>
                 Rehearse {interactive ? 'interactive rebase' : action}
               </h2>
-              <button aria-label="Close rehearsal panel" onClick={close}>
+              <button aria-label="Close rehearsal panel" onClick={() => void requestClose()}>
                 ×
               </button>
             </div>
@@ -301,31 +348,42 @@ export default function RehearsalPanel(): React.JSX.Element | null {
                   ⚠ {recovery.message} Recovery controls remain available beside this panel.
                 </p>
               )}
-              {!busy &&
-                (result?.kind === 'report' ? (
+              {result?.kind === 'report' ? (
+                // Keep the frozen review mounted while Refresh re-reads the
+                // retained report. Its inventory/query state must survive the
+                // brief busy interval so selection, scope, and view remain
+                // stable while the new revision arrives.
+                <>
+                  <RehearsalReviewPanel report={result.report} />
                   <RehearsalReportView report={result.report} />
-                ) : (
-                  result && (
-                    <p role="alert">
-                      ⚠{' '}
-                      {result.kind === 'refused'
-                        ? 'Rehearsal refused'
-                        : result.kind === 'unavailable'
-                          ? 'Rehearse unavailable'
-                          : 'Rehearsal error'}
-                      : {result.message}
-                    </p>
-                  )
-                ))}
+                </>
+              ) : (
+                !busy &&
+                result && (
+                  <p role="alert">
+                    ⚠{' '}
+                    {result.kind === 'refused'
+                      ? 'Rehearsal refused'
+                      : result.kind === 'unavailable'
+                        ? 'Rehearse unavailable'
+                        : 'Rehearsal error'}
+                    : {result.message}
+                  </p>
+                )
+              )}
             </div>
-            {open && result?.kind === 'report' && (
-              <RehearsalCityComparison report={result.report} />
-            )}
             {result?.kind === 'report' && result.report.outcome === 'stopped' && (
               <RehearsalConflicts
                 key={`${repo}:${result.report.id}`}
                 report={result.report}
                 blocked={!!blocked}
+                onDirtyStateChange={setConflictDirty}
+                onAbandonAvailable={(abandon) => {
+                  conflictAbandon.current = abandon
+                }}
+                onPrepareNavigationAvailable={(prepare) => {
+                  conflictPrepare.current = prepare
+                }}
               />
             )}
             <details
@@ -386,7 +444,11 @@ export default function RehearsalPanel(): React.JSX.Element | null {
             </details>
             <details className="rehearsal-history">
               <summary>Saved rehearsals{inventory ? ` · ${inventory.entries.length}` : ''}</summary>
-              <RehearsalHistory key={repo} repo={repo} />
+              <RehearsalHistory
+                key={repo}
+                repo={repo}
+                onBeforeSelect={() => guardConflictNavigation('switch rehearsals')}
+              />
             </details>
             <RehearsalUndo key={`undo:${repo}`} repo={repo} blocked={!!blocked} />
             {report && <RehearsalDetails report={report} />}
@@ -412,7 +474,9 @@ export default function RehearsalPanel(): React.JSX.Element | null {
                   {stopping ? 'Stopping…' : 'Stop rehearsal'}
                 </button>
               )}
-              <button onClick={close}>{running ? 'Keep and close' : 'Keep for later'}</button>
+              <button onClick={() => void requestClose()}>
+                {running ? 'Keep and close' : 'Keep for later'}
+              </button>
               {!running && report && (
                 <button
                   className="primary"

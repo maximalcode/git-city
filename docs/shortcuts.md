@@ -57,6 +57,10 @@ Both/Edit, text fields, Save and stage, Refresh sandbox and Continue rehearsal.
 Enter activates buttons; Escape keeps and closes the rehearsal panel. See the
 [Rehearse panel guide](rehearse.md) and [rehearsal](rehearse.md#review-and-resolve).
 
+In the frozen review workspace, Tab reaches the scope selector, file filter,
+changed-file list, Changes/Before/After tabs, city preference and the pane
+divider. Focus the divider and use Left/Right to resize the file list.
+
 In the interactive-rebase rehearsal flow, Tab reaches Move up/down and Pick/Squash/Drop;
 Enter activates them. Rehearse opens the shared side panel with focus on submission,
 and Escape returns to the plan entry.

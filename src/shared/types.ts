@@ -573,6 +573,132 @@ export interface RehearsalComparison {
   notice: string
 }
 
+/** Opaque identity/version values used by the frozen Rehearse review reads. */
+export type RehearsalReviewIdentity = RehearsalIdentity
+export type RehearsalReviewRevision = string
+export type RehearsalReviewCursor = string
+
+export type RehearsalReviewScopeKind = 'tracked-worktree' | 'committed-reference'
+export type RehearsalReviewChange = 'added' | 'modified' | 'deleted' | 'renamed' | 'typechange'
+export type RehearsalReviewAvailability =
+  'available' | 'absent' | 'binary' | 'mode-only' | 'too-large' | 'unavailable'
+
+export interface RehearsalReviewEndpoint {
+  kind: 'commit' | 'empty'
+  commit: string | null
+  provenance: 'original' | 'carried' | 'synthetic-empty'
+}
+
+export interface RehearsalReviewReplay {
+  reference: string
+  changed: string[]
+  dropped: string[]
+  added: string[]
+  compared: boolean
+}
+
+export interface RehearsalReviewScope {
+  scopeId: string
+  kind: RehearsalReviewScopeKind
+  label: string
+  refAliases: string[]
+  before: RehearsalReviewEndpoint | null
+  after: RehearsalReviewEndpoint | null
+  available: boolean
+  unavailableReason?: string
+  replay?: RehearsalReviewReplay
+  renameDetectionLimited?: boolean
+}
+
+export interface RehearsalReviewSide {
+  present: boolean
+  mode: string | null
+  objectId: string | null
+}
+
+export interface RehearsalReviewEntry {
+  entryId: string
+  change: RehearsalReviewChange
+  oldPath: string | null
+  newPath: string | null
+  old: RehearsalReviewSide
+  new: RehearsalReviewSide
+  binary: boolean
+  type: 'text' | 'binary' | 'mode' | 'symlink' | 'gitlink' | 'unknown'
+  /** Rename detection is bounded; limited means complete add/delete identity is retained. */
+  rename?: 'detected' | 'not-detected' | 'limited' | 'not-applicable'
+  text: {
+    changes: RehearsalReviewAvailability
+    before: RehearsalReviewAvailability
+    after: RehearsalReviewAvailability
+  }
+  lines: {
+    before: number | null
+    after: number | null
+    additions: number | null
+    deletions: number | null
+  }
+}
+
+/**
+ * Blob-free identity and path metadata for one frozen changed entry.
+ *
+ * The summary carries this complete map so consumers such as the city can
+ * resolve a rendered path without loading a paged content inventory. Content
+ * availability and line counts remain owned by RehearsalReviewEntry, which is
+ * loaded only for the selected entry.
+ */
+export interface RehearsalReviewEntrySummary {
+  entryId: string
+  change: RehearsalReviewChange
+  oldPath: string | null
+  newPath: string | null
+  old: RehearsalReviewSide
+  new: RehearsalReviewSide
+  rename?: 'detected' | 'not-detected' | 'limited' | 'not-applicable'
+}
+
+export interface RehearsalReviewSummary {
+  identity: RehearsalReviewIdentity
+  reviewRevision: RehearsalReviewRevision
+  toolResultRevision: string | null
+  complete: boolean
+  afterAvailable: boolean
+  afterReason: string | null
+  scopes: RehearsalReviewScope[]
+  defaultScopeId: string | null
+  notices: string[]
+  replayWarnings: RehearsalReviewReplay[]
+  carried: { status: string; paths: string[]; included: boolean; reason?: string } | null
+  /** Complete blob-free changed-entry maps, keyed by scope ID. */
+  changeMap: Record<string, RehearsalReviewEntrySummary[]>
+}
+
+export interface RehearsalReviewFilesResult {
+  identity: RehearsalReviewIdentity
+  reviewRevision: RehearsalReviewRevision
+  scopeId: string
+  entries: RehearsalReviewEntry[]
+  nextCursor: RehearsalReviewCursor | null
+  /** Null means the retained result was incomplete, so no total was established. */
+  total: number | null
+  complete: boolean
+  filter: string | null
+}
+
+export type RehearsalReviewFileView = 'changes' | 'before' | 'after'
+export interface RehearsalReviewFileResult {
+  identity: RehearsalReviewIdentity
+  reviewRevision: RehearsalReviewRevision
+  scopeId: string
+  entryId: string
+  view: RehearsalReviewFileView
+  availability: RehearsalReviewAvailability
+  text: string | null
+  hunks: DiffHunk[]
+  entry: RehearsalReviewEntry
+}
+
 /** Inventory belongs to one canonical original worktree. Byte counts are logical,
  * including shared Git objects; they are not a prediction of freed disk space. */
 export interface RehearsalEntry extends RehearsalIdentity {
@@ -605,8 +731,77 @@ export interface RehearsalDiscardResult {
 
 export interface RehearsalConflict {
   file: ConflictFile
+  /** Original conflict-marker content when the editor was opened. */
+  base_content?: string
   external?: boolean
   revision: string
+}
+
+/** The durable owner of an in-progress conflict editor draft. */
+export interface RehearsalDraftKey {
+  repository: string
+  origin_worktree: string
+  repository_id: string
+  rehearsal_id: string
+  path: string
+}
+
+export type RehearsalDraftMode = 'hunks' | 'whole-file'
+export type RehearsalDraftChoice = 'ours' | 'theirs' | 'both' | 'edit'
+
+/** User editing state only; saving a draft never writes the rehearsal sandbox. */
+export interface RehearsalDraftRecord {
+  schema: 1
+  key: RehearsalDraftKey
+  /** Sandbox revision when this draft was based. It is data, not part of ownership. */
+  base_revision: string
+  /** Content shown when the draft was opened, retained for deliberate reconciliation. */
+  base_content: string
+  mode: RehearsalDraftMode
+  whole_file_text: string | null
+  choices: Record<string, RehearsalDraftChoice>
+  edits: Record<string, string>
+  /** Hunk ids explicitly considered by the user; absent choices stay unreviewed. */
+  acknowledged_hunks: string[]
+  draft_revision: number
+  saved_at_unix: number
+}
+
+export type RehearsalDraftStatus =
+  'absent' | 'saved' | 'pending' | 'error' | 'conflict' | 'obsolete' | 'unknown'
+
+export interface RehearsalDraftReadResult {
+  status: RehearsalDraftStatus
+  record: RehearsalDraftRecord | null
+  message?: string
+}
+
+export interface RehearsalDraftListResult {
+  status: 'saved' | 'unknown'
+  records: RehearsalDraftRecord[]
+  message?: string
+}
+
+export interface RehearsalDraftPayload {
+  base_revision: string
+  base_content: string
+  mode: RehearsalDraftMode
+  whole_file_text: string | null
+  choices: Record<string, RehearsalDraftChoice>
+  edits: Record<string, string>
+  acknowledged_hunks: string[]
+}
+
+export interface RehearsalDraftWriteResult {
+  status: RehearsalDraftStatus
+  record: RehearsalDraftRecord | null
+  message?: string
+}
+
+export interface RehearsalDraftDiscardResult {
+  status: RehearsalDraftStatus
+  draft_revision: number | null
+  message?: string
 }
 
 export type RehearsalResult =
@@ -690,8 +885,36 @@ export interface GitCityApi {
     revision: string,
     text: string | { side: 'ours' | 'theirs' }
   ): Promise<void>
+  rehearsalDraftRead(identity: RehearsalIdentity, path: string): Promise<RehearsalDraftReadResult>
+  rehearsalDraftList(identity: RehearsalIdentity): Promise<RehearsalDraftListResult>
+  rehearsalDraftWrite(
+    identity: RehearsalIdentity,
+    path: string,
+    payload: RehearsalDraftPayload,
+    expectedDraftRevision: number | null
+  ): Promise<RehearsalDraftWriteResult>
+  rehearsalDraftDiscard(
+    identity: RehearsalIdentity,
+    path: string,
+    expectedDraftRevision: number | null
+  ): Promise<RehearsalDraftDiscardResult>
   rehearsalContinue(identity: RehearsalIdentity): Promise<RehearsalResult>
   rehearsalComparison(identity: RehearsalIdentity): Promise<RehearsalComparison>
+  rehearsalReviewSummary(identity: RehearsalReviewIdentity): Promise<RehearsalReviewSummary>
+  rehearsalReviewFiles(
+    identity: RehearsalReviewIdentity,
+    reviewRevision: RehearsalReviewRevision,
+    scopeId: string,
+    cursor?: RehearsalReviewCursor,
+    filter?: string
+  ): Promise<RehearsalReviewFilesResult>
+  rehearsalReviewFile(
+    identity: RehearsalReviewIdentity,
+    reviewRevision: RehearsalReviewRevision,
+    scopeId: string,
+    entryId: string,
+    view: RehearsalReviewFileView
+  ): Promise<RehearsalReviewFileResult>
   rehearsalShow(identity: RehearsalIdentity): Promise<RehearsalResult>
   rehearsalList(repo: string): Promise<RehearsalInventory>
   rehearsalDiscard(repo: string, identities: RehearsalIdentity[]): Promise<RehearsalDiscardResult>

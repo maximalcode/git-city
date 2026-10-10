@@ -176,6 +176,7 @@ export default function SceneView(): React.JSX.Element {
               worldSize={size}
               resolveFocus={resolveFocus}
               maxPolarAngle={Math.PI * 0.47}
+              cacheKey={`live:${useStore.getState().repoPath ?? ''}:${viewMode}`}
             />
 
             {/* Only some modes use AO; its presence changes the composer's child

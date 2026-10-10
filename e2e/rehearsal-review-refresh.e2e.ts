@@ -33,11 +33,18 @@ async function mountReview(page: Page): Promise<void> {
         lines: { before: 1, after: 1, additions: 1, deletions: 1 }
       }
     })
+    const referenceScopeId = 'reference:refs/heads/topic'
+    const referenceEntries = entries.map((entry, index) => ({
+      ...entry,
+      entryId: `topic-entry-${index}`,
+      oldPath: `topic-${entry.oldPath}`,
+      newPath: `topic-${entry.newPath}`
+    }))
     const calls = { summary: 0, files: 0, file: 0 }
     let revision = 'revision-1'
     let unavailable = false
     let delayNextFile = false
-    let delayedFile: ((value: unknown) => void) | null = null
+    let delayedFile: (() => void) | null = null
     const api = {
       rehearsalReviewSummary: async (request: typeof identity) => {
         calls.summary++
@@ -58,13 +65,26 @@ async function mountReview(page: Page): Promise<void> {
               before: { kind: 'commit' as const, commit: 'base', provenance: 'original' as const },
               after: { kind: 'commit' as const, commit: 'after', provenance: 'original' as const },
               available: true
+            },
+            {
+              scopeId: referenceScopeId,
+              kind: 'committed-reference' as const,
+              label: 'topic',
+              refAliases: ['refs/heads/topic'],
+              before: { kind: 'commit' as const, commit: 'base', provenance: 'original' as const },
+              after: {
+                kind: 'commit' as const,
+                commit: 'topic-after',
+                provenance: 'original' as const
+              },
+              available: true
             }
           ],
           defaultScopeId: 'tracked-worktree',
           notices: ['Fixture review'],
           replayWarnings: [],
           carried: null,
-          changeMap: { 'tracked-worktree': [] }
+          changeMap: { 'tracked-worktree': [], [referenceScopeId]: referenceEntries }
         }
       },
       rehearsalReviewFiles: async (
@@ -76,14 +96,15 @@ async function mountReview(page: Page): Promise<void> {
       ) => {
         calls.files++
         const page = cursor ? 1 : 0
-        const pageEntries = entries.slice(page * 200, page * 200 + 200)
+        const sourceEntries = scopeId === referenceScopeId ? referenceEntries : entries
+        const pageEntries = sourceEntries.slice(page * 200, page * 200 + 200)
         return {
           identity: request,
           reviewRevision: requestRevision,
           scopeId,
           entries: pageEntries,
           nextCursor: page === 0 ? 'page-2' : null,
-          total: filter ? pageEntries.length : entries.length,
+          total: filter ? pageEntries.length : sourceEntries.length,
           complete: true,
           filter: filter || null
         }
@@ -96,14 +117,10 @@ async function mountReview(page: Page): Promise<void> {
         view: 'changes' | 'before' | 'after'
       ) => {
         calls.file++
-        const entry = entries.find((candidate) => candidate.entryId === entryId) ?? entries[0]
-        if (delayNextFile) {
-          delayNextFile = false
-          return new Promise((resolve) => {
-            delayedFile = resolve
-          })
-        }
-        return {
+        const sourceEntries = scopeId === referenceScopeId ? referenceEntries : entries
+        const entry =
+          sourceEntries.find((candidate) => candidate.entryId === entryId) ?? sourceEntries[0]
+        const result = {
           identity: request,
           reviewRevision: requestRevision,
           scopeId,
@@ -114,6 +131,11 @@ async function mountReview(page: Page): Promise<void> {
           hunks: [],
           entry
         }
+        if (delayNextFile) {
+          delayNextFile = false
+          return new Promise((resolve) => (delayedFile = () => resolve(result)))
+        }
+        return result
       },
       rehearsalAvailability: async () => ({ available: true, configured: true, message: '' }),
       rehearsalRecovery: async () => ({
@@ -160,10 +182,10 @@ async function mountReview(page: Page): Promise<void> {
       setRevision: (next: string) => (revision = next),
       setUnavailable: (next: boolean) => (unavailable = next),
       delayNextFile: () => (delayNextFile = true),
-      resolveDelayedFile: (value: unknown) => {
+      resolveDelayedFile: () => {
         const resolver = delayedFile
         delayedFile = null
-        resolver?.(value)
+        resolver?.()
       }
     }
   })
@@ -248,7 +270,45 @@ test('late content from an older revision cannot replace the current revision', 
   await expect(review.locator('pre')).toHaveText('file-000.txt:after:revision-2')
   await page.evaluate(() => {
     const state = (window as unknown as { reviewFixture: any }).reviewFixture
-    state.resolveDelayedFile({})
+    state.resolveDelayedFile()
   })
   await expect(review.locator('pre')).toHaveText('file-000.txt:after:revision-2')
+})
+
+test('blocks scope switching while a file is pending, then loads the selected scope', async ({
+  page
+}) => {
+  await mountReview(page)
+  const review = page.getByRole('region', { name: 'Frozen rehearsal review' })
+  const files = review.locator('.rehearsal-review-files')
+  const scope = review.getByRole('combobox', { name: 'Review scope' })
+
+  await expect(scope).toHaveValue('tracked-worktree')
+  await expect(files.getByRole('option')).toHaveCount(200)
+  await expect(review.locator('pre')).toHaveText('file-000.txt:changes:revision-1')
+
+  await page.evaluate(() => {
+    const state = (window as unknown as { reviewFixture: any }).reviewFixture
+    state.delayNextFile()
+  })
+  await files.getByRole('option', { name: /file-001\.txt/ }).click()
+  await expect(scope).toBeDisabled()
+
+  await page.evaluate(() => {
+    const state = (window as unknown as { reviewFixture: any }).reviewFixture
+    state.resolveDelayedFile()
+  })
+  await expect(review.locator('pre')).toHaveText('file-001.txt:changes:revision-1')
+  await expect(scope).toBeEnabled()
+
+  await scope.focus()
+  await expect(scope).toBeFocused()
+  await page.keyboard.press('ArrowDown')
+  await expect(scope).toHaveValue('reference:refs/heads/topic')
+  await expect(files.getByRole('option')).toHaveCount(200)
+  await expect(files.getByRole('option', { name: /topic-file-000\.txt/ })).toHaveAttribute(
+    'aria-selected',
+    'true'
+  )
+  await expect(review.locator('pre')).toHaveText('topic-file-000.txt:changes:revision-1')
 })

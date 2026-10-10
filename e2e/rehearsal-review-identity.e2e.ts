@@ -259,23 +259,42 @@ test('picks a rendered change beyond the first page while a conflicting filter i
       drift_unexpected: false
     }
     const side = { present: true, mode: '100644', objectId: 'a'.repeat(40) }
-    const entries = analysis.paths.map((path, index) => ({
-      entryId: `entry-${index}`,
-      change: 'modified' as const,
-      oldPath: path,
-      newPath: path,
-      old: side,
-      new: side,
-      binary: false,
-      type: 'text' as const,
-      rename: 'not-detected' as const,
-      text: {
-        changes: 'available' as const,
-        before: 'available' as const,
-        after: 'available' as const
-      },
-      lines: { before: 1, after: 1, additions: 1, deletions: 1 }
-    }))
+    const entries = [
+      ...analysis.paths.map((path, index) => ({
+        entryId: `entry-${index}`,
+        change: 'modified' as const,
+        oldPath: path,
+        newPath: path,
+        old: side,
+        new: side,
+        binary: false,
+        type: 'text' as const,
+        rename: 'not-detected' as const,
+        text: {
+          changes: 'available' as const,
+          before: 'available' as const,
+          after: 'available' as const
+        },
+        lines: { before: 1, after: 1, additions: 1, deletions: 1 }
+      })),
+      {
+        entryId: 'entry-outside-drawn-cap',
+        change: 'modified' as const,
+        oldPath: 'outside-drawn-cap.txt',
+        newPath: 'outside-drawn-cap.txt',
+        old: side,
+        new: side,
+        binary: false,
+        type: 'text' as const,
+        rename: 'not-detected' as const,
+        text: {
+          changes: 'available' as const,
+          before: 'available' as const,
+          after: 'available' as const
+        },
+        lines: { before: 1, after: 1, additions: 1, deletions: 1 }
+      }
+    ]
     const summary = {
       identity,
       reviewRevision: 'r6-revision',
@@ -418,6 +437,7 @@ test('picks a rendered change beyond the first page while a conflicting filter i
     return probe.__gitCitySceneCanvas === document.querySelector('.rehearsal-city canvas')
   })
   await expect(page.locator('canvas:not(.minimap canvas)')).toHaveCount(1)
+  await expect(city.getByRole('button', { name: 'Before', exact: true })).toBeFocused()
   const point = await page.evaluate((path) => {
     const probe = window as unknown as {
       __gitCityScene?: { getObjectByName(name: string): any }
@@ -448,6 +468,33 @@ test('picks a rendered change beyond the first page while a conflicting filter i
   await expect(selected).toBeVisible()
   await expect(selected).toHaveAttribute('aria-selected', 'true')
   await expect(review.locator('pre')).toHaveText(`${targetPath}\n`)
+
+  const outsidePath = 'outside-drawn-cap.txt'
+  await review.getByRole('textbox', { name: 'Filter files' }).fill(outsidePath)
+  await review.getByRole('textbox', { name: 'Filter files' }).press('Enter')
+  const outside = files.getByRole('option').filter({ hasText: outsidePath })
+  await expect(outside).toBeVisible()
+  await outside.click()
+  await expect(
+    city.getByText(
+      'City context is unavailable for this file; frozen text review remains available.',
+      {
+        exact: true
+      }
+    )
+  ).toBeVisible()
+  await expect(review.locator('pre')).toHaveText(`${outsidePath}\n`)
+  const endpoint = city.getByRole('group', { name: 'Rehearsal city endpoint' })
+  await expect(endpoint.getByRole('button', { name: 'Before', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true'
+  )
+  await expect(endpoint.getByRole('button', { name: 'After', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'false'
+  )
+  await city.getByRole('button', { name: 'Return to live city' }).click()
+  await expect(city.getByRole('button', { name: 'Compare city', exact: true })).toBeFocused()
 })
 
 test('blocks repository exit until the draft guard settles and preserves a canceled failure', async ({

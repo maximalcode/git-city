@@ -40,7 +40,7 @@ The additional verification seams are:
 | Frozen objects, exact Git hunks, complete paged scopes and honest unavailable content | `src/main/rehearsalReview.git.test.ts`, `src/main/rehearsalReview.contract.test.ts`, `e2e/rehearsal-review.electron.ts`, `e2e/rehearsal-review-scopes.e2e.ts` |
 | Identity/refresh races, retained selection and visible errors | `e2e/rehearsal-review-identity.e2e.ts`, `e2e/rehearsal-review-refresh.e2e.ts` |
 | Real building picks beyond a page/filter, endpoint-aware rename paths, one scene and restored live context | `e2e/rehearsal-review-identity.e2e.ts`, `e2e/rehearsal-review.electron.ts`, `src/renderer/src/city/rehearsalMarkers.test.ts` |
-| Keyboard selection/resizing at 960×700 and 1280×800, reduced motion and existing mode switching | `e2e/rehearsal-review-scopes.e2e.ts`, `e2e/rehearsal-review.electron.ts`, `e2e/mode-switch.e2e.ts`, `e2e/rehearsal-panel-focus.e2e.ts` |
+| Keyboard selection/resizing at 960×700 and 1280×800, reduced motion and existing mode switching | `e2e/rehearsal-review-scopes.e2e.ts`, `e2e/rehearsal-review.electron.ts`, `e2e/mode-switch.e2e.ts`, `e2e/rehearsal-panel-focus.e2e.ts`, `e2e/rehearsal-review-focus.e2e.ts` |
 
 The complete acceptance scenarios and remaining cross-repository gate are in the
 [approved execution runbook](plans/rehearse-review/runbook.md#acceptance-evidence-matrix).

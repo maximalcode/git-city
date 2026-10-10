@@ -303,7 +303,8 @@ test('blocks scope switching while a file is pending, then loads the selected sc
 
   await scope.focus()
   await expect(scope).toBeFocused()
-  await page.keyboard.press('ArrowDown')
+  // Native select type-ahead chooses the topic scope using the keyboard.
+  await page.keyboard.press('t')
   await expect(scope).toHaveValue('reference:refs/heads/topic')
   await expect(files.getByRole('option')).toHaveCount(200)
   await expect(files.getByRole('option', { name: /topic-file-000\.txt/ })).toHaveAttribute(

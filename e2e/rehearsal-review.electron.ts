@@ -202,7 +202,7 @@ test('reviews immutable Changes, Before and After content for same-line, added a
     await expect(city.getByRole('button', { name: 'Before', exact: true })).toBeVisible()
     await expect(page.locator('canvas:not(.minimap canvas)')).toHaveCount(1)
     await expect(city.getByLabel('Review change markers')).toContainText('Modified')
-    await expect(city.getByLabel('Review change markers')).toContainText('Added')
+    await expect(city.getByLabel('Review change markers')).not.toContainText('Added')
     await expect(city.getByLabel('Review change markers')).toContainText('Deleted')
     await expect(city.getByLabel('Review change markers')).toContainText('Renamed')
     // Wait for the actual comparison surface, not a stale probe from the live
@@ -281,6 +281,8 @@ test('reviews immutable Changes, Before and After content for same-line, added a
     await expect(city.getByText(/absent from the Before endpoint/)).toBeVisible()
     await city.getByRole('button', { name: 'After', exact: true }).click()
     await expect(city.getByText(/absent from the Before endpoint/)).toHaveCount(0)
+    await expect(city.getByLabel('Review change markers')).toContainText('Added')
+    await expect(city.getByLabel('Review change markers')).not.toContainText('Deleted')
     await app.evaluate(({ app, BrowserWindow }) => {
       app.focus({ steal: true })
       BrowserWindow.getAllWindows()[0]?.focus()

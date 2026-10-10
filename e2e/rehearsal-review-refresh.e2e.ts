@@ -63,7 +63,8 @@ async function mountReview(page: Page): Promise<void> {
           defaultScopeId: 'tracked-worktree',
           notices: ['Fixture review'],
           replayWarnings: [],
-          carried: null
+          carried: null,
+          changeMap: { 'tracked-worktree': [] }
         }
       },
       rehearsalReviewFiles: async (

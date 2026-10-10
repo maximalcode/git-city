@@ -133,7 +133,9 @@ for (const conflict of [false, true]) {
       }).trim()
       await page.keyboard.press('Escape')
       await expect(page.locator('.rehearsal-panel')).toBeHidden()
-      await expect(page.getByRole('button', { name: 'Rehearse panel' })).toBeFocused()
+      await expect(
+        conflict ? entry : page.getByRole('button', { name: 'Rehearse panel' })
+      ).toBeFocused()
       await page.getByRole('button', { name: 'Rehearse panel' }).click()
       await page.getByRole('button', { name: 'Apply', exact: true }).focus()
       await page.keyboard.press('Enter')

@@ -4,6 +4,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join, resolve } from 'path'
 import { expandRehearsal } from './rehearsal-ui'
+import type { InstancedMesh, PerspectiveCamera, Scene } from 'three'
 
 test('reviews immutable Changes, Before and After content for same-line, added and deleted files', async () => {
   const tool = process.env.GIT_CITY_REHEARSE_BIN!
@@ -18,16 +19,28 @@ test('reviews immutable Changes, Before and After content for same-line, added a
   git('config', 'commit.gpgSign', 'false')
   // The review must classify retained bytes itself; mutable attributes must not
   // turn valid UTF-8 content into an unavailable or filtered response.
-  await writeFile(join(repo, '.gitattributes'), '*.txt binary\n')
+  await writeFile(join(repo, '.gitattributes'), 'same.txt binary\n')
   await writeFile(join(repo, 'same.txt'), 'before\n')
   await writeFile(join(repo, 'deleted.txt'), 'kept before\n')
+  await writeFile(
+    join(repo, 'old-name.txt'),
+    'rename before\nkeep\nstable\none\ntwo\nthree\nfour\nfive\n'
+  )
   await writeFile(join(repo, 'carried.txt'), 'carried before\n')
   git('add', '.')
   git('commit', '-m', 'base')
   git('checkout', '-b', 'topic')
   await writeFile(join(repo, 'same.txt'), 'after\n')
   await writeFile(join(repo, 'added.txt'), 'new file\n')
+  git('mv', 'old-name.txt', 'new-name.txt')
+  await writeFile(
+    join(repo, 'new-name.txt'),
+    'rename after\nkeep\nstable\none\ntwo\nthree\nfour\nfive\n'
+  )
   await rm(join(repo, 'deleted.txt'))
+  for (let index = 0; index < 32; index++) {
+    await writeFile(join(repo, `extra-${String(index).padStart(2, '0')}.txt`), `extra ${index}\n`)
+  }
   git('add', '-A')
   git('commit', '-m', 'review changes')
   git('checkout', 'main')
@@ -47,8 +60,22 @@ test('reviews immutable Changes, Before and After content for same-line, added a
     }, repo)
     const page = await app.firstWindow()
     await page.setViewportSize({ width: 960, height: 700 })
+    await expect(page.getByRole('button', { name: 'Open a local repository…' })).toBeVisible({
+      timeout: 90_000
+    })
     await page.getByRole('button', { name: 'Open a local repository…' }).click()
     await page.getByRole('button', { name: 'Got it', exact: true }).click()
+    await page.getByRole('button', { name: 'Settings' }).click()
+    await page
+      .locator('label.settings-row.toggle')
+      .filter({ hasText: 'Reduce motion' })
+      .getByRole('checkbox')
+      .check({ force: true })
+    await page.getByRole('button', { name: 'Close' }).click()
+    await page.keyboard.press('ControlOrMeta+k')
+    await page.getByLabel('Command palette', { exact: true }).fill('carried.txt')
+    await page.getByLabel('Command palette', { exact: true }).press('Enter')
+    await expect(page.locator('.details .path')).toHaveText('carried.txt')
     await page.getByRole('button', { name: 'Rehearse panel' }).click()
     await expandRehearsal(page, /Rehearse again|Choose rehearsal target/)
     await page.getByLabel('Branch or commit to merge into the current checkout').fill('topic')
@@ -66,12 +93,27 @@ test('reviews immutable Changes, Before and After content for same-line, added a
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)
     ).toBe(true)
-    await expect(review.getByText('3 changed files', { exact: true })).toBeVisible()
+    await expect(review.getByText(/changed files$/, { exact: false })).toBeVisible()
+    const fileList = review.locator('.rehearsal-review-files')
+    expect(await fileList.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(
+      true
+    )
+    const lastFile = review.getByRole('option').filter({ hasText: 'extra-31.txt' })
+    await expect(lastFile).toHaveCount(1)
+    await lastFile.scrollIntoViewIfNeeded()
+    await expect(lastFile).toBeVisible()
+    await expect(lastFile).toBeEnabled()
+    await lastFile.click()
+    await review.getByRole('tab', { name: 'After', exact: true }).click()
+    await expect(review.locator('pre')).toHaveText('extra 31\n')
     const same = review.getByRole('option').filter({ hasText: 'same.txt' })
     await expect(same).toContainText('Modified')
     await expect(review.getByRole('option').filter({ hasText: 'added.txt' })).toContainText('Added')
     await expect(review.getByRole('option').filter({ hasText: 'deleted.txt' })).toContainText(
       'Deleted'
+    )
+    await expect(review.getByRole('option').filter({ hasText: 'old-name.txt' })).toContainText(
+      'Renamed'
     )
 
     const selected = await page.evaluate((path) => window.gitCity.rehearsalList(path), repo)
@@ -101,13 +143,15 @@ test('reviews immutable Changes, Before and After content for same-line, added a
         addedBefore: await read('added.txt', 'before'),
         addedAfter: await read('added.txt', 'after'),
         deletedBefore: await read('deleted.txt', 'before'),
-        deletedAfter: await read('deleted.txt', 'after')
+        deletedAfter: await read('deleted.txt', 'after'),
+        renamedBefore: await read('new-name.txt', 'before'),
+        renamedAfter: await read('new-name.txt', 'after')
       }
     }, identity)
     expect(bridgeReview.summary.scopes.map((scope) => scope.scopeId)).toContain('tracked-worktree')
     expect(bridgeReview.summary.carried?.included).toBe(true)
     expect(bridgeReview.files.complete).toBe(true)
-    expect(bridgeReview.files.total).toBe(3)
+    expect(bridgeReview.files.total).toBe(36)
     expect(bridgeReview.addedBefore).toMatchObject({ availability: 'absent', text: null })
     expect(bridgeReview.addedAfter).toMatchObject({ availability: 'available', text: 'new file\n' })
     expect(bridgeReview.deletedBefore).toMatchObject({
@@ -115,6 +159,14 @@ test('reviews immutable Changes, Before and After content for same-line, added a
       text: 'kept before\n'
     })
     expect(bridgeReview.deletedAfter).toMatchObject({ availability: 'absent', text: null })
+    expect(bridgeReview.renamedBefore).toMatchObject({
+      availability: 'available',
+      text: 'rename before\nkeep\nstable\none\ntwo\nthree\nfour\nfive\n'
+    })
+    expect(bridgeReview.renamedAfter).toMatchObject({
+      availability: 'available',
+      text: 'rename after\nkeep\nstable\none\ntwo\nthree\nfour\nfive\n'
+    })
 
     await same.click()
     await expect(review.getByRole('tab', { name: 'Changes', exact: true })).toHaveAttribute(
@@ -136,6 +188,125 @@ test('reviews immutable Changes, Before and After content for same-line, added a
     await review.getByRole('tab', { name: 'After', exact: true }).click()
     await expect(review.locator('pre')).toHaveText('new file\n')
 
+    // R6: the optional city is the same review context. Its status markers are
+    // textual and shape/color differentiated in the scene, while endpoint
+    // absence remains explicit in the selected file review.
+    await review.getByRole('button', { name: 'Show city context', exact: true }).click()
+    const city = review.getByRole('region', { name: 'Rehearsal city comparison' })
+    await expect(city.getByRole('button', { name: 'Compare city', exact: true })).toBeVisible()
+    const liveCamera = await page.evaluate(() =>
+      (window as unknown as { __gitCityCam: PerspectiveCamera }).__gitCityCam.position.toArray()
+    )
+    await city.getByRole('button', { name: 'Compare city', exact: true }).click()
+    await expect(page.locator('.details')).toHaveCount(0)
+    await expect(city.getByRole('button', { name: 'Before', exact: true })).toBeVisible()
+    await expect(page.locator('canvas:not(.minimap canvas)')).toHaveCount(1)
+    await expect(city.getByLabel('Review change markers')).toContainText('Modified')
+    await expect(city.getByLabel('Review change markers')).not.toContainText('Added')
+    await expect(city.getByLabel('Review change markers')).toContainText('Deleted')
+    await expect(city.getByLabel('Review change markers')).toContainText('Renamed')
+    // Wait for the actual comparison surface, not a stale probe from the live
+    // canvas which has just unmounted. Selection below still uses a real click.
+    await page.waitForFunction(() => {
+      const probe = window as unknown as { __gitCitySceneCanvas?: HTMLCanvasElement }
+      return probe.__gitCitySceneCanvas === document.querySelector('.rehearsal-city canvas')
+    })
+    const projectBuilding = () =>
+      page.evaluate(() => {
+        const probe = window as unknown as {
+          __gitCityScene?: Scene
+          __gitCityCam?: PerspectiveCamera
+          __gitCitySceneCanvas?: HTMLCanvasElement
+        }
+        const mesh = probe.__gitCityScene?.getObjectByName('file-buildings') as
+          InstancedMesh | undefined
+        const camera = probe.__gitCityCam
+        const canvas = probe.__gitCitySceneCanvas
+        if (!mesh?.isInstancedMesh || !camera || !canvas)
+          throw new Error('Comparison scene missing')
+        const index = (mesh.userData.filePaths as string[]).indexOf('same.txt')
+        if (index < 0) throw new Error('same.txt has no rendered building')
+        const offset = index * 16
+        const elements = mesh.instanceMatrix.array
+        const scaleY = Math.hypot(elements[offset + 1], elements[offset + 5], elements[offset + 9])
+        const point = camera.position
+          .clone()
+          .set(elements[offset + 12], elements[offset + 13] + scaleY * 0.45, elements[offset + 14])
+        point.applyMatrix4(mesh.matrixWorld).project(camera)
+        const rect = canvas.getBoundingClientRect()
+        return {
+          x: rect.left + ((point.x + 1) / 2) * rect.width,
+          y: rect.top + ((1 - point.y) / 2) * rect.height,
+          left: rect.left,
+          right: rect.right,
+          top: rect.top,
+          bottom: rect.bottom
+        }
+      })
+    const buildingPoint = await projectBuilding()
+    expect(buildingPoint.x).toBeGreaterThan(buildingPoint.left)
+    expect(buildingPoint.x).toBeLessThan(buildingPoint.right)
+    expect(buildingPoint.y).toBeGreaterThan(buildingPoint.top)
+    expect(buildingPoint.y).toBeLessThan(buildingPoint.bottom)
+    await page.mouse.click(buildingPoint.x, buildingPoint.y)
+    await expect(same).toHaveAttribute('aria-selected', 'true')
+    const focusMotion = await page.evaluate(async () => {
+      const frame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+      await frame()
+      const camera = (window as unknown as { __gitCityCam: PerspectiveCamera }).__gitCityCam
+      const first = camera.position.clone()
+      let maximum = 0
+      for (let index = 0; index < 8; index++) {
+        await frame()
+        maximum = Math.max(maximum, first.distanceTo(camera.position))
+      }
+      return maximum
+    })
+    expect(focusMotion, 'Reduce motion must not animate the selected review focus').toBeLessThan(
+      0.01
+    )
+    const focusedPoint = await projectBuilding()
+    await page.mouse.dblclick(focusedPoint.x, focusedPoint.y)
+    await expect(same).toHaveAttribute('aria-selected', 'true')
+    await expect(page.locator('.diff-panel')).toHaveCount(0)
+
+    await expect(review.getByRole('tab', { name: 'Changes', exact: true })).toHaveAttribute(
+      'aria-selected',
+      'true'
+    )
+    await expect(review.locator('.diff-del')).toContainText('before')
+    await expect(review.locator('.diff-add')).toContainText('after')
+    await added.click()
+    await city.getByRole('button', { name: 'Before', exact: true }).click()
+    await expect(city.getByText(/absent from the Before endpoint/)).toBeVisible()
+    await city.getByRole('button', { name: 'After', exact: true }).click()
+    await expect(city.getByText(/absent from the Before endpoint/)).toHaveCount(0)
+    await expect(city.getByLabel('Review change markers')).toContainText('Added')
+    await expect(city.getByLabel('Review change markers')).not.toContainText('Deleted')
+    await app.evaluate(({ app, BrowserWindow }) => {
+      app.focus({ steal: true })
+      BrowserWindow.getAllWindows()[0]?.focus()
+    })
+    await page.screenshot({
+      path: 'test-results/rehearsal-review-city-960x700.png',
+      timeout: 90_000
+    })
+
+    const renamed = review.getByRole('option').filter({ hasText: 'old-name.txt' })
+    await renamed.click()
+    await review.getByRole('tab', { name: 'Before', exact: true }).click()
+    await expect(review.locator('pre')).toHaveText(
+      'rename before\nkeep\nstable\none\ntwo\nthree\nfour\nfive\n'
+    )
+    await city.getByRole('button', { name: 'Before', exact: true }).click()
+    await expect(city.getByText(/absent from the/)).toHaveCount(0)
+    await city.getByRole('button', { name: 'After', exact: true }).click()
+    await review.getByRole('tab', { name: 'After', exact: true }).click()
+    await expect(review.locator('pre')).toHaveText(
+      'rename after\nkeep\nstable\none\ntwo\nthree\nfour\nfive\n'
+    )
+    await expect(city.getByText(/absent from the/)).toHaveCount(0)
+
     const deleted = review.getByRole('option').filter({ hasText: 'deleted.txt' })
     await deleted.click()
     await review.getByRole('tab', { name: 'Before', exact: true }).click()
@@ -144,6 +315,18 @@ test('reviews immutable Changes, Before and After content for same-line, added a
     await expect(review.locator('pre')).toHaveCount(0)
     await expect(review.getByText('This side is absent.', { exact: true })).toBeVisible()
 
+    await city.getByRole('button', { name: 'Return to live city', exact: true }).click()
+    await expect(page.locator('.details .path')).toHaveText('carried.txt')
+    await page.waitForFunction(() => {
+      const canvas = (window as unknown as { __gitCitySceneCanvas?: HTMLCanvasElement })
+        .__gitCitySceneCanvas
+      return canvas?.isConnected && !canvas.closest('.rehearsal-city')
+    })
+    const restoredCamera = await page.evaluate(() =>
+      (window as unknown as { __gitCityCam: PerspectiveCamera }).__gitCityCam.position.toArray()
+    )
+    for (let axis = 0; axis < 3; axis++)
+      expect(restoredCamera[axis]).toBeCloseTo(liveCamera[axis], 4)
     const entry = identity
     const shown = await page.evaluate(
       async ({ path, id }) => {
@@ -181,8 +364,14 @@ test('reviews immutable Changes, Before and After content for same-line, added a
       const inventory = JSON.parse(
         execFileSync(tool, ['--json', 'list'], { cwd: repo, encoding: 'utf8' })
       )
-      for (const item of inventory.rehearsals)
-        execFileSync(tool, ['--json', 'discard', item.id], { cwd: repo })
+      for (const item of inventory.rehearsals) {
+        try {
+          execFileSync(tool, ['--json', 'discard', item.id], { cwd: repo })
+        } catch {
+          // The pinned tool may finish its final cleanup just after Electron
+          // exits; this isolated temporary repository can then be removed.
+        }
+      }
     } finally {
       await rm(repo, { recursive: true, force: true })
       await rm(userData, { recursive: true, force: true })

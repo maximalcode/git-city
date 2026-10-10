@@ -94,6 +94,40 @@ it('returns a revision-bound complete scope and inventory without using a path s
   expect(files.entries[0].entryId).not.toBe(files.entries[0].newPath)
 })
 
+it('publishes a complete blob-free change map and resolves an entry beyond the first page', async () => {
+  const manyRaw = Array.from(
+    { length: 201 },
+    (_, index) => `:100644 100644 ${oldObject} ${newObject} M\0src/file-${index}.ts\0`
+  ).join('')
+  vi.mocked(runGit).mockImplementation(async (_root, args) => {
+    if (args.includes('--path-format=absolute')) return '/sandbox/.git'
+    if (args.includes('diff-tree')) return manyRaw
+    if (args[1] === 'cat-file' && args[2] === '-s') return '5'
+    return ''
+  })
+  vi.mocked(runGitBufferBounded).mockImplementation(async (_root, args) => ({
+    kind: 'ok',
+    bytes: Buffer.from(args.includes('diff-tree') ? manyRaw : '@@ -1 +1 @@\n-old\n+new\n')
+  }))
+
+  const summary = await rehearsalReviewSummary('/tool', identity)
+  const map = summary.changeMap['tracked-worktree']
+  expect(map).toHaveLength(201)
+  expect(vi.mocked(runGitBuffer)).not.toHaveBeenCalled()
+
+  const last = map[200]
+  const result = await rehearsalReviewFile(
+    '/tool',
+    identity,
+    summary.reviewRevision,
+    'tracked-worktree',
+    last.entryId,
+    'changes'
+  )
+  expect(result.entry.entryId).toBe(last.entryId)
+  expect(result.entry.newPath).toBe('src/file-200.ts')
+})
+
 it('reads before, after and changes from immutable object IDs and rejects stale revisions', async () => {
   const summary = await rehearsalReviewSummary('/tool', identity)
   const files = await rehearsalReviewFiles(
@@ -225,6 +259,7 @@ it('leaves the incomplete inventory total unknown instead of claiming zero', asy
     report: { ...report, outcome: 'incomplete', conflicted: true }
   })
   const summary = await rehearsalReviewSummary('/tool', identity)
+  expect(summary.changeMap['tracked-worktree']).toEqual([])
   const files = await rehearsalReviewFiles(
     '/tool',
     identity,

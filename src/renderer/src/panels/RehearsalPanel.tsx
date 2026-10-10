@@ -1,5 +1,4 @@
 import RehearsalReportView, { RehearsalDetails } from './RehearsalReportView'
-import RehearsalCityComparison from './RehearsalCityComparison'
 import RehearsalUndo from './RehearsalUndo'
 import RehearsalMode from './RehearsalMode'
 import RehearsalHistory from './RehearsalHistory'
@@ -326,29 +325,30 @@ export default function RehearsalPanel(): React.JSX.Element | null {
                   ⚠ {recovery.message} Recovery controls remain available beside this panel.
                 </p>
               )}
-              {!busy &&
-                (result?.kind === 'report' ? (
-                  <>
-                    <RehearsalReviewPanel report={result.report} />
-                    <RehearsalReportView report={result.report} />
-                  </>
-                ) : (
-                  result && (
-                    <p role="alert">
-                      ⚠{' '}
-                      {result.kind === 'refused'
-                        ? 'Rehearsal refused'
-                        : result.kind === 'unavailable'
-                          ? 'Rehearse unavailable'
-                          : 'Rehearsal error'}
-                      : {result.message}
-                    </p>
-                  )
-                ))}
+              {result?.kind === 'report' ? (
+                // Keep the frozen review mounted while Refresh re-reads the
+                // retained report. Its inventory/query state must survive the
+                // brief busy interval so selection, scope, and view remain
+                // stable while the new revision arrives.
+                <>
+                  <RehearsalReviewPanel report={result.report} />
+                  <RehearsalReportView report={result.report} />
+                </>
+              ) : (
+                !busy &&
+                result && (
+                  <p role="alert">
+                    ⚠{' '}
+                    {result.kind === 'refused'
+                      ? 'Rehearsal refused'
+                      : result.kind === 'unavailable'
+                        ? 'Rehearse unavailable'
+                        : 'Rehearsal error'}
+                    : {result.message}
+                  </p>
+                )
+              )}
             </div>
-            {open && result?.kind === 'report' && (
-              <RehearsalCityComparison report={result.report} />
-            )}
             {result?.kind === 'report' && result.report.outcome === 'stopped' && (
               <RehearsalConflicts
                 key={`${repo}:${result.report.id}`}

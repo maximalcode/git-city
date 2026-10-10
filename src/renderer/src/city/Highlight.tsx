@@ -12,14 +12,20 @@ import type { HeightSource, PlotSource } from './plots'
 export default function Highlight({
   model,
   targets,
-  floor = 0
+  floor = 0,
+  selectedPath
 }: {
   model: PlotSource
   targets: HeightSource
   floor?: number
+  selectedPath?: string | null
 }): React.JSX.Element | null {
-  const hovered = useStore((s) => s.hovered)
-  const selected = useStore((s) => s.selected)
+  const liveHovered = useStore((s) => s.hovered)
+  // A frozen review scene has its own selection context. Do not let a live
+  // scene hover leak into it while the user compares endpoints.
+  const hovered = selectedPath === undefined ? liveHovered : null
+  const liveSelected = useStore((s) => s.selected)
+  const selected = selectedPath === undefined ? liveSelected : selectedPath
 
   return (
     <>

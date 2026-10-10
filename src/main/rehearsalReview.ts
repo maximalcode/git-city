@@ -8,6 +8,7 @@ import type {
   RehearsalReport,
   RehearsalReviewAvailability,
   RehearsalReviewEntry,
+  RehearsalReviewEntrySummary,
   RehearsalReviewFileResult,
   RehearsalReviewFileView,
   RehearsalReviewFilesResult,
@@ -307,6 +308,41 @@ function entryIdFor(scopeId: string, raw: RawEntry): string {
     .digest('hex')
 }
 
+/** Build the public change map without inspecting either blob. */
+function entrySummary(
+  scopeId: string,
+  raw: RawEntry,
+  renameDetectionLimited: boolean
+): RehearsalReviewEntrySummary {
+  const change =
+    raw.status[0] === 'A'
+      ? 'added'
+      : raw.status[0] === 'D'
+        ? 'deleted'
+        : raw.status.startsWith('R') || raw.status.startsWith('C')
+          ? 'renamed'
+          : raw.oldMode !== raw.newMode && raw.oldId === raw.newId
+            ? 'typechange'
+            : 'modified'
+  const rename =
+    raw.status.startsWith('R') || raw.status.startsWith('C')
+      ? 'detected'
+      : raw.status[0] === 'A' || raw.status[0] === 'D'
+        ? renameDetectionLimited
+          ? 'limited'
+          : 'not-applicable'
+        : 'not-detected'
+  return {
+    entryId: entryIdFor(scopeId, raw),
+    change,
+    oldPath: raw.oldPath,
+    newPath: raw.newPath,
+    old: side(raw.oldMode, raw.oldId),
+    new: side(raw.newMode, raw.newId),
+    rename
+  }
+}
+
 function patchSize(hunks: DiffHunk[]): number {
   return hunks.reduce(
     (size, hunk) =>
@@ -432,7 +468,7 @@ async function makeEntry(
         : oldContent !== null || newContent !== null
           ? 'available'
           : 'unavailable'
-  const key = entryIdFor(scopeId, raw)
+  const metadata = entrySummary(scopeId, raw, renameDetectionLimited)
   let diff: FrozenDiff | null = null
   if (includeDiff && !binary && !modeOnly) {
     if (!old.present && newContent !== null) diff = absentSideDiff(null, newContent)
@@ -445,34 +481,12 @@ async function makeEntry(
     }
   }
   const changes = diff?.tooLarge ? 'too-large' : diff?.unavailable ? 'unavailable' : baseChanges
-  const change =
-    raw.status[0] === 'A'
-      ? 'added'
-      : raw.status[0] === 'D'
-        ? 'deleted'
-        : raw.status.startsWith('R') || raw.status.startsWith('C')
-          ? 'renamed'
-          : raw.oldMode !== raw.newMode && raw.oldId === raw.newId
-            ? 'typechange'
-            : 'modified'
-  const rename =
-    raw.status.startsWith('R') || raw.status.startsWith('C')
-      ? 'detected'
-      : raw.status[0] === 'A' || raw.status[0] === 'D'
-        ? renameDetectionLimited
-          ? 'limited'
-          : 'not-applicable'
-        : 'not-detected'
   return {
-    entryId: key,
-    change,
-    oldPath: raw.oldPath,
-    newPath: raw.newPath,
+    ...metadata,
     old,
     new: newer,
     binary,
     type,
-    rename,
     text: { changes, before: oldAvailable, after: newAvailable },
     lines: {
       before: oldContent !== null ? linesOf(oldContent) : null,
@@ -746,7 +760,17 @@ export async function rehearsalReviewSummary(
               data.report.carried.conflicts.length === 0,
             reason: data.report.carried.reason
           }
-        : null
+        : null,
+      changeMap: Object.fromEntries(
+        [...data.scopes.values()].map((item) => [
+          item.scope.scopeId,
+          data.report.outcome === 'clean' && item.scope.after !== null && item.scope.available
+            ? item.entries.map((raw) =>
+                entrySummary(item.scope.scopeId, raw, item.scope.renameDetectionLimited ?? false)
+              )
+            : []
+        ])
+      )
     }
   })
 }

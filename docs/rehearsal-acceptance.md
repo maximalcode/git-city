@@ -6,6 +6,41 @@ Test coverage below identifies where to verify each requirement; it is not itsel
 evidence that a run passed. Public activation requires completed local checks,
 real-tool integration, Electron keyboard flows, and all four packaged targets.
 
+## Connected review work (#195)
+
+The independent R1–R6 implementation adds durable conflict drafts, explicit
+resolution decisions, frozen content review, reference scopes, keyboard pane
+controls, and linked city selection. Its integration baseline is
+`8e1988bcb441cd184150b031e321e79d4152d5e3`. The activation results below belong
+to earlier revisions; they are not acceptance of this new workspace. Current
+commands, tested revision, screenshots and outcomes belong to the implementation
+PR's validation record.
+
+**Complete #195 acceptance remains pending.** R7/#200 requires the compatible
+published tool from [git-rehearse #119](https://github.com/maximalcode/git-rehearse/issues/119).
+The conditional Apply contract is implemented separately in
+[git-rehearse PR #120](https://github.com/maximalcode/git-rehearse/pull/120),
+but an unmerged PR and its build artifacts are not the required tool release.
+The current Git City bundle remains v1.3.0. Passing its existing Apply, Undo and
+package checks does not establish strict binding to an expected result revision.
+No merge or release is included in this partial implementation.
+
+The additional verification seams are:
+
+| Requirement | Verification source |
+| --- | --- |
+| Durable drafts, obsolete bases, atomic records and save recovery | `src/main/rehearsalDrafts.test.ts`, `src/main/rehearsalConflicts.test.ts`, `e2e/rehearsal-conflicts.electron.ts`, `e2e/rehearsal-draft-safety.e2e.ts` |
+| Deliberate hunk and whole-file decisions, including restart | `e2e/rehearsal-decisions.electron.ts`, `e2e/rehearsal-interactive.electron.ts` |
+| Frozen objects, exact Git hunks, complete paged scopes and honest unavailable content | `src/main/rehearsalReview.git.test.ts`, `src/main/rehearsalReview.contract.test.ts`, `e2e/rehearsal-review.electron.ts`, `e2e/rehearsal-review-scopes.e2e.ts` |
+| Identity/refresh races, retained selection and visible errors | `e2e/rehearsal-review-identity.e2e.ts`, `e2e/rehearsal-review-refresh.e2e.ts` |
+| Real building picks beyond a page/filter, endpoint-aware rename paths, one scene and restored live context | `e2e/rehearsal-review-identity.e2e.ts`, `e2e/rehearsal-review.electron.ts`, `src/renderer/src/city/rehearsalMarkers.test.ts` |
+| Keyboard selection/resizing at 960×700 and 1280×800, reduced motion and existing mode switching | `e2e/rehearsal-review-scopes.e2e.ts`, `e2e/rehearsal-review.electron.ts`, `e2e/mode-switch.e2e.ts` |
+
+The complete acceptance scenarios and remaining cross-repository gate are in the
+[approved execution runbook](plans/rehearse-review/runbook.md#acceptance-evidence-matrix).
+A test file identifies coverage intent; only a recorded completed run establishes
+its outcome.
+
 ## Baseline
 
 The acceptance branch starts at `30d6415984b62ebc52639b585b73a79eff8ee3c4`

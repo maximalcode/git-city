@@ -199,9 +199,11 @@ Each text section starts unreviewed. Explicit hunk or remaining-section choices 
 confirmation enable Save and stage; later edits invalidate the affected decision. Decisions
 survive navigation and restart with the draft, and external revisions require deliberate
 reconciliation. The complete assembled result can be inspected before saving.
-Apply confirms origin and consequences, rechecks state, then adopts exact reviewed
+Apply confirms origin and consequences, rechecks state, then adopts retained commit
 objects. Stale results and local-work/foreign-checkout collisions are refused and
 retained. Carried tracked edits become unstaged; untracked files are not carried.
+Strict binding to an expected reviewed result is still pending the compatible tool
+release and integration; see [Apply and local work](rehearse.md#apply-and-local-work).
 
 **Automatic / Ask / Off** persists across linked worktrees. New repositories use
 Automatic; existing recent repositories get a one-time choice. Automatic routes

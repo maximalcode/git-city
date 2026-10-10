@@ -107,7 +107,8 @@ when the original worktree still permits it. Interrupted Apply/Undo blocks write
 until checked recovery. Hooks are not run in rehearsal or Apply; signature presence
 is shown separately from verification. Git City bundles git-rehearse v1.3.0 for
 Windows/Linux x64 and both macOS architectures. Read the [Rehearse guide](docs/rehearse.md)
-for local-work handling, limits, keyboard controls and recovery.
+for local-work handling, limits, keyboard controls and recovery. Strict binding of
+Apply to the reviewed result still awaits the [compatible tool integration](docs/rehearse.md#apply-and-local-work).
 
 ## Install
 

@@ -96,6 +96,11 @@ const SHOTS = [
         state: 'hidden',
         timeout: 180_000
       })
+      // Choosing a lower file can scroll the outer workspace as well as its
+      // inventory. Capture the review heading, scope and content tabs together.
+      await page.locator('.rehearsal-body').evaluate((element) => {
+        element.scrollTop = 0
+      })
     }
   },
   // ── Hero ─────────────────────────────────────────────────────────────────

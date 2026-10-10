@@ -5,7 +5,8 @@ import { Canvas } from '@react-three/fiber'
 import type {
   RehearsalComparison,
   RehearsalReport,
-  RehearsalReviewEntry
+  RehearsalReviewEntry,
+  RehearsalReviewEntrySummary
 } from '../../../shared/types'
 import { materializeSnapshot } from '../../../shared/snapshots'
 import { useStore } from '../store'
@@ -54,7 +55,7 @@ function Comparison({
   reviewPaths?: string[]
   reviewMarkers?: RehearsalReviewMarker[]
   selectedPath?: string | null
-  selectedEntry?: RehearsalReviewEntry | null
+  selectedEntry?: RehearsalReviewEntry | RehearsalReviewEntrySummary | null
   onSelectPath?: (path: string) => void
 }): React.JSX.Element {
   const [side, setSide] = useState(0)
@@ -205,7 +206,7 @@ export default function RehearsalCityComparison({
   reviewPaths?: string[]
   reviewMarkers?: RehearsalReviewMarker[]
   selectedPath?: string | null
-  selectedEntry?: RehearsalReviewEntry | null
+  selectedEntry?: RehearsalReviewEntry | RehearsalReviewEntrySummary | null
   onSelectPath?: (path: string) => void
 }): React.JSX.Element {
   const comparison = useStore((s) => s.rehearsalComparison)

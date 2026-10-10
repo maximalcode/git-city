@@ -640,6 +640,24 @@ export interface RehearsalReviewEntry {
   }
 }
 
+/**
+ * Blob-free identity and path metadata for one frozen changed entry.
+ *
+ * The summary carries this complete map so consumers such as the city can
+ * resolve a rendered path without loading a paged content inventory. Content
+ * availability and line counts remain owned by RehearsalReviewEntry, which is
+ * loaded only for the selected entry.
+ */
+export interface RehearsalReviewEntrySummary {
+  entryId: string
+  change: RehearsalReviewChange
+  oldPath: string | null
+  newPath: string | null
+  old: RehearsalReviewSide
+  new: RehearsalReviewSide
+  rename?: 'detected' | 'not-detected' | 'limited' | 'not-applicable'
+}
+
 export interface RehearsalReviewSummary {
   identity: RehearsalReviewIdentity
   reviewRevision: RehearsalReviewRevision
@@ -652,6 +670,8 @@ export interface RehearsalReviewSummary {
   notices: string[]
   replayWarnings: RehearsalReviewReplay[]
   carried: { status: string; paths: string[]; included: boolean; reason?: string } | null
+  /** Complete blob-free changed-entry maps, keyed by scope ID. */
+  changeMap: Record<string, RehearsalReviewEntrySummary[]>
 }
 
 export interface RehearsalReviewFilesResult {

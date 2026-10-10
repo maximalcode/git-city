@@ -4,6 +4,7 @@ import RehearsalCityComparison from './RehearsalCityComparison'
 import type {
   RehearsalReport,
   RehearsalReviewEntry,
+  RehearsalReviewEntrySummary,
   RehearsalReviewFileResult,
   RehearsalReviewFileView,
   RehearsalReviewIdentity
@@ -15,7 +16,12 @@ export {
 import { bridge } from '../lib/bridge'
 import { useRepoQuery } from '../lib/repoQuery'
 import { useStore } from '../store'
-import { reviewChangeLabel, reviewEntryMarkers, reviewEntryPaths } from '../city/rehearsalMarkers'
+import {
+  reviewChangeLabel,
+  reviewEntryForPath,
+  reviewEntryMarkers,
+  reviewEntryPaths
+} from '../city/rehearsalMarkers'
 import {
   authoritativeRehearsalReviewTotal,
   validateRehearsalReviewFileResponse,
@@ -23,14 +29,16 @@ import {
   validateRehearsalReviewSummaryResponse
 } from '../lib/rehearsalReviewResponses'
 
-function name(entry: RehearsalReviewEntry): string {
+type ReviewEntry = RehearsalReviewEntry | RehearsalReviewEntrySummary
+
+function name(entry: Pick<ReviewEntry, 'oldPath' | 'newPath'>): string {
   if (entry.oldPath && entry.newPath && entry.oldPath !== entry.newPath)
     return `${entry.oldPath} → ${entry.newPath}`
   return entry.newPath ?? entry.oldPath ?? '(unnamed entry)'
 }
 
-function status(entry: RehearsalReviewEntry): string {
-  if (entry.change === 'modified' && entry.binary) return 'Binary'
+function status(entry: ReviewEntry): string {
+  if (entry.change === 'modified' && 'binary' in entry && entry.binary) return 'Binary'
   return reviewChangeLabel(entry.change)
 }
 
@@ -161,6 +169,17 @@ export function RehearsalReviewContent({
       {entry && (
         <>
           <h4>{name(entry)}</h4>
+          {(entry.type === 'symlink' || entry.type === 'gitlink' || entry.type === 'unknown') && (
+            <p className="rehearsal-review-file-kind">
+              {entry.type === 'symlink'
+                ? 'Symbolic link target — read from the stored object; the target is not followed.'
+                : entry.type === 'gitlink'
+                  ? 'Git submodule pointer — these object IDs identify the recorded commits.'
+                  : 'Unrecognized file type.'}{' '}
+              Mode {entry.old.present ? (entry.old.mode ?? 'unknown') : 'absent'} →{' '}
+              {entry.new.present ? (entry.new.mode ?? 'unknown') : 'absent'}.
+            </p>
+          )}
           <div role="tablist" aria-label="Frozen file view">
             {(['changes', 'before', 'after'] as const).map((candidate) => (
               <button
@@ -316,14 +335,21 @@ export default function RehearsalReviewPanel({
   const files = filesQuery.loading ? null : filesQuery.data
   const fileEntries = useMemo(() => files?.entries ?? [], [files])
   const nextCursor = files?.nextCursor ?? null
-  const selected = fileEntries.find((entry) => entry.entryId === selectedEntryId) ?? null
+  const changeEntries = useMemo(
+    () => (scopeId ? (summary?.changeMap[scopeId] ?? []) : []),
+    [scopeId, summary]
+  )
+  const selectedSummary =
+    changeEntries.find((entry) => entry.entryId === selectedEntryId) ??
+    fileEntries.find((entry) => entry.entryId === selectedEntryId) ??
+    null
   const fileQuery = useRepoQuery(
-    summary && scopeId && selected
+    summary && scopeId && selectedEntryId
       ? ([
           reviewIdentity,
           summary.reviewRevision,
           scopeId,
-          selected.entryId,
+          selectedEntryId,
           view,
           refreshNonce
         ] as const)
@@ -347,13 +373,14 @@ export default function RehearsalReviewPanel({
     }
   )
   const file = fileQuery.loading ? null : fileQuery.data
+  const selected = file?.entry ?? null
   const loading = summaryQuery.loading || filesQuery.loading || fileQuery.loading
   const error = summaryQuery.error || filesQuery.error || fileQuery.error
   const reviewPaths = useMemo(
-    () => [...new Set(fileEntries.flatMap(reviewEntryPaths))],
-    [fileEntries]
+    () => [...new Set(changeEntries.flatMap(reviewEntryPaths))],
+    [changeEntries]
   )
-  const reviewMarkers = useMemo(() => reviewEntryMarkers(fileEntries), [fileEntries])
+  const reviewMarkers = useMemo(() => reviewEntryMarkers(changeEntries), [changeEntries])
   const selectedScope = summary?.scopes.find((candidate) => candidate.scopeId === scopeId) ?? null
   const selectedAfterAvailable = Boolean(
     selectedScope?.available &&
@@ -431,13 +458,18 @@ export default function RehearsalReviewPanel({
     if (!files || filesQuery.loading) return
     setKnownTotal(files.total)
     setSelectedEntryId((current) => {
-      if (current && files.entries.some((entry) => entry.entryId === current)) return current
+      if (
+        current &&
+        (changeEntries.some((entry) => entry.entryId === current) ||
+          files.entries.some((entry) => entry.entryId === current))
+      )
+        return current
       return files.entries[0]?.entryId ?? null
     })
-  }, [files, filesQuery.loading])
+  }, [changeEntries, files, filesQuery.loading])
 
-  const loadFiles = (nextFilter: string): void => {
-    setSelectedEntryId(null)
+  const loadFiles = (nextFilter: string, preserveSelection = false): void => {
+    if (!preserveSelection) setSelectedEntryId(null)
     setAppliedFilter(nextFilter)
     setFilePageCount(1)
   }
@@ -462,9 +494,23 @@ export default function RehearsalReviewPanel({
     }
   }
 
-  const choose = (entry: RehearsalReviewEntry): void => {
+  const choose = (entry: ReviewEntry): void => {
     setSelectedEntryId(entry.entryId)
     setView('changes')
+  }
+
+  const chooseCityPath = (path: string): void => {
+    const entry = reviewEntryForPath(changeEntries, path)
+    if (!entry) return
+    // A city path may be outside the current 200-entry page or hidden by the
+    // active filter. Narrow the list to the exact path so the selected entry
+    // is visible while retaining the opaque entry ID as the source of truth.
+    const visible = fileEntries.some((candidate) => candidate.entryId === entry.entryId)
+    if (!visible) {
+      setFilter(path)
+      loadFiles(path, true)
+    }
+    choose(entry)
   }
 
   const selectView = (nextView: RehearsalReviewFileView): void => {
@@ -535,7 +581,7 @@ export default function RehearsalReviewPanel({
                   {cityVisible ? 'Hide city context' : 'Show city context'}
                 </button>
                 <span role="status" aria-live="polite">
-                  {selected ? `Selected ${name(selected)}` : 'Select a changed file'}
+                  {selectedSummary ? `Selected ${name(selectedSummary)}` : 'Select a changed file'}
                 </span>
               </div>
               {cityVisible && (
@@ -545,13 +591,8 @@ export default function RehearsalReviewPanel({
                       report={report}
                       reviewPaths={reviewPaths}
                       reviewMarkers={reviewMarkers}
-                      selectedEntry={selected}
-                      onSelectPath={(path) => {
-                        const entry = fileEntries.find(
-                          (candidate) => candidate.oldPath === path || candidate.newPath === path
-                        )
-                        if (entry) choose(entry)
-                      }}
+                      selectedEntry={selected ?? selectedSummary}
+                      onSelectPath={chooseCityPath}
                     />
                   ) : (
                     <p className="rehearsal-review-city-note" role="status">
@@ -580,7 +621,9 @@ export default function RehearsalReviewPanel({
                   onFilterChange={setFilter}
                   onApplyFilter={() => loadFiles(filter)}
                   onSelectEntry={(entryId) => {
-                    const entry = fileEntries.find((candidate) => candidate.entryId === entryId)
+                    const entry =
+                      fileEntries.find((candidate) => candidate.entryId === entryId) ??
+                      changeEntries.find((candidate) => candidate.entryId === entryId)
                     if (entry) choose(entry)
                   }}
                   onLoadMore={loadMore}

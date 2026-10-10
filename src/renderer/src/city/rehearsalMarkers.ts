@@ -1,4 +1,9 @@
-import type { RehearsalReviewChange, RehearsalReviewEntry, Snapshot } from '../../../shared/types'
+import type {
+  RehearsalReviewChange,
+  RehearsalReviewEntry,
+  RehearsalReviewEntrySummary,
+  Snapshot
+} from '../../../shared/types'
 
 export interface RehearsalReviewMarker {
   path: string
@@ -7,10 +12,20 @@ export interface RehearsalReviewMarker {
 }
 
 /** Return both sides of a rename while keeping ordinary entries to one path. */
-export function reviewEntryPaths(entry: RehearsalReviewEntry): string[] {
+type ReviewEntryPathMetadata = Pick<RehearsalReviewEntry, 'oldPath' | 'newPath'>
+
+export function reviewEntryPaths(entry: ReviewEntryPathMetadata): string[] {
   return [
     ...new Set([entry.oldPath, entry.newPath].filter((path): path is string => path !== null))
   ]
+}
+
+/** Resolve a city path against the complete review metadata map. */
+export function reviewEntryForPath<T extends ReviewEntryPathMetadata>(
+  entries: T[],
+  path: string
+): T | null {
+  return entries.find((entry) => entry.oldPath === path || entry.newPath === path) ?? null
 }
 
 export function reviewChangeLabel(change: RehearsalReviewChange): string {
@@ -21,7 +36,9 @@ export function reviewChangeLabel(change: RehearsalReviewChange): string {
   return 'Modified'
 }
 
-export function reviewEntryMarkers(entries: RehearsalReviewEntry[]): RehearsalReviewMarker[] {
+export function reviewEntryMarkers(
+  entries: Array<RehearsalReviewEntry | RehearsalReviewEntrySummary>
+): RehearsalReviewMarker[] {
   return entries.flatMap((entry) =>
     reviewEntryPaths(entry).map((path) => ({
       path,

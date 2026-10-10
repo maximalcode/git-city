@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import type { RehearsalReviewEntry, Snapshot } from '../../../shared/types'
-import { reviewEntryMarkers, reviewEntryPaths, snapshotHasPath } from './rehearsalMarkers'
+import {
+  reviewEntryForPath,
+  reviewEntryMarkers,
+  reviewEntryPaths,
+  snapshotHasPath
+} from './rehearsalMarkers'
 
 function entry(overrides: Partial<RehearsalReviewEntry>): RehearsalReviewEntry {
   return {
@@ -63,6 +68,12 @@ describe('rehearsal city markers', () => {
       { path: 'added.ts', change: 'added', label: 'Added' },
       { path: 'deleted.ts', change: 'deleted', label: 'Deleted' }
     ])
+  })
+
+  it('resolves a path from the complete metadata map even when the page omits it', () => {
+    const omittedFromPage = entry({ entryId: 'later', newPath: 'src/later.ts' })
+    expect(reviewEntryForPath([omittedFromPage], 'src/later.ts')?.entryId).toBe('later')
+    expect(reviewEntryForPath([omittedFromPage], 'src/missing.ts')).toBeNull()
   })
 
   it('checks endpoint presence exactly', () => {

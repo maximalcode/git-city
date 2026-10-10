@@ -8,6 +8,7 @@ import type {
   RehearsalReport,
   RehearsalReviewAvailability,
   RehearsalReviewEntry,
+  RehearsalReviewEntrySummary,
   RehearsalReviewFileResult,
   RehearsalReviewFileView,
   RehearsalReviewFilesResult,
@@ -305,6 +306,41 @@ function entryIdFor(scopeId: string, raw: RawEntry): string {
     .update('\0')
     .update(raw.newId)
     .digest('hex')
+}
+
+/** Build the public change map without inspecting either blob. */
+function entrySummary(
+  scopeId: string,
+  raw: RawEntry,
+  renameDetectionLimited: boolean
+): RehearsalReviewEntrySummary {
+  const change =
+    raw.status[0] === 'A'
+      ? 'added'
+      : raw.status[0] === 'D'
+        ? 'deleted'
+        : raw.status.startsWith('R') || raw.status.startsWith('C')
+          ? 'renamed'
+          : raw.oldMode !== raw.newMode && raw.oldId === raw.newId
+            ? 'typechange'
+            : 'modified'
+  const rename =
+    raw.status.startsWith('R') || raw.status.startsWith('C')
+      ? 'detected'
+      : raw.status[0] === 'A' || raw.status[0] === 'D'
+        ? renameDetectionLimited
+          ? 'limited'
+          : 'not-applicable'
+        : 'not-detected'
+  return {
+    entryId: entryIdFor(scopeId, raw),
+    change,
+    oldPath: raw.oldPath,
+    newPath: raw.newPath,
+    old: side(raw.oldMode, raw.oldId),
+    new: side(raw.newMode, raw.newId),
+    rename
+  }
 }
 
 function patchSize(hunks: DiffHunk[]): number {
@@ -746,7 +782,15 @@ export async function rehearsalReviewSummary(
               data.report.carried.conflicts.length === 0,
             reason: data.report.carried.reason
           }
-        : null
+        : null,
+      changeMap: Object.fromEntries(
+        [...data.scopes.values()].map((item) => [
+          item.scope.scopeId,
+          item.entries.map((raw) =>
+            entrySummary(item.scope.scopeId, raw, item.scope.renameDetectionLimited ?? false)
+          )
+        ])
+      )
     }
   })
 }

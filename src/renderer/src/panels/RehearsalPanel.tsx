@@ -27,6 +27,7 @@ export default function RehearsalPanel(): React.JSX.Element | null {
   const wasConfirming = useRef(false)
   const cancelApply = useRef<HTMLButtonElement>(null)
   const [draft, setDraft] = useState({ context: '', value: '' })
+  const lastPanelFocus = useRef<HTMLElement | null>(null)
   const returnFocus = useRef<HTMLElement | null>(null)
   const wasOpen = useRef(false)
   const submit = useRef<HTMLButtonElement>(null)
@@ -105,6 +106,19 @@ export default function RehearsalPanel(): React.JSX.Element | null {
   useEffect(() => registerRehearsalNavigationGuard((action) => navigationGuard.current(action)), [])
 
   useEffect(() => {
+    const clearPanelFocus = (event: Event): void => {
+      const target = event.target
+      if (!(target instanceof Node) || !panel.current?.contains(target))
+        lastPanelFocus.current = null
+    }
+    document.addEventListener('focusin', clearPanelFocus, true)
+    document.addEventListener('pointerdown', clearPanelFocus, true)
+    return () => {
+      document.removeEventListener('focusin', clearPanelFocus, true)
+      document.removeEventListener('pointerdown', clearPanelFocus, true)
+    }
+  }, [])
+  useEffect(() => {
     if (blocked) recoveryHeading.current?.focus()
     else if (wasBlocked.current) trigger.current?.focus()
     wasBlocked.current = !!blocked
@@ -146,6 +160,7 @@ export default function RehearsalPanel(): React.JSX.Element | null {
       }
       wasOpen.current = true
     } else {
+      lastPanelFocus.current = null
       if (wasOpen.current) {
         if (returnFocus.current?.isConnected) returnFocus.current.focus()
         else trigger.current?.focus()
@@ -160,11 +175,16 @@ export default function RehearsalPanel(): React.JSX.Element | null {
     const changed =
       previousStatus.current.result !== result || previousStatus.current.application !== application
     previousStatus.current = { result, application }
+    const active = document.activeElement
+    const focusWasLost =
+      !!lastPanelFocus.current &&
+      !lastPanelFocus.current.isConnected &&
+      (!active || active === document.body)
     if (
       changed &&
       open &&
-      panel.current?.contains(document.activeElement) &&
-      !document.activeElement?.closest('[aria-label="Undo Apply"]')
+      (panel.current?.contains(active) || focusWasLost) &&
+      !active?.closest('[aria-label="Undo Apply"]')
     )
       status.current?.focus()
   }, [result, application, open, busy])
@@ -238,6 +258,9 @@ export default function RehearsalPanel(): React.JSX.Element | null {
           id="rehearsal-panel"
           className="rehearsal-panel"
           aria-labelledby="rehearsal-title"
+          onFocusCapture={(event) => {
+            lastPanelFocus.current = event.target as HTMLElement
+          }}
           onKeyDown={(event) => {
             event.stopPropagation()
             // Native confirmation dialogs own Escape and their cancel event.

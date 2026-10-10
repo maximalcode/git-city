@@ -377,10 +377,17 @@ export default function RehearsalReviewPanel({
   const loading = summaryQuery.loading || filesQuery.loading || fileQuery.loading
   const error = summaryQuery.error || filesQuery.error || fileQuery.error
   const reviewPaths = useMemo(
-    () => [...new Set(changeEntries.flatMap(reviewEntryPaths))],
+    () => [...new Set(changeEntries.flatMap((entry) => reviewEntryPaths(entry)))],
     [changeEntries]
   )
-  const reviewMarkers = useMemo(() => reviewEntryMarkers(changeEntries), [changeEntries])
+  const reviewMarkers = useMemo(
+    () =>
+      changeEntries.flatMap((entry) => [
+        ...reviewEntryMarkers([entry], 'before'),
+        ...reviewEntryMarkers([entry], 'after')
+      ]),
+    [changeEntries]
+  )
   const selectedScope = summary?.scopes.find((candidate) => candidate.scopeId === scopeId) ?? null
   const selectedAfterAvailable = Boolean(
     selectedScope?.available &&
@@ -499,8 +506,8 @@ export default function RehearsalReviewPanel({
     setView('changes')
   }
 
-  const chooseCityPath = (path: string): void => {
-    const entry = reviewEntryForPath(changeEntries, path)
+  const chooseCityPath = (path: string, endpoint: 'before' | 'after'): void => {
+    const entry = reviewEntryForPath(changeEntries, path, endpoint)
     if (!entry) return
     // A city path may be outside the current 200-entry page or hidden by the
     // active filter. Narrow the list to the exact path so the selected entry

@@ -259,6 +259,7 @@ it('leaves the incomplete inventory total unknown instead of claiming zero', asy
     report: { ...report, outcome: 'incomplete', conflicted: true }
   })
   const summary = await rehearsalReviewSummary('/tool', identity)
+  expect(summary.changeMap['tracked-worktree']).toEqual([])
   const files = await rehearsalReviewFiles(
     '/tool',
     identity,

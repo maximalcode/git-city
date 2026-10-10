@@ -56,7 +56,7 @@ function Comparison({
   reviewMarkers?: RehearsalReviewMarker[]
   selectedPath?: string | null
   selectedEntry?: RehearsalReviewEntry | RehearsalReviewEntrySummary | null
-  onSelectPath?: (path: string) => void
+  onSelectPath?: (path: string, endpoint: 'before' | 'after') => void
 }): React.JSX.Element {
   const [side, setSide] = useState(0)
   const before = useRef<HTMLButtonElement>(null)
@@ -93,6 +93,10 @@ function Comparison({
       ? snapshotHasPath(snapshot, endpointPath)
       : true
   const selectedRepresented = endpointPath ? resolveFocus(endpointPath) !== null : false
+  const endpoint = side === 0 ? 'before' : 'after'
+  const endpointMarkers = reviewMarkers.filter(
+    (marker) => !marker.endpoint || marker.endpoint === endpoint
+  )
   return (
     <>
       <div role="group" aria-label="Rehearsal city endpoint">
@@ -113,9 +117,9 @@ function Comparison({
         files · {snapshot.files.reduce((sum, file) => sum + file.loc, 0)} lines
       </p>
       <p>{data.notice}</p>
-      {reviewMarkers.length > 0 && (
+      {endpointMarkers.length > 0 && (
         <div className="rehearsal-city-marker-legend" aria-label="Review change markers">
-          {[...new Map(reviewMarkers.map((marker) => [marker.change, marker])).values()].map(
+          {[...new Map(endpointMarkers.map((marker) => [marker.change, marker])).values()].map(
             (marker) => (
               <span className={`review-marker review-marker-${marker.change}`} key={marker.change}>
                 {marker.label}
@@ -164,10 +168,10 @@ function Comparison({
                   snapshot,
                   hotspots: [],
                   reviewPaths,
-                  reviewMarkers,
+                  reviewMarkers: endpointMarkers,
                   liveWorktree: false,
                   selectedPath: endpointPath,
-                  onSelectPath
+                  onSelectPath: (path) => onSelectPath?.(path, endpoint)
                 })}
                 <CameraRig
                   worldSize={scene.worldSize}
@@ -207,7 +211,7 @@ export default function RehearsalCityComparison({
   reviewMarkers?: RehearsalReviewMarker[]
   selectedPath?: string | null
   selectedEntry?: RehearsalReviewEntry | RehearsalReviewEntrySummary | null
-  onSelectPath?: (path: string) => void
+  onSelectPath?: (path: string, endpoint: 'before' | 'after') => void
 }): React.JSX.Element {
   const comparison = useStore((s) => s.rehearsalComparison)
   const busy = useStore((s) => s.rehearsalBusy)

@@ -70,6 +70,17 @@ describe('rehearsal city markers', () => {
     ])
   })
 
+  it('uses the active endpoint to disambiguate a rename from a new path', () => {
+    const rename = entry({ entryId: 'rename', change: 'renamed', oldPath: 'a.ts', newPath: 'b.ts' })
+    const added = entry({ entryId: 'added', change: 'added', oldPath: null, newPath: 'a.ts' })
+    expect(reviewEntryForPath([rename, added], 'a.ts', 'before')?.entryId).toBe('rename')
+    expect(reviewEntryForPath([rename, added], 'a.ts', 'after')?.entryId).toBe('added')
+    expect(reviewEntryMarkers([rename, added], 'after')).toEqual([
+      { path: 'b.ts', change: 'renamed', label: 'Renamed', endpoint: 'after' },
+      { path: 'a.ts', change: 'added', label: 'Added', endpoint: 'after' }
+    ])
+  })
+
   it('resolves a path from the complete metadata map even when the page omits it', () => {
     const omittedFromPage = entry({ entryId: 'later', newPath: 'src/later.ts' })
     expect(reviewEntryForPath([omittedFromPage], 'src/later.ts')?.entryId).toBe('later')

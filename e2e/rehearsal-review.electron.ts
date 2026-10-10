@@ -4,6 +4,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join, resolve } from 'path'
 import { expandRehearsal } from './rehearsal-ui'
+import { discardFixtureRehearsals } from './rehearsal-fixture-cleanup'
 import type { InstancedMesh, PerspectiveCamera, Scene } from 'three'
 
 test('reviews immutable Changes, Before and After content for same-line, added and deleted files', async () => {
@@ -373,17 +374,7 @@ test('reviews immutable Changes, Before and After content for same-line, added a
   } finally {
     await app.close()
     try {
-      const inventory = JSON.parse(
-        execFileSync(tool, ['--json', 'list'], { cwd: repo, encoding: 'utf8' })
-      )
-      for (const item of inventory.rehearsals) {
-        try {
-          execFileSync(tool, ['--json', 'discard', item.id], { cwd: repo })
-        } catch {
-          // The pinned tool may finish its final cleanup just after Electron
-          // exits; this isolated temporary repository can then be removed.
-        }
-      }
+      await discardFixtureRehearsals(tool, repo)
     } finally {
       await rm(repo, { recursive: true, force: true })
       await rm(userData, { recursive: true, force: true })
@@ -445,11 +436,7 @@ test('exposes separate real rebase reference scopes through the public bridge', 
   } finally {
     await app.close()
     try {
-      const inventory = JSON.parse(
-        execFileSync(tool, ['--json', 'list'], { cwd: repo, encoding: 'utf8' })
-      )
-      for (const item of inventory.rehearsals)
-        execFileSync(tool, ['--json', 'discard', item.id], { cwd: repo })
+      await discardFixtureRehearsals(tool, repo)
     } finally {
       await rm(repo, { recursive: true, force: true })
       await rm(userData, { recursive: true, force: true })

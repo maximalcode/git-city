@@ -4,6 +4,7 @@ import { execFileSync } from 'child_process'
 import { mkdtemp, readFile, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join, resolve } from 'path'
+import { discardFixtureRehearsals } from './rehearsal-fixture-cleanup'
 
 test('interrupted exact Undo survives restart and blocks writes across worktrees', async () => {
   test.setTimeout(600_000)
@@ -112,9 +113,7 @@ test('interrupted exact Undo survives restart and blocks writes across worktrees
     } catch {
       /* already clear */
     }
-    const list = JSON.parse(execFileSync(tool, ['--json', 'list'], { cwd: root, encoding: 'utf8' }))
-    for (const entry of list.rehearsals)
-      execFileSync(tool, ['--json', 'discard', entry.id], { cwd: root })
+    await discardFixtureRehearsals(tool, root)
     await rm(root, { recursive: true, force: true })
     await rm(userData, { recursive: true, force: true })
   }

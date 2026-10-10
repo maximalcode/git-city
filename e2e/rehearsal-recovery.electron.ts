@@ -4,6 +4,7 @@ import { execFileSync } from 'child_process'
 import { mkdtemp, readFile, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join, resolve } from 'path'
+import { discardFixtureRehearsals } from './rehearsal-fixture-cleanup'
 
 test('interrupted real Apply survives restart and blocks IPC writes across worktrees', async () => {
   const tool = process.env.GIT_CITY_REHEARSE_BIN!
@@ -92,9 +93,7 @@ test('interrupted real Apply survives restart and blocks IPC writes across workt
     } catch {
       /* already clear */
     }
-    const list = JSON.parse(execFileSync(tool, ['--json', 'list'], { cwd: root, encoding: 'utf8' }))
-    for (const entry of list.rehearsals)
-      execFileSync(tool, ['--json', 'discard', entry.id], { cwd: root })
+    await discardFixtureRehearsals(tool, root)
     await rm(root, { recursive: true, force: true })
     await rm(userData, { recursive: true, force: true })
   }

@@ -144,11 +144,7 @@ test('keyboard sandbox conflict resolution preserves the original until checked 
     } catch {
       /* no pending recovery */
     }
-    const listing = JSON.parse(
-      execFileSync(tool!, ['--json', 'list'], { cwd: root, encoding: 'utf8' })
-    )
-    for (const rehearsal of listing.rehearsals)
-      execFileSync(tool!, ['--json', 'discard', rehearsal.id], { cwd: root })
+    await discardFixtureRehearsals(tool!, root)
     await rm(root, { recursive: true, force: true })
     await rm(userData, { recursive: true, force: true })
   }
@@ -252,15 +248,7 @@ test('durable conflict drafts survive file navigation, panel close and restart',
     } catch {
       /* The restart branch already closed the first process. */
     }
-    try {
-      const listing = JSON.parse(
-        execFileSync(tool!, ['--json', 'list'], { cwd: root, encoding: 'utf8' })
-      )
-      for (const rehearsal of listing.rehearsals)
-        execFileSync(tool!, ['--json', 'discard', rehearsal.id], { cwd: root })
-    } catch {
-      /* cleanup is best effort after a failed launch */
-    }
+    await discardFixtureRehearsals(tool!, root)
     await rm(root, { recursive: true, force: true })
     await rm(userData, { recursive: true, force: true })
   }

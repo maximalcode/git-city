@@ -6,5 +6,8 @@ export async function discardFixtureRehearsals(tool: string, root: string): Prom
   const list = (): { id: string; active: boolean }[] =>
     JSON.parse(execFileSync(tool, ['--json', 'list'], { cwd: root, encoding: 'utf8' })).rehearsals
   await expect.poll(() => list().some((item) => item.active), { timeout: 30_000 }).toBe(false)
-  for (const item of list()) execFileSync(tool, ['--json', 'discard', item.id], { cwd: root })
+  await expect(async () => {
+    for (const item of list()) execFileSync(tool, ['--json', 'discard', item.id], { cwd: root })
+    expect(list()).toHaveLength(0)
+  }).toPass({ timeout: 30_000 })
 }

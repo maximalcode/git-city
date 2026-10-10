@@ -4,6 +4,7 @@ import { execFileSync } from 'child_process'
 import { mkdtemp, readFile, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join, resolve } from 'path'
+import { discardFixtureRehearsals } from './rehearsal-fixture-cleanup'
 
 for (const [entryKind, conflict] of [
   ['branches', false],
@@ -131,11 +132,7 @@ for (const [entryKind, conflict] of [
         } catch {
           /* no pending recovery */
         }
-        const listing = JSON.parse(
-          execFileSync(tool!, ['--json', 'list'], { cwd: root, encoding: 'utf8' })
-        )
-        for (const rehearsal of listing.rehearsals)
-          execFileSync(tool!, ['--json', 'discard', rehearsal.id], { cwd: root })
+        await discardFixtureRehearsals(tool!, root)
         await rm(root, { recursive: true, force: true })
         await rm(userData, { recursive: true, force: true })
       }

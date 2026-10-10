@@ -4,6 +4,7 @@ import { execFileSync } from 'child_process'
 import { mkdtemp, readFile, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join, resolve } from 'path'
+import { discardFixtureRehearsals } from './rehearsal-fixture-cleanup'
 
 for (const conflict of [false, true]) {
   test(`keyboard interactive plan ${conflict ? 'continues repeated conflicts' : 'reorders, squashes and drops'} before Apply`, async () => {
@@ -151,16 +152,7 @@ for (const conflict of [false, true]) {
       await page.screenshot({ path: `test-results/rehearsal-interactive-${conflict}.png` })
     } finally {
       await app.close()
-      const listing = JSON.parse(
-        execFileSync(tool, ['--json', 'list'], { cwd: root, encoding: 'utf8' })
-      )
-      // Closing Electron can leave its read-only recovery inspection finishing.
-      // Wait for that process to release the journal before cleaning fixtures.
-      for (const item of listing.rehearsals) {
-        await expect(() =>
-          execFileSync(tool, ['--json', 'discard', item.id], { cwd: root, stdio: 'pipe' })
-        ).toPass({ timeout: 30_000 })
-      }
+      await discardFixtureRehearsals(tool, root)
       await rm(root, { recursive: true, force: true })
       await rm(userData, { recursive: true, force: true })
     }

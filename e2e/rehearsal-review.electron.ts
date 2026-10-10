@@ -248,20 +248,32 @@ test('reviews immutable Changes, Before and After content for same-line, added a
     expect(buildingPoint.x).toBeLessThan(buildingPoint.right)
     expect(buildingPoint.y).toBeGreaterThan(buildingPoint.top)
     expect(buildingPoint.y).toBeLessThan(buildingPoint.bottom)
-    await page.mouse.click(buildingPoint.x, buildingPoint.y)
-    await expect(same).toHaveAttribute('aria-selected', 'true')
-    const focusMotion = await page.evaluate(async () => {
-      const frame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
-      await frame()
-      const camera = (window as unknown as { __gitCityCam: PerspectiveCamera }).__gitCityCam
-      const first = camera.position.clone()
-      let maximum = 0
-      for (let index = 0; index < 8; index++) {
-        await frame()
-        maximum = Math.max(maximum, first.distanceTo(camera.position))
-      }
-      return maximum
-    })
+    // The DOM selection commits before R3F applies its camera update. Observe
+    // from before the real click, then measure from the first actual movement:
+    // reduced motion permits one direct jump, never a sequence of tween steps.
+    const [focusMotion] = await Promise.all([
+      page.evaluate(async () => {
+        const frame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+        const camera = (window as unknown as { __gitCityCam: PerspectiveCamera }).__gitCityCam
+        const origin = camera.position.clone()
+        const deadline = performance.now() + 90_000
+        while (origin.distanceTo(camera.position) < 0.01) {
+          await frame()
+          if (performance.now() > deadline) throw new Error('Selected review camera never focused')
+        }
+        const first = camera.position.clone()
+        let maximum = 0
+        for (let index = 0; index < 8; index++) {
+          await frame()
+          maximum = Math.max(maximum, first.distanceTo(camera.position))
+        }
+        return maximum
+      }),
+      (async () => {
+        await page.mouse.click(buildingPoint.x, buildingPoint.y)
+        await expect(same).toHaveAttribute('aria-selected', 'true')
+      })()
+    ])
     expect(focusMotion, 'Reduce motion must not animate the selected review focus').toBeLessThan(
       0.01
     )

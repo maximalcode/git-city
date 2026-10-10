@@ -101,7 +101,15 @@ for (const conflict of [false, true]) {
         await expect(
           page.getByLabel('Interactive plan base (Root includes the root commit)')
         ).toHaveValue('root')
+        const retainedId = page.getByText('Kept rehearsal:', { exact: false }).locator('code')
+        const previousId = await retainedId.textContent()
+        expect(previousId).toBeTruthy()
         await page.getByRole('button', { name: 'Rehearse', exact: true }).click()
+        await expect(retainedId).not.toHaveText(previousId!)
+        await expect(page.locator('.rehearsal-panel [aria-busy]')).toHaveAttribute(
+          'aria-busy',
+          'false'
+        )
         await expect(page.getByRole('heading', { name: 'Rebase preview completed' })).toBeVisible()
         await expandRehearsal(page, /^Review changes$/)
         await expect(page.getByRole('region', { name: 'Rehearsed plan' })).toContainText('drop')
@@ -124,9 +132,8 @@ for (const conflict of [false, true]) {
         encoding: 'utf8'
       }).trim()
       await page.keyboard.press('Escape')
-      await expect(
-        conflict ? entry : page.getByRole('button', { name: 'Rehearse panel' })
-      ).toBeFocused()
+      await expect(page.locator('.rehearsal-panel')).toBeHidden()
+      await expect(page.getByRole('button', { name: 'Rehearse panel' })).toBeFocused()
       await page.getByRole('button', { name: 'Rehearse panel' }).click()
       await page.getByRole('button', { name: 'Apply', exact: true }).focus()
       await page.keyboard.press('Enter')

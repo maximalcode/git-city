@@ -121,6 +121,7 @@ jobs:
           name: installer-${{ matrix.platform }}-${{ matrix.arch }}
           path: ${{ matrix.artifact }}
           if-no-files-found: error
+          retention-days: ${{ github.event_name == 'pull_request' && 7 || 0 }}
 
   # Only on a version tag: collect every platform's artifact into a single
   # Release with auto-generated notes.

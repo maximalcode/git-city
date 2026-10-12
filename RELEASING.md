@@ -152,6 +152,12 @@ Linux x64, macOS arm64 and macOS x64 builds on its native runner and launches th
 packaged executable for version, integrity, rehearsal/Apply and retained-metadata
 upgrade checks. Intel macOS is tested natively rather than only cross-built.
 `node scripts/smoke-package.mjs "<packaged executable>"` runs the same local check.
+Pull-request installer artifacts are available for seven days. Download one within
+that window if a review candidate must be retained longer, or use the existing
+manual workflow run to build a fresh candidate: tag and `workflow_dispatch`
+installer artifacts keep the repository's default retention, and diagnostic
+artifacts keep their existing retention. Existing hosted artifacts and release
+assets are unaffected.
 Only tag builds publish installers, after all four package jobs succeed.
 
 The current unsigned macOS distribution preserves the reviewed tool bytes using

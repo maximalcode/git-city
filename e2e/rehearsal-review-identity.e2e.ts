@@ -393,7 +393,10 @@ test('picks a rendered change beyond the first page while a conflicting filter i
           report.outcome,
           report.conflicted,
           report.conflicts,
-          report.carried
+          report.carried,
+          report.result_revision,
+          report.result_endpoints,
+          report.result_unavailable
         ]),
         identity,
         analysis,

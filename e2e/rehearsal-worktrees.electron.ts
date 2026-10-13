@@ -1,3 +1,4 @@
+import { reviewedApplyRequest } from './rehearsal-review-assertions'
 import { test, expect, _electron as electron } from '@playwright/test'
 import { execFileSync } from 'child_process'
 import { mkdtemp, readFile, rm, writeFile } from 'fs/promises'
@@ -67,9 +68,11 @@ test('parallel worktree previews preserve origins and stale Apply keeps the revi
       repo
     )
     if (alternative.kind !== 'report') throw new Error(JSON.stringify(alternative))
+    const firstRequest = await reviewedApplyRequest(page, first.report)
+    const alternativeRequest = await reviewedApplyRequest(page, alternative.report)
     const applied = await page.evaluate(
       (report) => window.gitCity.rehearsalApply(report),
-      first.report
+      firstRequest
     )
     expect(applied.kind, JSON.stringify(applied)).toBe('applied')
     expect(git(repo, 'rev-parse', 'HEAD')).toBe(target)
@@ -77,7 +80,7 @@ test('parallel worktree previews preserve origins and stale Apply keeps the revi
     const adoptedIndex = await readFile(join(repo, '.git/index'))
     const refused = await page.evaluate(
       (report) => window.gitCity.rehearsalApply(report),
-      alternative.report
+      alternativeRequest
     )
     expect(refused.kind, JSON.stringify(refused)).toBe('refused')
     expect(git(repo, 'rev-parse', 'HEAD')).toBe(target)

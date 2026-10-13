@@ -60,6 +60,14 @@ def smoke(binary, version, root):
         raise RuntimeError("Rehearsal changed the original or produced the wrong commit")
     if (repo / "file.txt").read_bytes() != b"before\n" or git("status", "--porcelain"):
         raise RuntimeError("Rehearsal changed original files or index")
+    revision = preview.get("result_revision")
+    endpoints = preview.get("result_endpoints")
+    if not isinstance(revision, str) or not revision.startswith("rr1:"):
+        raise RuntimeError("Packaged tool did not expose a conditional Apply revision")
+    if not isinstance(endpoints, dict) or endpoints.get("version") != 1:
+        raise RuntimeError("Packaged tool did not expose authoritative endpoint descriptors")
+    if endpoints["results"]["HEAD"] != reviewed or endpoints["pre_state"]["HEAD"] != before:
+        raise RuntimeError("Public endpoints do not describe the reviewed result")
     # Same-schema upgrades keep a still-applicable open rehearsal and optional data.
     metadata = Path(preview["storage"]["metadata"])
     current = json.loads(metadata.read_bytes())
@@ -69,7 +77,22 @@ def smoke(binary, version, root):
         reopened = rehearse("show", preview["id"])
         if not reopened["can_apply"] or json.loads(metadata.read_bytes())["future_annotation"] != current["future_annotation"]:
             raise RuntimeError("Open rehearsal did not survive compatible upgrade")
-    rehearse("apply", preview["id"])
+        if reopened.get("result_revision") != revision or reopened.get("result_endpoints") != endpoints:
+            raise RuntimeError("Compatible reads changed the reviewed identity")
+    protected = (git("show-ref"), git("rev-parse", "HEAD"),
+                 (repo / ".git" / "index").read_bytes(),
+                 (repo / "file.txt").read_bytes(), metadata.read_bytes())
+    wrong_revision = "rr1:" + "0" * (len(revision) - len("rr1:"))
+    refused = rehearse("apply", preview["id"], "--expected-result-revision", wrong_revision,
+                       expected_code=4)
+    if refused.get("kind") != "refused":
+        raise RuntimeError("Mismatched result revision was not refused")
+    observed = (git("show-ref"), git("rev-parse", "HEAD"),
+                (repo / ".git" / "index").read_bytes(),
+                (repo / "file.txt").read_bytes(), metadata.read_bytes())
+    if observed != protected:
+        raise RuntimeError("Conditional Apply refusal changed original or retained state")
+    rehearse("apply", preview["id"], "--expected-result-revision", revision)
     if git("rev-parse", "HEAD") != reviewed:
         raise RuntimeError("Apply did not transplant the reviewed commit")
     if (repo / "file.txt").read_bytes() != b"after\n" or git("status", "--porcelain"):
@@ -85,13 +108,15 @@ def smoke(binary, version, root):
     protected_head = git("rev-parse", "HEAD")
     protected_index = (repo / ".git" / "index").read_bytes()
     migration_smoke(stopped, rehearse)
-    rehearse("apply", stopped["id"], expected_code=4)
+    rehearse("apply", stopped["id"], "--expected-result-revision", revision, expected_code=4)
     if git("rev-parse", "HEAD") != protected_head or (repo / ".git" / "index").read_bytes() != protected_index:
         raise RuntimeError("Incompatible metadata changed the original repository")
     if (repo / "file.txt").read_bytes() != b"main branch\n":
         raise RuntimeError("Incompatible metadata changed original work")
     return {"version": observed_version, "git": git("--version"),
-            "rehearsal_apply": "passed", "retained_metadata_migration": "passed"}
+            "rehearsal_apply": "passed", "retained_metadata_migration": "passed",
+            "authoritative_endpoints": "passed", "conditional_apply": "passed",
+            "conditional_refusal_preserves_state": "passed"}
 
 
 def migration_smoke(preview, rehearse):

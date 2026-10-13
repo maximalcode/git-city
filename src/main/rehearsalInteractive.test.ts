@@ -11,8 +11,18 @@ import {
   saveRehearsalConflict
 } from './rehearsalConflicts'
 import { applyRehearsal } from './rehearsalRecovery'
+import { rehearsalReviewSummary } from './rehearsalReview'
 
 const tool = process.env.GIT_CITY_REHEARSE_BIN
+async function applyRequest(report: import('../shared/types').RehearsalReport) {
+  const summary = await rehearsalReviewSummary(tool, report)
+  if (!report.result_revision) throw new Error('Expected a tool result revision.')
+  return {
+    report,
+    reviewRevision: summary.reviewRevision,
+    expectedResultRevision: report.result_revision
+  }
+}
 it.skipIf(!tool).each(['reorder-squash-drop', 'repeated-conflicts', 'root'])(
   'rehearses the interactive %s plan and adopts exact commit objects',
   async (scenario) => {
@@ -60,7 +70,15 @@ it.skipIf(!tool).each(['reorder-squash-drop', 'repeated-conflicts', 'root'])(
       if (scenario === 'repeated-conflicts') {
         for (let stop = 0; stop < 2; stop++) {
           expect(report.outcome).toBe('stopped')
-          expect((await applyRehearsal(tool, report)).kind).toBe('refused')
+          expect(
+            (
+              await applyRehearsal(tool, {
+                report,
+                reviewRevision: 'stopped-result',
+                expectedResultRevision: 'stopped-result'
+              })
+            ).kind
+          ).toBe('refused')
           const file = await readRehearsalConflict(tool, report, 'file')
           await saveRehearsalConflict(tool, report, 'file', file.revision, `resolution ${stop}\n`)
           const next = await continueRehearsal(tool, report)
@@ -85,7 +103,7 @@ it.skipIf(!tool).each(['reorder-squash-drop', 'repeated-conflicts', 'root'])(
         expect(sandboxGit('log', '--format=%s')).toBe('commit1\ncommit2\ncommit0')
         expect(sandboxGit('ls-files')).toBe('file0\nfile1\nfile2\nfile3')
       }
-      const adopted = await applyRehearsal(tool, report)
+      const adopted = await applyRehearsal(tool, await applyRequest(report))
       expect(adopted.kind, adopted.message).toBe('applied')
       expect(git('rev-list', 'HEAD')).toBe(expected)
       if (scenario === 'repeated-conflicts')

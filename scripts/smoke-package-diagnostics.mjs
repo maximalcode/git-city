@@ -227,12 +227,18 @@ export async function installMainSpawnDiagnostics(
           const handlers = ipcMain?._invokeHandlers
           const applyHandler = handlers?.get('git-city:rehearsal-apply')
           if (handlers instanceof Map && typeof applyHandler === 'function') {
-            handlers.set('git-city:rehearsal-apply', async (event, identity) => {
-              const id = typeof identity?.id === 'string' ? identity.id : null
-              const started = { phase: 'start', id, ...stampNow() }
+            handlers.set('git-city:rehearsal-apply', async (event, request) => {
+              const id = typeof request?.report?.id === 'string' ? request.report.id : null
+              const started = {
+                phase: 'start',
+                id,
+                reviewRevision: request?.reviewRevision,
+                expectedResultRevision: request?.expectedResultRevision,
+                ...stampNow()
+              }
               state.ipcRecords.push(started)
               try {
-                const result = await applyHandler(event, identity)
+                const result = await applyHandler(event, request)
                 state.ipcRecords.push({
                   phase: 'result',
                   id,

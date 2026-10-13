@@ -1,7 +1,12 @@
 import { rehearsalComparisonKey } from '../shared/rehearsalComparison'
 import { realpath } from 'fs/promises'
 import { isAbsolute, relative, sep } from 'path'
-import type { RehearsalComparison, RehearsalIdentity, RehearsalReport } from '../shared/types'
+import type {
+  RehearsalComparison,
+  RehearsalIdentity,
+  RehearsalReport,
+  RehearsalResultEndpoints
+} from '../shared/types'
 import { analyzeComparison } from './git/analyze'
 import { runGit } from './git/exec'
 import { rehearsalShow } from './rehearsal'
@@ -33,33 +38,124 @@ export async function resolveRehearsalEndpoints(report: RehearsalReport): Promis
     )
     if (!inside(root, directory)) throw new Error('Sandbox Git metadata must be isolated.')
   }
-  const complete =
-    report.outcome === 'clean' &&
-    !report.conflicted &&
-    report.conflicts.length === 0 &&
-    (!report.carried ||
-      (['restored', 'contained', 'not_needed'].includes(report.carried.status) &&
-        report.carried.conflicts.length === 0))
-  const beforeHead = sha(report.pre_state.HEAD)
-  const movement = report.refs.find((ref) => ref.name === 'HEAD')
-  const afterHead = complete && movement ? sha(movement.after) : beforeHead
-  let before = beforeHead
-  let after = afterHead
-  if (report.carried) {
-    // Compatibility adapter for the pinned tool's retained Git refs. Never read
-    // private metadata or mutable working files; validate the stash ancestry.
-    const snapshot = async (ref: string, parent: string): Promise<string> => {
-      const commit = sha((await runGit(root, ['rev-parse', '--verify', `${ref}^{commit}`])).trim())
-      if ((await runGit(root, ['rev-parse', `${commit}^1`])).trim() !== parent)
-        throw new Error('Carried-work snapshot does not match this rehearsal. Refresh the report.')
-      return commit
-    }
-    before = await snapshot('refs/rehearse/carried', beforeHead)
-    if (complete && report.carried.status === 'restored')
-      after = await snapshot('refs/rehearse/replayed', afterHead)
-    else if (report.carried.status === 'not_needed') after = before
+  const complete = report.outcome === 'clean' && !report.conflicted && report.conflicts.length === 0
+  const endpoints = report.result_endpoints
+  const resultRevision = report.result_revision
+  if (!complete) {
+    const before = report.pre_state.HEAD
+    if (!before)
+      throw new Error('Frozen comparison Before endpoint is unavailable. Refresh the rehearsal.')
+    return [sha(before)]
   }
-  return complete ? [before, after] : [before]
+  if (!endpoints || !resultRevision) {
+    throw new Error(
+      report.result_unavailable ||
+        'This retained result has no authoritative endpoints. Refresh with a compatible git-rehearse release.'
+    )
+  }
+  await validateResultEndpoints(report, endpoints, resultRevision)
+  const beforeHead = sha(endpoints.pre_state.HEAD)
+  const afterHead = sha(endpoints.results.HEAD)
+  if (!endpoints.carried) return [beforeHead, afterHead]
+  const carried = endpoints.carried
+  if (
+    carried.snapshot_ref_status !== 'present' ||
+    !carried.snapshot_ref ||
+    sha(carried.snapshot_ref) !== sha(carried.snapshot)
+  )
+    throw new Error(
+      `The authoritative carried-work snapshot is unavailable (${carried.snapshot_ref_status}; ${carried.snapshot_ref ?? 'no ref'}; ${carried.snapshot}). Refresh the result.`
+    )
+  const before = sha(carried.snapshot)
+  await requireFirstParent(
+    root,
+    before,
+    sha(endpoints.pre_state.HEAD),
+    'The authoritative carried-work snapshot does not match this rehearsal.'
+  )
+  if (report.carried?.status === 'restored') {
+    if (
+      carried.replay_ref_status !== 'present' ||
+      !carried.replay_ref ||
+      !carried.replay ||
+      sha(carried.replay_ref) !== sha(carried.replay)
+    )
+      throw new Error('The authoritative carried-work replay is unavailable. Refresh the result.')
+    await requireFirstParent(
+      root,
+      sha(carried.replay),
+      afterHead,
+      'The authoritative carried-work replay does not match this rehearsal.'
+    )
+    return [before, sha(carried.replay)]
+  }
+  if (
+    report.carried?.status === 'contained' &&
+    carried.replay_ref_status === 'not_produced' &&
+    carried.replay === null &&
+    carried.replay_ref === null
+  )
+    return [before, afterHead]
+  if (
+    report.carried?.status === 'not_needed' &&
+    carried.replay_ref_status === 'not_needed' &&
+    carried.replay === null &&
+    carried.replay_ref === null
+  )
+    return [before, before]
+  throw new Error(
+    'The retained carried-work endpoints are unavailable for review. Refresh with a compatible git-rehearse release.'
+  )
+}
+
+async function requireFirstParent(
+  sandbox: string,
+  commit: string,
+  expectedParent: string,
+  message: string
+): Promise<void> {
+  const parent = sha(
+    (await runGit(sandbox, ['--no-replace-objects', 'rev-parse', '--verify', `${commit}^1`])).trim()
+  )
+  if (parent !== expectedParent) throw new Error(`${message} Refresh the result.`)
+}
+
+async function validateResultEndpoints(
+  report: RehearsalReport,
+  endpoints: RehearsalResultEndpoints,
+  revision: string
+): Promise<void> {
+  if (!/^rr1:(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(revision) || endpoints.version !== 1)
+    throw new Error('The retained result revision is invalid. Refresh the rehearsal.')
+  if (
+    endpoints.origin.rehearsal !== report.id ||
+    endpoints.origin.repository !== report.repository ||
+    endpoints.origin.repository_id !== report.repository_id ||
+    JSON.stringify(endpoints.action) !== JSON.stringify(report.command) ||
+    JSON.stringify(endpoints.checkout) !== JSON.stringify(report.checkout)
+  )
+    throw new Error('The authoritative retained endpoints do not match this rehearsal.')
+  const origin = await realpath(report.origin_worktree)
+  if ((await realpath(endpoints.origin.repository)) !== origin)
+    throw new Error('The authoritative endpoints belong to another original worktree.')
+  const actualGitDir = await realpath(
+    (await runGit(origin, ['rev-parse', '--path-format=absolute', '--absolute-git-dir'])).trim()
+  )
+  const actualCommonDir = await realpath(
+    (await runGit(origin, ['rev-parse', '--path-format=absolute', '--git-common-dir'])).trim()
+  )
+  if (
+    (await realpath(endpoints.origin.git_dir)) !== actualGitDir ||
+    (await realpath(endpoints.origin.common_dir)) !== actualCommonDir
+  )
+    throw new Error('The authoritative endpoint repository identity changed. Refresh the result.')
+  if (sha(endpoints.pre_state.HEAD) !== sha(report.pre_state.HEAD))
+    throw new Error('The authoritative Before endpoint does not match the retained report.')
+  const reportHead = report.refs.find((ref) => ref.name === 'HEAD')?.after
+  if (reportHead && sha(endpoints.results.HEAD) !== sha(reportHead))
+    throw new Error('The authoritative After endpoint does not match the retained report.')
+  if (report.carried && !endpoints.carried)
+    throw new Error('The retained report has carried work without authoritative frozen endpoints.')
 }
 
 export async function compareRehearsal(
@@ -95,10 +191,7 @@ export async function compareRehearsal(
       notice:
         commits.length === 2
           ? 'Frozen rehearsal endpoints, including tracked carried work. Untracked files are excluded.'
-          : '⚠ No finished After: this rehearsal is stopped, incomplete, failed, or has unresolved carried work. Continue and refresh to compare the completed result.' +
-            (report.outcome === 'incomplete' && !report.carried
-              ? ' Before shows the frozen committed tree only: this incomplete report has no carried-work details.'
-              : '')
+          : '⚠ No finished After endpoint is available. Before shows only the frozen committed tree; tracked carried work is unavailable because the tool did not publish an authoritative snapshot.'
     }
   })
 }

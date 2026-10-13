@@ -116,6 +116,23 @@ for (const [entryKind, conflict] of [
         await expect(entry).toBeFocused()
         // Reopen the retained report without creating another rehearsal.
         await page.getByRole('button', { name: 'Rehearse panel' }).click()
+        const shown = await page
+          .getByText('Kept rehearsal:', { exact: false })
+          .locator('code')
+          .textContent()
+        const reviewedHead = await page.evaluate(
+          async ({ repo, id }) => {
+            const listing = await window.gitCity.rehearsalList(repo)
+            const identity = listing.entries.find((entry) => entry.id === id)
+            if (!identity) throw new Error('Displayed result missing')
+            const result = await window.gitCity.rehearsalShow(identity)
+            if (result.kind !== 'report' || !result.report.result_revision)
+              throw new Error('Missing result revision')
+            return result.report.result_endpoints?.results.HEAD
+          },
+          { repo: root, id: shown }
+        )
+        expect(reviewedHead).toBeTruthy()
         await page.getByRole('button', { name: 'Apply', exact: true }).click()
         await expect(page.getByRole('button', { name: 'Cancel Apply' })).toBeFocused()
         await expect(page.getByRole('region', { name: 'Confirm Apply' })).toContainText(action)
@@ -125,6 +142,7 @@ for (const [entryKind, conflict] of [
         expect(await readFile(join(root, 'file.txt'), 'utf8')).toBe('preview\n')
         expect(await readFile(join(root, 'independent.txt'), 'utf8')).toBe('main work\n')
         expect(git('rev-parse', 'HEAD')).not.toBe(before)
+        expect(git('rev-parse', 'HEAD')).toBe(reviewedHead)
         expect(git('rev-parse', 'HEAD^')).toBe(action === 'rebase' ? source : before)
         await page.screenshot({ path: 'test-results/rehearsal-' + entryKind + '.png' })
       } finally {

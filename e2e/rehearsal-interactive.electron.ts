@@ -179,6 +179,23 @@ for (const conflict of [false, true]) {
         conflict ? entry : page.getByRole('button', { name: 'Rehearse panel' })
       ).toBeFocused()
       await page.getByRole('button', { name: 'Rehearse panel' }).click()
+      const shown = await page
+        .getByText('Kept rehearsal:', { exact: false })
+        .locator('code')
+        .textContent()
+      const reviewedHead = await page.evaluate(
+        async ({ repo, id }) => {
+          const listing = await window.gitCity.rehearsalList(repo)
+          const identity = listing.entries.find((entry) => entry.id === id)
+          if (!identity) throw new Error('Displayed result missing')
+          const result = await window.gitCity.rehearsalShow(identity)
+          if (result.kind !== 'report' || !result.report.result_revision)
+            throw new Error('Missing result revision')
+          return result.report.result_endpoints?.results.HEAD
+        },
+        { repo: root, id: shown }
+      )
+      expect(reviewedHead).toBeTruthy()
       await page.getByRole('button', { name: 'Apply', exact: true }).focus()
       await page.keyboard.press('Enter')
       await expect(page.getByRole('button', { name: 'Cancel Apply' })).toBeFocused()
@@ -188,6 +205,7 @@ for (const conflict of [false, true]) {
         timeout: 180_000
       })
       expect(git('rev-list', 'HEAD')).toBe(expected)
+      expect(git('rev-parse', 'HEAD')).toBe(reviewedHead)
       if (conflict) expect(await readFile(join(root, 'file'), 'utf8')).toBe('resolved 1\n')
       else expect(git('log', '--format=%s')).toBe('commit3\ncommit0')
       await page.screenshot({ path: `test-results/rehearsal-interactive-${conflict}.png` })

@@ -167,7 +167,7 @@ fly-to.
 
 ### Rehearse
 
-Git City v0.9.2 bundles published, integrity-checked git-rehearse v1.3.0 for Windows x64,
+Git City bundles published, integrity-checked git-rehearse v1.4.0 for Windows x64,
 Linux x64, Intel macOS and Apple Silicon. Merge, normal Rebase, the existing
 interactive Pick/Squash/Drop/reorder plan, and single Cherry-pick from Graph or
 commit details run in retained sandboxes. There is no separate installation.
@@ -199,11 +199,24 @@ Each text section starts unreviewed. Explicit hunk or remaining-section choices 
 confirmation enable Save and stage; later edits invalidate the affected decision. Decisions
 survive navigation and restart with the draft, and external revisions require deliberate
 reconciliation. The complete assembled result can be inspected before saving.
-Apply confirms origin and consequences, rechecks state, then adopts retained commit
-objects. Stale results and local-work/foreign-checkout collisions are refused and
-retained. Carried tracked edits become unstaged; untracked files are not carried.
-Strict binding to an expected reviewed result is still pending the compatible tool
-release and integration; see [Apply and local work](rehearse.md#apply-and-local-work).
+Preflight identifies tracked work, staging consequences and excluded untracked
+files; the retained report supersedes it after execution. The completed summary
+leads with outcome, checkout/worktree and complete changed-file count. Git
+completion, content availability, tests not run, skipped hooks and unchecked
+signatures remain distinct facts.
+
+Apply confirms origin, consequences and the displayed review revision. Refresh or
+change invalidates the pending confirmation. The backend verifies the complete
+app review revision and passes the tool's expected result revision for a check
+under ownership before adopting the same retained candidate. Missing tool support
+refuses clearly; there is no unconditional Apply fallback. Both content and city
+use the tool's authoritative endpoints. Supported v1.3.0 retained results remain
+reviewable through the new tool; unavailable older results are preserved.
+Stale results and local-work/foreign-checkout collisions are refused and retained.
+Initial carry replay leaves tracked edits unstaged; Apply adopts the reviewed
+index/files, and untracked files are excluded. The confirmation explains that
+carried uncommitted work may prevent Undo. See [Apply and local work](rehearse.md#apply-and-local-work)
+for the coordination boundary and supported next steps after refusal.
 
 **Automatic / Ask / Off** persists across linked worktrees. New repositories use
 Automatic; existing recent repositories get a one-time choice. Automatic routes

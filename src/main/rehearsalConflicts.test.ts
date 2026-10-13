@@ -11,6 +11,7 @@ import {
   saveRehearsalConflict
 } from './rehearsalConflicts'
 import { applyRehearsal } from './rehearsalRecovery'
+import { rehearsalReviewSummary } from './rehearsalReview'
 import { readRehearsalDraft, writeRehearsalDraft } from './rehearsalDrafts'
 import type { RehearsalDraftPayload } from '../shared/types'
 
@@ -22,6 +23,15 @@ vi.mock('fs/promises', async (importOriginal) => {
 
 const tool = process.env.GIT_CITY_REHEARSE_BIN
 const cleanup: (() => Promise<void>)[] = []
+async function applyRequest(report: import('../shared/types').RehearsalReport) {
+  const summary = await rehearsalReviewSummary(tool, report)
+  if (!report.result_revision) throw new Error('Expected a tool result revision.')
+  return {
+    report,
+    reviewRevision: summary.reviewRevision,
+    expectedResultRevision: report.result_revision
+  }
+}
 afterEach(async () => {
   for (const fn of cleanup.splice(0).reverse()) await fn()
 })
@@ -63,7 +73,15 @@ it.skipIf(!tool).each(['merge', 'rebase', 'cherry-pick'] as const)(
       execFileSync(tool!, ['--json', 'discard', report.id], { cwd: repo })
     })
     expect(report.outcome).toBe('stopped')
-    expect((await applyRehearsal(tool, report)).kind).toBe('refused')
+    expect(
+      (
+        await applyRehearsal(tool, {
+          report,
+          reviewRevision: 'stopped-result',
+          expectedResultRevision: 'stopped-result'
+        })
+      ).kind
+    ).toBe('refused')
     const sandbox = report.sandbox!
     for (const path of [
       '../file.txt',
@@ -145,7 +163,7 @@ it.skipIf(!tool).each(['merge', 'rebase', 'cherry-pick'] as const)(
       encoding: 'utf8'
     }).trim()
     const expectedFile = await readFile(join(sandbox, 'file.txt'))
-    const applied = await applyRehearsal(tool, report)
+    const applied = await applyRehearsal(tool, await applyRequest(report))
     expect(applied.kind, JSON.stringify(applied)).toBe('applied')
     expect(git('rev-parse', 'HEAD')).toBe(expectedHead)
     expect(await readFile(join(repo, 'file.txt'))).toEqual(expectedFile)

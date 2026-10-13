@@ -87,10 +87,23 @@ jobs:
       - name: Test rehearsal tool preparation
         run: python3 -m unittest discover -s scripts -p 'test_*.py'
       - run: npm run build
+      - name: Prepare published predecessor for retained-data acceptance
+        if: matrix.platform == 'darwin' && matrix.arch == 'arm64'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import json, runpy
+          from pathlib import Path
+          prepare = runpy.run_path('scripts/prepare-rehearse.py')
+          pin = json.loads(Path('scripts/fixtures/rehearse-toolchain-v1.3.0.json').read_text())
+          prepare['prepare_target'](pin, 'darwin-arm64', root=Path('build/predecessor'))
+          PY
       - name: Real-tool and Electron acceptance (Apple Silicon)
         if: matrix.platform == 'darwin' && matrix.arch == 'arm64'
         env:
           GIT_CITY_REHEARSE_BIN: ${{ github.workspace }}/build/rehearse/darwin-arm64/git-rehearse
+          GIT_CITY_REHEARSE_V130_BIN: ${{ github.workspace }}/build/predecessor/build/rehearse/darwin-arm64/git-rehearse
         run: |
           npm test
           npx playwright test -c playwright.rehearsal.config.ts

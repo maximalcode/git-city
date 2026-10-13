@@ -1,4 +1,5 @@
 import { expect, type Page } from '@playwright/test'
+import type { RehearsalApplyRequest, RehearsalReport } from '../src/shared/types'
 
 /** Read a retained result through the public bridge and its visible keyboard UI. */
 export async function expectFrozenReview(
@@ -81,4 +82,25 @@ export async function expectFrozenReview(
   await expect(review.locator('.diff-del')).toContainText(before.trim())
   if (after !== null) await expect(review.locator('.diff-add')).toContainText(after.trim())
   return shownId!
+}
+
+/** Capture the same report/review pair that an explicit Apply confirmation approves. */
+export async function reviewedApplyRequest(
+  page: Page,
+  report: RehearsalReport
+): Promise<RehearsalApplyRequest> {
+  const summary = await page.evaluate(
+    (identity) => window.gitCity.rehearsalReviewSummary(identity),
+    report
+  )
+  expect(summary.complete).toBe(true)
+  expect(summary.afterAvailable).toBe(true)
+  expect(summary.identity.id).toBe(report.id)
+  expect(summary.toolResultRevision).toBeTruthy()
+  expect(summary.toolResultRevision).toBe(report.result_revision)
+  return {
+    report,
+    reviewRevision: summary.reviewRevision,
+    expectedResultRevision: summary.toolResultRevision!
+  }
 }

@@ -81,6 +81,19 @@ function revisionOf(
   return createHash('sha256')
     .update(rehearsalComparisonKey(report))
     .update('\0')
+    .update(report.result_revision ?? '')
+    .update('\0')
+    .update(JSON.stringify(report.result_endpoints ?? null))
+    .update('\0')
+    .update(
+      JSON.stringify([
+        report.command,
+        report.drift_unexpected,
+        report.signatures ?? null,
+        report.result_unavailable ?? null
+      ])
+    )
+    .update('\0')
     .update(JSON.stringify(report.drift))
     .update('\0')
     .update(endpoints.join('\0'))
@@ -138,8 +151,8 @@ function endpoint(
     }
   const carried =
     kind === 'tracked-worktree' &&
-    !!report.carried &&
-    (before || report.carried.status === 'restored')
+    (commit === report.result_endpoints?.carried?.snapshot ||
+      commit === report.result_endpoints?.carried?.replay)
   return { kind: 'commit', commit, provenance: carried ? 'carried' : 'original' }
 }
 
@@ -561,15 +574,18 @@ function referenceScopes(report: RehearsalReport): Array<{
     string,
     { aliases: string[]; before: string | null; after: string | null }
   >()
-  for (const ref of report.refs) {
-    const before = commitId(ref.before, `${ref.name} before`)
-    const after = commitId(ref.after, `${ref.name} after`)
+  const descriptor = report.result_endpoints
+  if (!descriptor) return []
+  const names = new Set([...Object.keys(descriptor.pre_state), ...Object.keys(descriptor.results)])
+  for (const name of names) {
+    const before = commitId(descriptor.pre_state[name], `${name} before`)
+    const after = commitId(descriptor.results[name], `${name} after`)
     if (!before && !after) continue
-    const key = currentAliases.has(ref.name)
+    const key = currentAliases.has(name)
       ? `current\0${scopeKey(before, after)}`
-      : `ref\0${ref.name}\0${scopeKey(before, after)}`
+      : `ref\0${name}\0${scopeKey(before, after)}`
     const group = groups.get(key) ?? { aliases: [], before, after }
-    group.aliases.push(ref.name)
+    group.aliases.push(name)
     groups.set(key, group)
   }
   return [...groups.values()].filter(
@@ -617,12 +633,21 @@ async function loadData(
   const scope: RehearsalReviewScope = {
     scopeId: 'tracked-worktree',
     kind: 'tracked-worktree',
-    label: 'Tracked worktree result',
+    label:
+      after !== null
+        ? 'Tracked worktree result'
+        : report.carried
+          ? 'Committed Before only; tracked carried work unavailable'
+          : 'Committed Before only',
     refAliases: ['HEAD'],
     before: endpoint(before, report, true),
     after: after ? endpoint(after, report, false) : null,
     available: true,
-    unavailableReason: after ? undefined : 'This rehearsal has no finished After endpoint.',
+    unavailableReason: after
+      ? undefined
+      : report.carried
+        ? 'No finished After endpoint is available. This view shows only the frozen committed Before tree; tracked carried work is unavailable because the tool did not publish an authoritative snapshot.'
+        : 'This view shows only the frozen committed Before tree; no finished After endpoint is available.',
     replay: replayFor(report, ['HEAD']),
     renameDetectionLimited: false
   }
@@ -680,6 +705,18 @@ async function loadData(
   return data
 }
 
+/**
+ * Read the complete review revision while the caller owns withRehearsal. This
+ * intentionally does not acquire the rehearsal queue itself so Apply can
+ * validate its displayed subject inside one non-reentrant admission section.
+ */
+export async function rehearsalReviewRevisionLocked(
+  tool: string | undefined,
+  identity: RehearsalIdentity
+): Promise<string> {
+  return (await loadData(tool, identity)).revision
+}
+
 function decodeCursor(
   cursor: string | undefined,
   revision: string,
@@ -726,7 +763,11 @@ export async function rehearsalReviewSummary(
       'Untracked files and the original staging selection are excluded from this tracked-worktree scope.'
     ]
     if (!complete)
-      notices.push('After is withheld until the rehearsal has a finished, conflict-free result.')
+      notices.push(
+        data.report.carried
+          ? 'This view shows only the frozen committed Before tree. Tracked carried work is unavailable because the tool did not publish an authoritative snapshot; After is withheld until a finished, conflict-free result is available.'
+          : 'This view shows only the frozen committed Before tree; After is withheld until the rehearsal has a finished, conflict-free result.'
+      )
     if ([...data.scopes.values()].some((item) => item.scope.renameDetectionLimited))
       notices.push(
         'Rename detection was bounded for a large change set; complete add/delete entries remain visible.'
@@ -734,7 +775,7 @@ export async function rehearsalReviewSummary(
     return {
       identity: data.identity,
       reviewRevision: data.revision,
-      toolResultRevision: null,
+      toolResultRevision: data.report.result_revision ?? null,
       complete,
       afterAvailable: data.scope.available && data.scope.after?.kind === 'commit',
       afterReason:

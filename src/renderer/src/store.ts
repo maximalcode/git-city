@@ -15,6 +15,7 @@ import type {
   RehearsalResult,
   RehearsalRecovery,
   RehearsalApplyResult,
+  RehearsalApplyRequest,
   RehearsalReport,
   BranchInfo,
   GitCityApi,
@@ -336,7 +337,7 @@ export interface GitCityState extends RehearsalManagementState, RehearsalCompari
     resume?: boolean
   ): Promise<RehearsalResult | undefined>
   undoRehearsal(identity: RehearsalUndoStatus): Promise<RehearsalUndoResult | undefined>
-  applyRehearsal(identity: RehearsalReport): Promise<void>
+  applyRehearsal(request: RehearsalApplyRequest): Promise<void>
   recoverRehearsal(id: string, action: 'complete' | 'rollback'): Promise<void>
   rehearsalOpen: boolean
   rehearsalBusy: boolean
@@ -652,16 +653,36 @@ export const useStore = create<GitCityState>((set, get, api) => ({
     }
     return result
   },
-  applyRehearsal: async (identity) => {
+  applyRehearsal: async (request) => {
+    const { report, expectedResultRevision, reviewRevision } = request
     const api = bridge()
     const repo = get().repoPath
-    if (!api || !repo || get().rehearsalBusy || get().rehearsalApplications[repo]?.[identity.id])
+    if (
+      !api ||
+      !repo ||
+      get().rehearsalBusy ||
+      get().rehearsalApplications[repo]?.[report.id] ||
+      !reviewRevision ||
+      !expectedResultRevision ||
+      report.result_revision !== expectedResultRevision
+    )
       return
+    const selected = get().rehearsalResults[repo]
+    if (selected?.kind !== 'report' || selected.report !== report) {
+      set((state) => ({
+        rehearsalManagementMessages: {
+          ...state.rehearsalManagementMessages,
+          [repo]:
+            'The selected rehearsal changed before Apply. Review its current result and confirm it again.'
+        }
+      }))
+      return
+    }
     get().clearRehearsalComparison()
     set({ rehearsalBusy: true })
     let result: RehearsalApplyResult
     try {
-      result = await api.rehearsalApply(identity)
+      result = await api.rehearsalApply(request)
     } catch (error) {
       const recovery = await readRehearsalRecovery(api, repo)
       result = {
@@ -674,7 +695,7 @@ export const useStore = create<GitCityState>((set, get, api) => ({
       rehearsalBusy: false,
       rehearsalApplications: {
         ...state.rehearsalApplications,
-        [repo]: { ...state.rehearsalApplications[repo], [identity.id]: result }
+        [repo]: { ...state.rehearsalApplications[repo], [report.id]: result }
       },
       rehearsalRecovery: { ...state.rehearsalRecovery, [repo]: result.recovery }
     }))

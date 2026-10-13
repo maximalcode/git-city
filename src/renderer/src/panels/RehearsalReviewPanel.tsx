@@ -3,6 +3,7 @@ import { RehearsalReviewScopeSelector } from './RehearsalReviewScopeSelector'
 import RehearsalCityComparison from './RehearsalCityComparison'
 import type {
   RehearsalReport,
+  RehearsalReviewSummary,
   RehearsalReviewEntry,
   RehearsalReviewEntrySummary,
   RehearsalReviewFileResult,
@@ -231,9 +232,15 @@ export function RehearsalReviewContent({
 }
 
 export default function RehearsalReviewPanel({
-  report
+  report,
+  onReviewState
 }: {
   report: RehearsalReport
+  onReviewState?: (state: {
+    summary: RehearsalReviewSummary | null
+    loading: boolean
+    error: string | null
+  }) => void
 }): React.JSX.Element {
   const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null)
   const [view, setView] = useState<RehearsalReviewFileView>('changes')
@@ -310,6 +317,13 @@ export default function RehearsalReviewPanel({
     previousReportKey.current = key
   }, [key, reloadSummary, report])
   const summary = summaryQuery.loading ? null : summaryQuery.data
+  useEffect(() => {
+    onReviewState?.({
+      summary,
+      loading: summaryQuery.loading,
+      error: summaryQuery.error
+    })
+  }, [onReviewState, summary, summaryQuery.error, summaryQuery.loading])
   const scopeId = selectedScopeId ?? summary?.defaultScopeId ?? null
   const filesQuery = useRepoQuery(
     summary && scopeId
@@ -588,6 +602,17 @@ export default function RehearsalReviewPanel({
           <p className="rehearsal-review-eyebrow">Review workspace</p>
           <h3>Frozen file review</h3>
         </div>
+        <button
+          type="button"
+          disabled={summaryQuery.loading}
+          onClick={() => {
+            onReviewState?.({ summary: null, loading: true, error: null })
+            setRefreshNonce((nonce) => nonce + 1)
+            reloadSummary()
+          }}
+        >
+          Refresh review
+        </button>
         <button onClick={() => setExpanded((value) => !value)} aria-expanded={expanded}>
           {expanded ? 'Hide file review' : 'Review changed files'}
         </button>

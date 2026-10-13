@@ -71,6 +71,9 @@ Saved rehearsals, Technical details and the exact Undo Apply disclosure. Escape
 closes the panel only while focus is inside it; closing returns focus to its entry.
 Stop and Keep remain in the footer during execution. Apply and Discard
 confirmations are modal; Escape cancels them without closing the panel.
+Apply and Undo confirmations are invalidated when their displayed subject is
+refreshed or changes. Return to the current result and confirm again; no extra
+per-file acknowledgement is required.
 
 In expanded rehearsal history, Tab reaches Open, checkboxes and Discard;
 Space toggles a checkbox and Enter activates a button. Discard confirmation starts

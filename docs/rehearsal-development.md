@@ -5,12 +5,13 @@ see the [Rehearse guide](rehearse.md). Packaged applications expose the same
 workflow and include their compatible tool. Source builds require an explicit
 absolute `GIT_CITY_REHEARSE_BIN`; they never search PATH or download a tool.
 Both the development renderer and `npm start` support these source builds.
-Git City v0.9.2 requires git-rehearse v1.3.0; re-run preparation and update any
-explicit development override when upgrading from the earlier test build.
+This integration requires git-rehearse v1.4.0; re-run preparation and update any
+explicit development override when upgrading. Older tools are incompatible with
+the expected-result Apply contract and are refused.
 
 ## Pinned toolchain
 
-`rehearse-toolchain.json` records the published v1.3.0 release tag, source revision,
+`rehearse-toolchain.json` records the published v1.4.0 release tag, source revision,
 archive, executable and license checksums for Windows/Linux x64 and Intel/Apple
 Silicon macOS. Preparation downloads exact release assets, checks the archive before
 extraction, and checks the executable and license before installing them locally.
@@ -30,12 +31,23 @@ execution, safety, Apply, Undo, recovery and retained metadata. Apply/Undo/recov
 do not use the ordinary index.lock retry. Unknown completion causes inspection.
 App-owned coordination uses the canonical common Git directory; external tools
 remain outside that queue, so authoritative CLI checks still determine safety.
+Apply additionally carries the frozen app review revision and the tool's public
+`result_revision`. Admission rechecks the complete review under the existing
+rehearsal queue, then invokes only `apply <id> --expected-result-revision <revision>`.
+The tool owns the final candidate check and adoption. Missing capability,
+unavailable endpoints or a changed revision refuses instead of silently falling
+back. Do not create or impersonate the tool's ownership files.
 
 ## Validation
 
 Run `npm run typecheck && npm run lint && npm test`. Export
 `GIT_CITY_REHEARSE_BIN` for the test command to include real-tool integration;
 without it those suites are explicitly skipped and do not count as acceptance.
+Retained-v1.3 integration cases additionally require `GIT_CITY_REHEARSE_V130_BIN`
+pointing to the published predecessor. The Apple Silicon acceptance job prepares
+it with the same archive/executable checks using the historical pin at
+`scripts/fixtures/rehearse-toolchain-v1.3.0.json`, separately from the bundled
+v1.4.0 tool. Both variables must be set for these upgrade cases to count as passed.
 Preparation regressions run with Python 3.10+ using
 `python3 -m unittest discover -s scripts -p 'test_*.py'` (also run by CI and each
 native package job). They cover release selection, checksum failures, destination
@@ -55,8 +67,9 @@ The Release workflow builds native packages on all four targets, then runs
 with a bogus development override, opens a real repository, performs a keyboard
 preview/confirmed Apply, verifies the resulting commit and file, and repeats after
 restart. Corrupted bundled files must give repair guidance without mutation or
-changing Automatic. The extracted CLI also runs Apply and metadata migration
-checks through `scripts/smoke-rehearse.py`. PR/manual runs produce artifacts only;
+changing Automatic. The extracted CLI also verifies public endpoint identity,
+conditional Apply, unchanged-state refusal and metadata migration through
+`scripts/smoke-rehearse.py`. PR/manual runs produce artifacts only;
 public releases still require the normal tag/release process.
 
 Confirmed Apply has a dedicated five-minute smoke assertion; ordinary UI checks
@@ -98,10 +111,13 @@ Comparison reads immutable objects from the exact retained sandbox after checkin
 identity through public JSON `show`; it never checks out a commit or uses live
 original HEAD as a fallback. Before includes tracked carried work; After includes
 restored carried work only for a completed result. Untracked files are excluded.
-The adapter reads pinned `refs/rehearse/carried` and `refs/rehearse/replayed` stash
-commits and checks their first parents. This is an explicit compatibility assumption
-beyond the JSON schema and requires the real-tool comparison tests on updates.
-A second endpoint check rejects changes during analysis.
+The shared resolver consumes version-1 `result_endpoints` and the matching opaque
+`result_revision` from the tool's public report. Both content scopes and city
+comparison use those descriptors, including carried-work objects. It does not
+infer replacement endpoints from legacy internal refs. A second endpoint/revision
+check rejects changes during reads. Supported v1.3.0 retained data is read through
+v1.4.0; unavailable endpoints preserve the old data and refuse review/conditional
+Apply with an explanation.
 
 ## Real screenshots
 

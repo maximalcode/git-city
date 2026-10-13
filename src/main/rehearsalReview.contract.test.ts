@@ -11,7 +11,9 @@ import type { RehearsalReport } from '../shared/types'
 vi.mock('fs/promises', () => ({ realpath: vi.fn(async (path: string) => path) }))
 vi.mock('./rehearsal', () => ({ rehearsalShow: vi.fn() }))
 vi.mock('./rehearsalComparison', () => ({
-  resolveRehearsalEndpoints: vi.fn(async () => ['a'.repeat(40), 'b'.repeat(40)])
+  resolveRehearsalEndpoints: vi.fn(async (report: RehearsalReport) =>
+    report.outcome === 'clean' ? ['a'.repeat(40), 'b'.repeat(40)] : ['a'.repeat(40)]
+  )
 }))
 vi.mock('./git/exec', () => ({
   runGit: vi.fn(),
@@ -28,6 +30,20 @@ const before = 'a'.repeat(40)
 const after = 'b'.repeat(40)
 const oldObject = 'c'.repeat(40)
 const newObject = 'd'.repeat(40)
+const resultEndpoints = (preState: Record<string, string>, results: Record<string, string>) => ({
+  version: 1 as const,
+  origin: {
+    rehearsal: identity.id,
+    repository: identity.repository,
+    repository_id: identity.repository_id,
+    common_dir: '/origin/.git',
+    git_dir: '/origin/.git'
+  },
+  action: ['merge', 'topic'],
+  checkout: { kind: 'branch' as const, target: 'main' },
+  pre_state: preState,
+  results
+})
 const identity = {
   id: 'review-1',
   repository: '/origin',
@@ -46,6 +62,8 @@ const report: RehearsalReport = {
   conflicted: false,
   conflicts: [],
   refs: [{ name: 'HEAD', before, after }],
+  result_revision: `rr1:${'9'.repeat(40)}`,
+  result_endpoints: resultEndpoints({ HEAD: before }, { HEAD: after }),
   drift: [],
   drift_unexpected: false
 }
@@ -92,6 +110,28 @@ it('returns a revision-bound complete scope and inventory without using a path s
     text: { changes: 'available' }
   })
   expect(files.entries[0].entryId).not.toBe(files.entries[0].newPath)
+})
+
+it('labels stopped carried review as committed Before only and discloses unavailable carried work', async () => {
+  vi.mocked(rehearsalShow).mockResolvedValue({
+    kind: 'report',
+    report: {
+      ...report,
+      outcome: 'stopped',
+      carried: { paths: ['file.txt'], status: 'conflicted', conflicts: ['file.txt'] },
+      result_revision: undefined,
+      result_endpoints: undefined,
+      result_unavailable: 'The rehearsal stopped before producing authoritative endpoints.'
+    }
+  })
+  const summary = await rehearsalReviewSummary('/tool', identity)
+  expect(summary.scopes[0]).toMatchObject({
+    label: 'Committed Before only; tracked carried work unavailable',
+    after: null,
+    before: { commit: before, provenance: 'original' }
+  })
+  expect(summary.afterReason).toContain('only the frozen committed Before tree')
+  expect(summary.notices.join(' ')).toContain('Tracked carried work is unavailable')
 })
 
 it('publishes a complete blob-free change map and resolves an entry beyond the first page', async () => {
@@ -283,6 +323,20 @@ it('returns distinct committed-reference scopes with grouped aliases and explici
         { name: 'refs/heads/deleted', before, after: undefined },
         { name: 'refs/heads/created', before: undefined, after }
       ],
+      result_endpoints: resultEndpoints(
+        {
+          HEAD: before,
+          'refs/heads/main': before,
+          'refs/heads/alias': before,
+          'refs/heads/deleted': before
+        },
+        {
+          HEAD: after,
+          'refs/heads/main': after,
+          'refs/heads/alias': after,
+          'refs/heads/created': after
+        }
+      ),
       drift: [
         {
           reference: 'refs/heads/main',
@@ -502,7 +556,11 @@ it('preserves a committed scope when one retained endpoint object is missing', a
       refs: [
         { name: 'HEAD', before, after },
         { name: 'refs/heads/missing', before, after }
-      ]
+      ],
+      result_endpoints: resultEndpoints(
+        { HEAD: before, 'refs/heads/missing': before },
+        { HEAD: after, 'refs/heads/missing': 'f'.repeat(40) }
+      )
     }
   })
   vi.mocked(runGit).mockImplementation(async (_root, args) => {
@@ -560,7 +618,11 @@ it('derives the empty tree in the repository object format', async () => {
       refs: [
         { name: 'HEAD', before, after },
         { name: 'refs/heads/deleted', before, after: undefined }
-      ]
+      ],
+      result_endpoints: resultEndpoints(
+        { HEAD: before, 'refs/heads/deleted': before },
+        { HEAD: after }
+      )
     }
   })
   await rehearsalReviewSummary('/tool', identity)

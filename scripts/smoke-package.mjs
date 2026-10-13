@@ -119,6 +119,12 @@ try {
       await page.getByRole('button', { name: 'Apply', exact: true }).focus()
       await page.keyboard.press('Enter')
       await expect(page.getByRole('button', { name: 'Cancel Apply', exact: true })).toBeFocused()
+      const reviewedRevision = await page
+        .getByRole('dialog', { name: 'Confirm Apply', exact: true })
+        .getByText('Displayed review revision:', { exact: false })
+        .locator('code')
+        .innerText()
+      assert.ok(reviewedRevision.length > 0, 'Confirmation must identify its displayed review')
       await page.keyboard.press('Tab')
       await expect(page.getByRole('button', { name: 'Apply rehearsal', exact: true })).toBeFocused()
       applyRequested = true
@@ -127,6 +133,20 @@ try {
       applyRequested = false
       assert.equal(git('rev-parse', 'HEAD'), target)
       assert.equal(await readFile(join(repo, 'file.txt'), 'utf8'), expectedFile)
+      const admission = await readMainSpawnDiagnostics(app)
+      const confirmed = admission.ipcRecords.filter((record) => record.phase === 'start')
+      assert.equal(confirmed.length, 1, 'Apply must not be retried')
+      assert.equal(confirmed[0].reviewRevision, reviewedRevision)
+      assert.match(confirmed[0].expectedResultRevision, /^rr1:[0-9a-f]{40,64}$/)
+      const applyProcesses = admission.records.filter((record) => record.args.includes('apply'))
+      assert.equal(applyProcesses.length, 1, 'Exactly one conditional tool Apply must run')
+      const expectedArgument = applyProcesses[0].args.indexOf('--expected-result-revision')
+      assert.ok(expectedArgument >= 0, 'Packaged Apply must pass the expected result revision')
+      assert.equal(
+        applyProcesses[0].args[expectedArgument + 1],
+        confirmed[0].expectedResultRevision
+      )
+      await writeDiagnostics(join(diagnosticsDir, 'conditional-apply.json'), admission)
       await writeDiagnostics(
         join(diagnosticsDir, 'post-apply-repo.json'),
         await snapshotRepo(repo, 'post-apply')

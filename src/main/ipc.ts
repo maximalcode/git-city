@@ -32,7 +32,8 @@ import type {
   RehearsalPlan,
   RehearsalAction,
   RehearsalIdentity,
-  RehearsalReport
+  RehearsalReport,
+  RehearsalApplyRequest
 } from '../shared/types'
 import type { ProgressInfo } from '../shared/types'
 import { analyze, checkGitInstalled } from './git/analyze'
@@ -142,11 +143,11 @@ export function registerIpc(): void {
   ipcMain.handle('git-city:rehearsal-undo', (_event, repo, identity) =>
     undoRehearsal(rehearsalTool(), repo, identity)
   )
-  ipcMain.handle('git-city:rehearsal-apply', (_event, identity: RehearsalReport) =>
-    withRehearsal(identity, async () => {
+  ipcMain.handle('git-city:rehearsal-apply', (_event, request: RehearsalApplyRequest) =>
+    withRehearsal(request?.report, async () => {
       try {
-        if (await rehearsalDraftsExist(identity)) {
-          const recovery = await inspectRecovery(rehearsalTool(), identity.origin_worktree)
+        if (await rehearsalDraftsExist(request.report)) {
+          const recovery = await inspectRecovery(rehearsalTool(), request.report.origin_worktree)
           return {
             kind: 'refused' as const,
             message: 'Resolve or discard the saved rehearsal editor draft before Apply.',
@@ -154,7 +155,7 @@ export function registerIpc(): void {
           }
         }
       } catch (error) {
-        const recovery = await inspectRecovery(rehearsalTool(), identity.origin_worktree)
+        const recovery = await inspectRecovery(rehearsalTool(), request.report.origin_worktree)
         return {
           kind: 'refused' as const,
           message:
@@ -164,7 +165,7 @@ export function registerIpc(): void {
           recovery
         }
       }
-      return applyRehearsal(rehearsalTool(), identity)
+      return applyRehearsal(rehearsalTool(), request)
     })
   )
   ipcMain.handle('git-city:rehearsal-recovery', (_event, repo: string) =>

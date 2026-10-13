@@ -5,7 +5,7 @@ retained sandbox. Review the result, resolve conflicts there, then explicitly
 confirm **Apply** to adopt the reviewed result in the original worktree.
 A clean Git result is not proof that the resulting code is correct.
 
-Git City v0.9.2 includes git-rehearse v1.3.0; no separate installation is needed.
+This build includes git-rehearse v1.4.0; no separate installation is needed.
 Missing or damaged tools require repairing or reinstalling the app.
 See [acceptance evidence](rehearsal-acceptance.md) and [development setup](rehearsal-development.md).
 
@@ -58,7 +58,10 @@ shared frozen Before/After scene, while the live city remains a separate workspa
 **Compare city** opens the frozen **Before** and **After** views when a finished
 result has an available After. They use the same layout and provide a text
 inventory of files and line counts. Stopped, incomplete, failed, and unresolved
-results explain when an After view is unavailable. While the comparison is
+results explain when an After view is unavailable. If the tool cannot establish
+authoritative carried-work endpoints for an unfinished result, Before is explicitly
+limited to the frozen committed tree; carried edits remain retained but are excluded
+from that comparison. While the comparison is
 open, the live scene is paused so the comparison is the only active 3D scene in
 the main workspace. Changed files are marked in the frozen scene, including
 both endpoints of a rename; selecting a marker selects the matching file in the
@@ -139,24 +142,44 @@ so refresh before trying again. The original worktree remains unchanged.
 
 ## Apply and local work
 
-**Apply** opens a confirmation naming the original worktree, action, checkout,
-branch changes and tracked local work. Review it, then choose **Apply rehearsal**.
-The backend rechecks the checkout, refs, index, local files and other worktrees.
-It adopts retained commit objects rather than rerunning the original action.
+Before a run, the preflight summary identifies tracked edits, staging and excluded
+untracked files from the current status. After execution, the retained report
+supersedes that snapshot. Its summary names the Git outcome, affected checkout and
+worktree, and the complete changed-file count when available. Content availability,
+tests not run, skipped hooks and unverified signatures are separate facts.
 
-The current bundle is git-rehearse v1.3.0. It does not accept an expected reviewed
-result revision: a separate CLI operation can change the retained result between
-review and Apply. Strict result binding is still pending
-[the compatible tool release](https://github.com/maximalcode/git-rehearse/issues/119)
-and [Git City's integration](https://github.com/maximalcode/git-city/issues/200).
-An app-side recheck is not a substitute for that contract.
+**Apply** opens a confirmation naming the original worktree, action, checkout,
+branch changes, tracked local work and the displayed review revision. Review it,
+then choose **Apply rehearsal**. Refreshing or changing the review invalidates an
+open confirmation; inspect the current result and confirm again. Viewing or
+selecting every file is optional and is not a correctness checklist.
+
+Git City rechecks the complete app review revision while serializing its own
+editing, Continue and Apply requests. It passes the displayed tool result revision
+to git-rehearse, which checks it under rehearsal ownership before effects and
+retains that checked candidate through adoption. The tool still checks the
+checkout, refs, index, local files and other worktrees. It adopts retained objects
+without rerunning the original action. A changed carried-work snapshot is a
+changed result even if its public carry status is unchanged.
+
+This guarantee coordinates cooperating tool operations; Git City's queue does not
+lock external processes, and arbitrary writes bypassing tool ownership are outside
+the guarantee. Missing expected-revision support or authoritative retained endpoints
+causes a clear refusal, never an unconditional Apply fallback. Supported v1.3.0
+retained results are inspected through the new tool; unavailable older results and
+their data are preserved instead of substituting live content.
 
 Tracked local changes are replayed in the sandbox and can themselves conflict.
-After Apply, carried edits are unstaged: the original staging selection is not
-restored. Untracked files are not carried work. New collisions, changed local
+Initial carry replay leaves tracked edits unstaged: the original staging selection
+is not restored. Apply adopts the reviewed replay's index and file contents,
+including any deliberately staged sandbox resolution. Untracked files are not
+carried work. New collisions, changed local
 work, stale refs or branches checked out elsewhere cause refusal, preserving
 the retained result for inspection. Create a new rehearsal against the new basis.
-There is no force option. A no-op needs no Apply.
+There is no force option. A no-op needs no Apply. Outstanding conflict drafts must
+be resolved or deliberately discarded; Apply and Continue do not silently abandon
+them. Carried uncommitted edits can prevent Undo, which cannot overwrite local
+changes; the confirmation explains this before Apply.
 
 ## Keep, stop and discard
 
@@ -191,7 +214,9 @@ recovery to refuse.
 
 ## Hooks, signatures and limits
 
-The report says **Repository hooks were not run**: hooks are disabled during
+The report distinguishes Git completion from content availability and explicitly
+states that tests were not run. It also says **Repository hooks were not run**:
+hooks are disabled during
 rehearsal and Apply. Off keeps existing direct-action hook behavior. Existing
 rerere settings and solutions are copied into the sandbox; newly learned solutions
 are not written back to the original cache.

@@ -48,8 +48,45 @@ test('keyboard sandbox conflict resolution preserves the original until checked 
     await expect(page.getByRole('button', { name: 'Apply', exact: true })).toBeDisabled()
     const press = async (name: string): Promise<void> => {
       const button = editor.getByRole('button', { name, exact: true })
+      try {
+        await expect(button).toBeEnabled()
+      } catch (error) {
+        await test.info().attach('conflict-editor-readiness', {
+          body: JSON.stringify(
+            await editor.evaluate((element) => ({
+              text: element.textContent,
+              focused: document.hasFocus(),
+              active: document.activeElement?.outerHTML,
+              fieldsets: [...element.querySelectorAll('fieldset')].map((fieldset) => ({
+                disabled: fieldset.disabled,
+                legend: fieldset.querySelector('legend')?.textContent
+              }))
+            })),
+            null,
+            2
+          ),
+          contentType: 'application/json'
+        })
+        throw error
+      }
       await button.focus()
+      await expect(button).toBeFocused()
+      await expect.poll(() => page.evaluate(() => document.hasFocus())).toBe(true)
+      if (name === 'Continue rehearsal') {
+        await button.evaluate((element) => {
+          element.addEventListener(
+            'click',
+            () => document.documentElement.setAttribute('data-continue-keyboard-activated', 'true'),
+            { once: true }
+          )
+        })
+      }
       await page.keyboard.press('Enter')
+      if (name === 'Continue rehearsal')
+        await expect(page.locator('html')).toHaveAttribute(
+          'data-continue-keyboard-activated',
+          'true'
+        )
     }
     await press('Resolve file.txt')
     await expect(
@@ -96,6 +133,12 @@ test('keyboard sandbox conflict resolution preserves the original until checked 
       editor.getByRole('group', { name: 'Conflict content' }).getByRole('alert')
     ).toContainText('retained draft is based on sandbox revision')
     await editor.getByRole('button', { name: 'Start from current sandbox', exact: true }).click()
+    // Discarding an obsolete draft is asynchronous. Establish the current-base
+    // editor before testing a separate external-change/focus-return transition.
+    await expect(
+      editor.getByRole('button', { name: 'Start from current sandbox', exact: true })
+    ).toHaveCount(0)
+    await expect(editor.getByRole('button', { name: 'Edit whole file', exact: true })).toBeEnabled()
     await app.focus('away')
     await expect.poll(() => page.evaluate(() => document.hasFocus())).toBe(false)
     await writeFile(join(retained.sandbox, 'file.txt'), 'changed while outside the app\n')
@@ -129,7 +172,10 @@ test('keyboard sandbox conflict resolution preserves the original until checked 
       cwd: retained.sandbox,
       encoding: 'utf8'
     }).trim()
-    await page.getByRole('button', { name: 'Apply', exact: true }).focus()
+    const apply = page.getByRole('button', { name: 'Apply', exact: true })
+    await expect(apply).toBeEnabled()
+    await apply.focus()
+    await expect(apply).toBeFocused()
     await page.keyboard.press('Enter')
     await expect(page.getByRole('button', { name: 'Cancel Apply' })).toBeFocused()
     await page.keyboard.press('Tab')
@@ -298,6 +344,8 @@ for (const scenario of ['binary', 'delete', 'rename'] as const) {
       const button = editor.getByRole('button', { name: /^Resolve / }).first()
       await expect(button).toBeEnabled()
       await button.focus()
+      await expect(button).toBeFocused()
+      await expect.poll(() => page.evaluate(() => document.hasFocus())).toBe(true)
       await page.keyboard.press('Enter')
       await expect(
         editor.getByRole('heading', { name: 'Resolve in sandbox', exact: true })
@@ -340,8 +388,19 @@ for (const scenario of ['binary', 'delete', 'rename'] as const) {
       await expect(editor.getByRole('button', { name: 'Continue rehearsal' })).toBeEnabled()
       expect(git('rev-parse', 'HEAD')).toBe(head)
       expect(await readFile(join(root, '.git/index'))).toEqual(index)
-      await editor.getByRole('button', { name: 'Continue rehearsal' }).focus()
+      const resume = editor.getByRole('button', { name: 'Continue rehearsal' })
+      await resume.focus()
+      await expect(resume).toBeFocused()
+      await expect.poll(() => page.evaluate(() => document.hasFocus())).toBe(true)
+      await resume.evaluate((element) => {
+        element.addEventListener(
+          'click',
+          () => document.documentElement.setAttribute('data-continue-keyboard-activated', 'true'),
+          { once: true }
+        )
+      })
       await page.keyboard.press('Enter')
+      await expect(page.locator('html')).toHaveAttribute('data-continue-keyboard-activated', 'true')
       await expect(page.getByRole('heading', { name: 'Merge preview completed' })).toBeVisible()
       await page.screenshot({ path: `test-results/rehearsal-${scenario}.png` })
     } finally {

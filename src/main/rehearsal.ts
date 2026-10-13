@@ -8,6 +8,7 @@ import type {
   RehearsalAction,
   RehearsalIdentity,
   RehearsalReport,
+  RehearsalResultEndpoints,
   RehearsalResult
 } from '../shared/types'
 import { prepareRebasePlan } from '../shared/rebasePlan'
@@ -59,6 +60,42 @@ const optionalString = (v: unknown): boolean => v === undefined || string(v)
 const count = (v: unknown): boolean => typeof v === 'number' && Number.isSafeInteger(v) && v >= 0
 const arrayOf = (v: unknown, check: (entry: unknown) => boolean): boolean =>
   Array.isArray(v) && v.every(check)
+const hash = (v: unknown): v is string =>
+  typeof v === 'string' && /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(v)
+const stringMap = (v: unknown): v is Record<string, string> =>
+  object(v) && Object.values(v).every(hash)
+
+function isResultEndpoints(value: unknown): value is RehearsalResultEndpoints {
+  const statuses = ['present', 'missing', 'not_produced', 'not_needed', 'unexpected']
+  if (
+    !object(value) ||
+    value.version !== 1 ||
+    !object(value.origin) ||
+    !string(value.origin.rehearsal) ||
+    !string(value.origin.repository) ||
+    !string(value.origin.repository_id) ||
+    !string(value.origin.common_dir) ||
+    !string(value.origin.git_dir) ||
+    !strings(value.action) ||
+    !object(value.checkout) ||
+    !['branch', 'detached'].includes(String(value.checkout.kind)) ||
+    !string(value.checkout.target) ||
+    !stringMap(value.pre_state) ||
+    !stringMap(value.results)
+  )
+    return false
+  if (value.carried === undefined) return true
+  return (
+    object(value.carried) &&
+    hash(value.carried.snapshot) &&
+    (value.carried.snapshot_ref === null || hash(value.carried.snapshot_ref)) &&
+    statuses.includes(String(value.carried.snapshot_ref_status)) &&
+    (value.carried.replay === null || hash(value.carried.replay)) &&
+    (value.carried.replay_ref === null || hash(value.carried.replay_ref)) &&
+    statuses.includes(String(value.carried.replay_ref_status)) &&
+    strings(value.carried.paths)
+  )
+}
 
 /** Reject unknown shapes before any renderer consumes them; tolerate extra fields. */
 function isReport(v: Record<string, unknown>): v is Record<string, unknown> & RehearsalReport {
@@ -80,6 +117,10 @@ function isReport(v: Record<string, unknown>): v is Record<string, unknown> & Re
       )) &&
     (v.can_apply === undefined || typeof v.can_apply === 'boolean') &&
     optionalString(v.sandbox) &&
+    (v.result_revision === undefined ||
+      /^rr1:(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(String(v.result_revision))) &&
+    (v.result_endpoints === undefined || isResultEndpoints(v.result_endpoints)) &&
+    optionalString(v.result_unavailable) &&
     string(v.id) &&
     v.id.length > 0 &&
     string(v.repository) &&

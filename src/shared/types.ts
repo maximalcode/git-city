@@ -562,6 +562,37 @@ export interface RehearsalReport extends RehearsalIdentity {
   }[]
   drift_unexpected: boolean
   carried?: { paths: string[]; status: string; conflicts: string[]; reason?: string }
+  /** Opaque git-rehearse revision for the exact frozen result, when available. */
+  result_revision?: string
+  /** Authoritative immutable endpoints published by compatible git-rehearse. */
+  result_endpoints?: RehearsalResultEndpoints
+  /** Explicit reason the tool could not publish authoritative result endpoints. */
+  result_unavailable?: string
+}
+
+/** Public git-rehearse v1 result endpoint descriptor. */
+export interface RehearsalResultEndpoints {
+  version: number
+  origin: {
+    rehearsal: string
+    repository: string
+    repository_id: string
+    common_dir: string
+    git_dir: string
+  }
+  action: string[]
+  checkout: { kind: 'branch' | 'detached'; target: string }
+  pre_state: Record<string, string>
+  results: Record<string, string>
+  carried?: {
+    snapshot: string
+    snapshot_ref: string | null
+    snapshot_ref_status: 'present' | 'missing' | 'not_produced' | 'not_needed' | 'unexpected'
+    replay: string | null
+    replay_ref: string | null
+    replay_ref_status: 'present' | 'missing' | 'not_produced' | 'not_needed' | 'unexpected'
+    paths: string[]
+  }
 }
 
 /** Two immutable endpoints sharing one layout and string table. */
@@ -847,6 +878,13 @@ export interface RehearsalApplyResult {
   recovery: RehearsalRecovery
 }
 
+/** Apply is bound to the complete result that was displayed for confirmation. */
+export interface RehearsalApplyRequest {
+  report: RehearsalReport
+  reviewRevision: RehearsalReviewRevision
+  expectedResultRevision: string
+}
+
 /** API exposed to the renderer via the preload bridge. */
 export type RehearsalMode = 'automatic' | 'ask' | 'off'
 export interface RehearsalModeSetting {
@@ -871,7 +909,7 @@ export interface GitCityApi {
   rehearseMerge(repoPath: string, target: string): Promise<RehearsalResult>
   rehearsalUndoStatus(repo: string): Promise<RehearsalUndoStatus>
   rehearsalUndo(repo: string, identity: RehearsalUndoStatus): Promise<RehearsalUndoResult>
-  rehearsalApply(identity: RehearsalReport): Promise<RehearsalApplyResult>
+  rehearsalApply(request: RehearsalApplyRequest): Promise<RehearsalApplyResult>
   rehearsalRecovery(repo: string): Promise<RehearsalRecovery>
   rehearsalRecover(
     repo: string,

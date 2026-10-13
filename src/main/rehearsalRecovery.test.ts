@@ -7,11 +7,24 @@ import { join } from 'path'
 import { runGit } from './git/exec'
 import { rehearse, rehearseMerge, rehearsalShow } from './rehearsal'
 import { applyRehearsal, inspectRecovery, recoverRehearsal } from './rehearsalRecovery'
+import { rehearsalReviewSummary } from './rehearsalReview'
+import { resolveRehearsalEndpoints } from './rehearsalComparison'
 
 import { commonRepository } from './repositoryQueue'
 
 const tool = process.env.GIT_CITY_REHEARSE_BIN
+const oldTool = process.env.GIT_CITY_REHEARSE_V130_BIN
 const roots: string[] = []
+
+async function applyRequest(report: import('../shared/types').RehearsalReport) {
+  const summary = await rehearsalReviewSummary(tool, report)
+  if (!report.result_revision) throw new Error('Expected a tool result revision.')
+  return {
+    report,
+    reviewRevision: summary.reviewRevision,
+    expectedResultRevision: report.result_revision
+  }
+}
 afterEach(async () => {
   delete process.env.GIT_REHEARSE_ABORT_UNDO_AT
   delete process.env.GIT_REHEARSE_ABORT_APPLY_AT
@@ -67,6 +80,78 @@ it('fails closed without a tool when an interrupted operation exists', async () 
 })
 
 describe.skipIf(!tool)('real Apply and Recovery CLI', () => {
+  it.skipIf(!oldTool)(
+    'loads and conditionally applies a retained v1.3 result through v1.4',
+    async () => {
+      const root = await fixture()
+      await writeFile(join(root, 'local.txt'), 'legacy carried work\n')
+      await runGit(root, ['add', 'local.txt'])
+      await runGit(root, ['write-tree'])
+      const before = await snapshot(root)
+      const created = spawnSync(oldTool!, ['--json', '--keep', 'merge', 'topic'], {
+        cwd: root,
+        encoding: 'utf8'
+      })
+      expect(created.status, created.stderr).toBe(0)
+      const legacy = JSON.parse(created.stdout) as import('../shared/types').RehearsalReport
+      expect(legacy.result_revision).toBeUndefined()
+      expect(legacy.result_endpoints).toBeUndefined()
+
+      const upgraded = await rehearsalShow(tool, legacy)
+      if (upgraded.kind !== 'report') throw new Error(JSON.stringify(upgraded))
+      expect(upgraded.report.result_revision).toMatch(/^rr1:/)
+      expect(upgraded.report.result_endpoints).toBeDefined()
+      expect(upgraded.report.carried?.paths).toContain('local.txt')
+      const request = await applyRequest(upgraded.report)
+      const summary = await rehearsalReviewSummary(tool, upgraded.report)
+      expect(summary.complete).toBe(true)
+      expect(summary.carried?.included).toBe(true)
+      expect(await snapshot(root)).toEqual(before)
+
+      const applied = await applyRehearsal(tool, request)
+      expect(applied.kind, JSON.stringify(applied)).toBe('applied')
+      expect(await readFile(join(root, 'file.txt'), 'utf8')).toBe('topic\n')
+      expect(await readFile(join(root, 'local.txt'), 'utf8')).toBe('legacy carried work\n')
+      expect(await runGit(root, ['show', ':local.txt'])).toBe('local base\n')
+    },
+    120_000
+  )
+
+  it.skipIf(!oldTool)(
+    'preserves an unavailable retained v1.3 conflict result',
+    async () => {
+      const root = await fixture()
+      await writeFile(join(root, 'file.txt'), 'conflicting legacy main\n')
+      await runGit(root, ['commit', '-am', 'legacy conflict'])
+      await runGit(root, ['write-tree'])
+      const before = await snapshot(root)
+      const created = spawnSync(oldTool!, ['--json', '--keep', 'merge', 'topic'], {
+        cwd: root,
+        encoding: 'utf8'
+      })
+      expect([0, 2], created.stderr).toContain(created.status)
+      const legacy = JSON.parse(created.stdout) as import('../shared/types').RehearsalReport
+      const upgraded = await rehearsalShow(tool, legacy)
+      if (upgraded.kind !== 'report') throw new Error(JSON.stringify(upgraded))
+      expect(upgraded.report.outcome).toBe('stopped')
+      expect(upgraded.report.result_revision).toBeUndefined()
+      expect(upgraded.report.result_unavailable).toBeTruthy()
+      const summary = await rehearsalReviewSummary(tool, upgraded.report)
+      expect(summary.complete).toBe(false)
+      expect(summary.afterAvailable).toBe(false)
+      expect(await snapshot(root)).toEqual(before)
+      const refused = await applyRehearsal(tool, {
+        report: upgraded.report,
+        reviewRevision: summary.reviewRevision,
+        expectedResultRevision: 'unavailable'
+      })
+      expect(refused.kind).toBe('refused')
+      expect((await rehearsalShow(tool, legacy)).kind).toBe('report')
+      expect(await snapshot(root)).toEqual(before)
+    },
+    120_000
+  )
+
   it.each(['rebase', 'cherry-pick'] as const)(
     'previews and applies exact %s results with local work',
     async (action) => {
@@ -95,7 +180,7 @@ describe.skipIf(!tool)('real Apply and Recovery CLI', () => {
       expect(shown.report.repository_id).toBe(preview.report.repository_id)
       const expected = shown.report.refs.find((ref) => ref.name === 'refs/heads/main')?.after
       expect(expected).toBeTruthy()
-      expect((await applyRehearsal(tool, shown.report)).kind).toBe('applied')
+      expect((await applyRehearsal(tool, await applyRequest(shown.report))).kind).toBe('applied')
       expect((await runGit(root, ['rev-parse', 'HEAD'])).trim()).toBe(expected)
       expect(await readFile(join(root, 'file.txt'), 'utf8')).toBe('topic\n')
       expect(await readFile(join(root, 'independent.txt'), 'utf8')).toBe('main work\n')
@@ -129,7 +214,15 @@ describe.skipIf(!tool)('real Apply and Recovery CLI', () => {
       expect(preview.report.conflicted).toBe(true)
       expect(preview.report.can_apply).toBe(false)
       expect(preview.report.conflicts.map((entry) => entry.path)).toContain('file.txt')
-      expect((await applyRehearsal(tool, preview.report)).kind).toBe('refused')
+      expect(
+        (
+          await applyRehearsal(tool, {
+            report: preview.report,
+            reviewRevision: 'stopped-result',
+            expectedResultRevision: 'stopped-result'
+          })
+        ).kind
+      ).toBe('refused')
       expect(await snapshot(root)).toEqual(before)
       expect((await rehearsalShow(tool, preview.report)).kind).toBe('report')
     },
@@ -146,7 +239,7 @@ describe.skipIf(!tool)('real Apply and Recovery CLI', () => {
     if (preview.kind !== 'report') return
     expect(preview.report.can_apply).toBe(true)
     const expected = preview.report.refs.find((r) => r.name === 'refs/heads/main')?.after
-    const applied = await applyRehearsal(tool, preview.report)
+    const applied = await applyRehearsal(tool, await applyRequest(preview.report))
     expect(applied.kind, JSON.stringify(applied)).toBe('applied')
     expect((await runGit(root, ['rev-parse', 'HEAD'])).trim()).toBe(expected)
     expect(await readFile(join(root, 'file.txt'), 'utf8')).toBe('topic\n')
@@ -161,12 +254,17 @@ describe.skipIf(!tool)('real Apply and Recovery CLI', () => {
     if (preview.kind !== 'report') throw new Error(JSON.stringify(preview))
     const original = await snapshot(root)
     expect(
-      (await applyRehearsal(tool, { ...preview.report, command: ['merge', 'different'] })).kind
+      (
+        await applyRehearsal(tool, {
+          ...(await applyRequest(preview.report)),
+          report: { ...preview.report, command: ['merge', 'different'] }
+        })
+      ).kind
     ).toBe('refused')
     expect(await snapshot(root)).toEqual(original)
     await writeFile(join(root, 'local.txt'), 'new work\n')
     const before = await snapshot(root)
-    expect((await applyRehearsal(tool, preview.report)).kind).toBe('refused')
+    expect((await applyRehearsal(tool, await applyRequest(preview.report))).kind).toBe('refused')
     expect(await snapshot(root)).toEqual(before)
     await writeFile(join(root, 'local.txt'), 'local base\n')
     const linked = join(root, 'linked')
@@ -174,11 +272,77 @@ describe.skipIf(!tool)('real Apply and Recovery CLI', () => {
     expect(await commonRepository(linked)).toBe(await commonRepository(root))
     const occupiedBefore = await snapshot(root)
     const foreignIndex = await readFile(join(root, '.git/worktrees/linked/index'))
-    const refused = await applyRehearsal(tool, preview.report)
+    const refused = await applyRehearsal(tool, await applyRequest(preview.report))
     expect(refused.kind, JSON.stringify(refused)).toBe('refused')
     expect(await snapshot(root)).toEqual(occupiedBefore)
     expect(await readFile(join(root, '.git/worktrees/linked/index'))).toEqual(foreignIndex)
     expect(spawnSync(tool!, ['--json', 'show', preview.report.id], { cwd: root }).status).toBe(0)
+  }, 120_000)
+
+  it('refuses a changed carried snapshot even when the public carry status is unchanged', async () => {
+    const root = await fixture()
+    await writeFile(join(root, 'local.txt'), 'carried work\n')
+    await runGit(root, ['add', 'local.txt'])
+    await runGit(root, ['write-tree'])
+    const before = await snapshot(root)
+    const preview = await rehearseMerge(tool, root, 'topic')
+    if (preview.kind !== 'report') throw new Error(JSON.stringify(preview))
+    expect(preview.report.carried).toBeDefined()
+    const request = await applyRequest(preview.report)
+    const carried = preview.report.result_endpoints?.carried
+    if (!carried?.snapshot_ref) throw new Error('Expected an authoritative carried snapshot ref.')
+    expect(carried.snapshot_ref).toBe(carried.snapshot)
+
+    const sandbox = preview.report.sandbox!
+    const tree = (await runGit(sandbox, ['rev-parse', `${carried.snapshot}^{tree}`])).trim()
+    const parent = (await runGit(sandbox, ['rev-parse', `${carried.snapshot}^1`])).trim()
+    const replacement = (
+      await runGit(sandbox, ['commit-tree', tree, '-p', parent, '-m', 'changed snapshot identity'])
+    ).trim()
+    await runGit(sandbox, ['update-ref', 'refs/rehearse/carried', replacement])
+
+    const changed = await rehearsalShow(tool, preview.report)
+    if (changed.kind !== 'report') throw new Error(JSON.stringify(changed))
+    expect(changed.report.carried?.status).toBe(preview.report.carried?.status)
+    expect(changed.report.result_revision).not.toBe(preview.report.result_revision)
+    const refused = await applyRehearsal(tool, request)
+    expect(refused.kind, JSON.stringify(refused)).toBe('refused')
+    expect(await snapshot(root)).toEqual(before)
+    expect((await rehearsalShow(tool, preview.report)).kind).toBe('report')
+  }, 120_000)
+
+  it('reviews and conditionally applies a contained carried result from its public endpoints', async () => {
+    const root = await fixture()
+    // This tracked edit is already present in the merge target. git-rehearse
+    // records a contained carry: the snapshot is public, but no replay commit
+    // is produced because applying the snapshot changes nothing after merge.
+    await writeFile(join(root, 'file.txt'), 'topic\n')
+    await runGit(root, ['add', 'file.txt'])
+    await runGit(root, ['write-tree'])
+    const before = await snapshot(root)
+    const preview = await rehearseMerge(tool, root, 'topic')
+    if (preview.kind !== 'report') throw new Error(JSON.stringify(preview))
+    expect(preview.report.carried?.status).toBe('contained')
+    const endpoints = preview.report.result_endpoints
+    const carried = endpoints?.carried
+    if (!endpoints || !carried) throw new Error('Expected authoritative carried endpoints.')
+    expect(carried.replay).toBeNull()
+    expect(carried.replay_ref).toBeNull()
+    expect(carried.replay_ref_status).toBe('not_produced')
+    expect(await resolveRehearsalEndpoints(preview.report)).toEqual([
+      carried.snapshot,
+      endpoints.results.HEAD
+    ])
+
+    const summary = await rehearsalReviewSummary(tool, preview.report)
+    expect(summary.complete).toBe(true)
+    expect(summary.scopes[0].before?.commit).toBe(carried.snapshot)
+    expect(summary.scopes[0].after?.commit).toBe(endpoints.results.HEAD)
+    expect(await snapshot(root)).toEqual(before)
+    const applied = await applyRehearsal(tool, await applyRequest(preview.report))
+    expect(applied.kind, JSON.stringify(applied)).toBe('applied')
+    expect(await readFile(join(root, 'file.txt'), 'utf8')).toBe('topic\n')
+    expect((await runGit(root, ['rev-parse', 'HEAD'])).trim()).toBe(endpoints.results.HEAD)
   }, 120_000)
 
   it('queries status after losing the real CLI success response without repeating Apply', async () => {
@@ -201,7 +365,7 @@ process.exit(result.status ?? 1);
 `
     )
     await chmod(wrapper, 0o755)
-    const result = await applyRehearsal(wrapper, preview.report)
+    const result = await applyRehearsal(wrapper, await applyRequest(preview.report))
     expect(result.kind, JSON.stringify(result)).toBe('uncertain')
     expect(result.recovery.state).toBe('none')
     expect(await readFile(count, 'utf8')).toBe('apply\n')
@@ -215,7 +379,7 @@ process.exit(result.status ?? 1);
     const preview = await rehearseMerge(tool, root, 'topic')
     if (preview.kind !== 'report') throw new Error(JSON.stringify(preview))
     process.env.GIT_REHEARSE_ABORT_APPLY_AT = 'after-ref-transaction'
-    const applied = await applyRehearsal(tool, preview.report)
+    const applied = await applyRehearsal(tool, await applyRequest(preview.report))
     delete process.env.GIT_REHEARSE_ABORT_APPLY_AT
     expect(applied.kind).toBe('uncertain')
     const restarted = await inspectRecovery(tool, root)
@@ -237,7 +401,7 @@ describe.skipIf(!tool)('exact Undo Apply through the real CLI', () => {
     const before = await snapshot(root)
     const preview = await rehearseMerge(tool, root, 'topic')
     if (preview.kind !== 'report') throw new Error(JSON.stringify(preview))
-    expect((await applyRehearsal(tool, preview.report)).kind).toBe('applied')
+    expect((await applyRehearsal(tool, await applyRequest(preview.report))).kind).toBe('applied')
     const status = await inspectUndo(tool, root)
     expect(status.available).toBe(true)
     expect(status.rehearsal).toBe(preview.report.id)

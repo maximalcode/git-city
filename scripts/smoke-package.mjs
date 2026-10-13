@@ -1,9 +1,9 @@
 import { expect as baseExpect, _electron as electron } from '@playwright/test'
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { mkdtemp, rm, readFile, writeFile } from 'node:fs/promises'
+import { mkdtemp, rm, readFile, realpath, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import assert from 'node:assert/strict'
 import { waitForPackagedApply } from './smoke-package-apply.mjs'
 import {
@@ -20,7 +20,18 @@ const executablePath = resolve(process.argv[2])
 const restarts = Number(process.env.GIT_CITY_SMOKE_RESTARTS ?? 2)
 assert.ok(Number.isInteger(restarts) && restarts >= 2 && restarts <= 10)
 const profile = await mkdtemp(join(tmpdir(), 'git-city-package-profile-'))
+// Keep retained Git rehearsals outside Chromium's recursively cleaned cache tree.
+const cache = await mkdtemp(join(tmpdir(), 'git-city-package-rehearsal-cache-'))
 const repo = join(profile, 'repo')
+const isWithin = (parent, candidate) => {
+  const pathFromParent = relative(parent, candidate)
+  return (
+    pathFromParent === '' ||
+    (!isAbsolute(pathFromParent) &&
+      !pathFromParent.startsWith(`..${sep}`) &&
+      pathFromParent !== '..')
+  )
+}
 const diagnosticsGraceMs = Math.min(
   180_000,
   Math.max(0, Number(process.env.GIT_CITY_SMOKE_DIAGNOSTICS_GRACE_MS ?? 180_000) || 0)
@@ -76,7 +87,7 @@ try {
         env: {
           ...process.env,
           GIT_CITY_REHEARSE_BIN: '/must-not-use-development-override',
-          GIT_REHEARSE_CACHE_DIR: join(profile, 'cache')
+          GIT_REHEARSE_CACHE_DIR: cache
         },
         timeout: 90_000
       })
@@ -85,9 +96,19 @@ try {
         packaged: app.isPackaged,
         resources: process.resourcesPath,
         platform: process.platform,
-        arch: process.arch
+        arch: process.arch,
+        sessionData: app.getPath('sessionData')
       }))
       assert.equal(context.packaged, true)
+      const [sessionDataPath, toolCachePath] = await Promise.all([
+        realpath(context.sessionData),
+        realpath(cache)
+      ])
+      assert.equal(
+        isWithin(sessionDataPath, toolCachePath),
+        false,
+        `Rehearsal cache ${toolCachePath} must be outside Electron sessionData ${sessionDataPath}`
+      )
       page = await app.firstWindow()
       await writeDiagnostics(join(diagnosticsDir, 'diagnostics-install.json'), {
         main: mainDiagnosticsInstall,
@@ -236,4 +257,5 @@ try {
   }
 } finally {
   await rm(profile, { recursive: true, force: true })
+  await rm(cache, { recursive: true, force: true })
 }

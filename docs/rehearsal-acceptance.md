@@ -39,6 +39,15 @@ uses the built app and a clean clone of this repository. Screenshots establish
 presentation only; the conditional adoption/refusal results are recorded separately
 in the current PR validation.
 
+The conditional-Apply and packaged fixtures keep the tool cache outside Electron's
+session data and check that boundary against the running app. A directory named
+`cache` beneath the user profile aliases Chromium's `Cache` on case-insensitive
+filesystems; Chromium can delete its children asynchronously during startup.
+A real retained-rehearsal probe reproduced that deletion and verified preservation
+with a separate cache. Failed conditional tests preserve synthetic repository and
+tool-cache archives, public report/revision data, refs and object visibility for
+diagnosis. They do not archive the browser profile or relax Apply assertions.
+
 The additional verification seams are:
 
 | Requirement                                                                                                | Verification source                                                                                                                                                                               |

@@ -45,11 +45,13 @@ async function mountReview(page: Page): Promise<void> {
     let unavailable = false
     let delayNextFile = false
     let delayedFile: (() => void) | null = null
+    let delayNextSummary = false
+    let delayedSummary: (() => void) | null = null
     const api = {
       rehearsalReviewSummary: async (request: typeof identity) => {
         calls.summary++
         if (unavailable) throw new Error('Retained review object is unavailable.')
-        return {
+        const result = {
           identity: request,
           reviewRevision: revision,
           toolResultRevision: revision,
@@ -86,6 +88,11 @@ async function mountReview(page: Page): Promise<void> {
           carried: null,
           changeMap: { 'tracked-worktree': [], [referenceScopeId]: referenceEntries }
         }
+        if (delayNextSummary) {
+          delayNextSummary = false
+          return new Promise((resolve) => (delayedSummary = () => resolve(result)))
+        }
+        return result
       },
       rehearsalReviewFiles: async (
         request: typeof identity,
@@ -137,6 +144,7 @@ async function mountReview(page: Page): Promise<void> {
         }
         return result
       },
+      rehearsalDraftList: async () => ({ status: 'saved' as const, records: [] }),
       rehearsalAvailability: async () => ({ available: true, configured: true, message: '' }),
       rehearsalRecovery: async () => ({
         state: 'none' as const,
@@ -181,6 +189,14 @@ async function mountReview(page: Page): Promise<void> {
       render,
       setRevision: (next: string) => (revision = next),
       setUnavailable: (next: boolean) => (unavailable = next),
+      delayNextSummary: () => (delayNextSummary = true),
+      resolveDelayedSummary: () => {
+        const resolve = delayedSummary
+        delayedSummary = null
+        resolve?.()
+      },
+      hasDelayedSummary: () => delayedSummary !== null,
+      hasDelayedFile: () => delayedFile !== null,
       delayNextFile: () => (delayNextFile = true),
       resolveDelayedFile: () => {
         const resolver = delayedFile
@@ -258,12 +274,30 @@ test('late content from an older revision cannot replace the current revision', 
     state.delayNextFile()
   })
   await review.getByRole('option', { name: /file-001\.txt/ }).click()
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        (window as unknown as { reviewFixture: any }).reviewFixture.hasDelayedFile()
+      )
+    )
+    .toBe(true)
   await page.evaluate(() => {
     const state = (window as unknown as { reviewFixture: any }).reviewFixture
     state.setRevision('revision-2')
+    state.delayNextSummary()
     state.render({ ...state.report, id: 'review-2' })
   })
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        (window as unknown as { reviewFixture: any }).reviewFixture.hasDelayedSummary()
+      )
+    )
+    .toBe(true)
   await expect(review.locator('pre')).toHaveCount(0)
+  await page.evaluate(() => {
+    ;(window as unknown as { reviewFixture: any }).reviewFixture.resolveDelayedSummary()
+  })
   await expect(review.locator('.rehearsal-review-files').getByRole('option')).toHaveCount(200)
   await review.getByRole('option', { name: /file-000\.txt/ }).click()
   await review.getByRole('tab', { name: 'After', exact: true }).click()
@@ -292,6 +326,13 @@ test('keeps scope switching available while a file is pending, then loads the se
     state.delayNextFile()
   })
   await files.getByRole('option', { name: /file-001\.txt/ }).click()
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        (window as unknown as { reviewFixture: any }).reviewFixture.hasDelayedFile()
+      )
+    )
+    .toBe(true)
   await expect(scope).toBeEnabled()
 
   await scope.focus()

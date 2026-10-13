@@ -406,14 +406,7 @@ function absentSideDiff(before: string | null, after: string | null): FrozenDiff
 function pointerDiff(before: string, after: string): FrozenDiff {
   if (before === after)
     return { hunks: [], additions: 0, deletions: 0, tooLarge: false, unavailable: false }
-  const hunk: DiffHunk = {
-    header: '@@ -1,1 +1,1 @@',
-    lines: [
-      { kind: 'del', text: before },
-      { kind: 'add', text: after }
-    ]
-  }
-  return { hunks: [hunk], additions: 1, deletions: 1, tooLarge: false, unavailable: false }
+  return absentSideDiff(before, after)
 }
 
 async function retainedBlobDiff(root: string, before: string, after: string): Promise<FrozenDiff> {
@@ -452,13 +445,18 @@ async function retainedBlobDiff(root: string, before: string, after: string): Pr
   }
 }
 
-async function makeEntry(
+async function analyzeEntry(
   root: string,
   scopeId: string,
   raw: RawEntry,
   renameDetectionLimited = false,
   includeDiff = true
-): Promise<RehearsalReviewEntry> {
+): Promise<{
+  entry: RehearsalReviewEntry
+  before: BlobText
+  after: BlobText
+  diff: FrozenDiff | null
+}> {
   const old = side(raw.oldMode, raw.oldId)
   const newer = side(raw.newMode, raw.newId)
   const oldText = await blobText(root, old.objectId, old.mode)
@@ -495,18 +493,23 @@ async function makeEntry(
   }
   const changes = diff?.tooLarge ? 'too-large' : diff?.unavailable ? 'unavailable' : baseChanges
   return {
-    ...metadata,
-    old,
-    new: newer,
-    binary,
-    type,
-    text: { changes, before: oldAvailable, after: newAvailable },
-    lines: {
-      before: oldContent !== null ? linesOf(oldContent) : null,
-      after: newContent !== null ? linesOf(newContent) : null,
-      additions: diff && !diff.tooLarge && !diff.unavailable ? diff.additions : null,
-      deletions: diff && !diff.tooLarge && !diff.unavailable ? diff.deletions : null
-    }
+    entry: {
+      ...metadata,
+      old,
+      new: newer,
+      binary,
+      type,
+      text: { changes, before: oldAvailable, after: newAvailable },
+      lines: {
+        before: oldContent !== null ? linesOf(oldContent) : null,
+        after: newContent !== null ? linesOf(newContent) : null,
+        additions: diff && !diff.tooLarge && !diff.unavailable ? diff.additions : null,
+        deletions: diff && !diff.tooLarge && !diff.unavailable ? diff.deletions : null
+      }
+    },
+    before: oldText,
+    after: newText,
+    diff
   }
 }
 
@@ -855,13 +858,15 @@ export async function rehearsalReviewFiles(
     const page = all.slice(offset, offset + REHEARSAL_REVIEW_PAGE_SIZE)
     const entries = await mapBounded(
       page,
-      (raw) =>
-        makeEntry(
-          data.root,
-          selectedScope.scope.scopeId,
-          raw,
-          selectedScope.scope.renameDetectionLimited
-        ),
+      async (raw) =>
+        (
+          await analyzeEntry(
+            data.root,
+            selectedScope.scope.scopeId,
+            raw,
+            selectedScope.scope.renameDetectionLimited
+          )
+        ).entry,
       BLOB_READ_CONCURRENCY
     )
     const nextCursor =
@@ -902,15 +907,13 @@ export async function rehearsalReviewFile(
       (candidate) => entryIdFor(selectedScope.scope.scopeId, candidate) === entryId
     )
     if (!raw) throw new Error('Review file is unavailable. Refresh the file list.')
-    const entry = await makeEntry(
+    const { entry, before, after, diff } = await analyzeEntry(
       data.root,
       selectedScope.scope.scopeId,
       raw,
       selectedScope.scope.renameDetectionLimited,
       view === 'changes'
     )
-    const before = await blobText(data.root, entry.old.objectId, entry.old.mode)
-    const after = await blobText(data.root, entry.new.objectId, entry.new.mode)
     let availability: RehearsalReviewAvailability
     let text: string | null = null
     let hunks: DiffHunk[] = []
@@ -925,29 +928,8 @@ export async function rehearsalReviewFile(
             ? 'unavailable'
             : 'absent'
       if (selectedScope.scope.after?.kind === 'commit') text = contentText(after)
-    } else if (entry.text.changes === 'mode-only') {
-      availability = 'mode-only'
     } else {
-      const beforeText = contentText(before)
-      const afterText = contentText(after)
-      let diff: FrozenDiff | null = null
-      if (!entry.old.present && afterText !== null) diff = absentSideDiff(null, afterText)
-      else if (beforeText !== null && !entry.new.present) diff = absentSideDiff(beforeText, null)
-      else if (beforeText !== null && afterText !== null) {
-        diff =
-          entry.type === 'gitlink'
-            ? pointerDiff(beforeText, afterText)
-            : entry.old.objectId && entry.new.objectId
-              ? await retainedBlobDiff(data.root, entry.old.objectId, entry.new.objectId)
-              : null
-      }
-      availability = diff
-        ? diff.tooLarge
-          ? 'too-large'
-          : diff.unavailable
-            ? 'unavailable'
-            : 'available'
-        : entry.text.changes
+      availability = entry.text.changes
       if (diff && !diff.tooLarge && !diff.unavailable) hunks = diff.hunks
     }
     await verifyFrozenState(tool, identity, data)

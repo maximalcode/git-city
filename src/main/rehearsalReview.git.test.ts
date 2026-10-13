@@ -163,6 +163,34 @@ function gitlinkFixture(): ReviewFixture {
   return mockFixture(origin, sandbox, 'submodule', beforeId, afterId)
 }
 
+function gitlinkConversionFixture(mode: string, reverse: boolean) {
+  const origin = makeTempRepo('git-city-review-origin-')
+  const sandbox = makeTempRepo('git-city-review-sandbox-')
+  cleanups.push(origin.path, sandbox.path)
+  origin.write('origin.txt', 'origin worktree\n')
+  origin.commitAll('origin')
+  sandbox.git('commit', '--allow-empty', '-m', 'nested commit')
+  const pointer = sandbox.git('rev-parse', 'HEAD').trim()
+  const content = mode === '120000' ? 'target-path' : 'replacement line one\nreplacement line two\n'
+  sandbox.write('payload', content)
+  const blob = sandbox.git('hash-object', '-w', '--', 'payload').trim()
+  const pointerEntry = `160000,${pointer},converted`
+  const contentEntry = `${mode},${blob},converted`
+  sandbox.git('update-index', '--add', '--cacheinfo', reverse ? contentEntry : pointerEntry)
+  sandbox.git('commit', '-m', 'before conversion')
+  const beforeId = sandbox.git('rev-parse', 'HEAD').trim()
+  sandbox.git('update-index', '--add', '--cacheinfo', reverse ? pointerEntry : contentEntry)
+  sandbox.git('commit', '-m', 'after conversion')
+  const afterId = sandbox.git('rev-parse', 'HEAD').trim()
+  return {
+    data: mockFixture(origin, sandbox, 'converted', beforeId, afterId),
+    before: reverse ? content : pointer,
+    after: reverse ? pointer : content,
+    oldMode: reverse ? mode : '160000',
+    newMode: reverse ? '160000' : mode
+  }
+}
+
 async function reviewChanges(data: ReviewFixture) {
   const summary = await rehearsalReviewSummary('/tool', data.identity)
   const files = await rehearsalReviewFiles(
@@ -285,10 +313,7 @@ describe('frozen review Git-backed API', () => {
     const oversized = await reviewChanges(
       fixture(
         Buffer.alloc(REHEARSAL_REVIEW_BLOB_LIMIT + 1, 0x61),
-        Buffer.concat([
-          Buffer.alloc(REHEARSAL_REVIEW_BLOB_LIMIT, 0x61),
-          Buffer.from('b')
-        ]),
+        Buffer.concat([Buffer.alloc(REHEARSAL_REVIEW_BLOB_LIMIT, 0x61), Buffer.from('b')]),
         'large.txt'
       )
     )
@@ -299,6 +324,52 @@ describe('frozen review Git-backed API', () => {
       lines: { before: null, after: null, additions: null, deletions: null }
     })
   })
+
+  it.each([
+    ['regular file', '100644', false],
+    ['regular file', '100644', true],
+    ['symlink', '120000', false],
+    ['symlink', '120000', true]
+  ] as const)(
+    'reviews gitlink conversions with %s mode %s (reverse=%s)',
+    async (_kind, mode, reverse) => {
+      const { data, before, after, oldMode, newMode } = gitlinkConversionFixture(mode, reverse)
+      const beforeLines = before.replace(/\n$/, '').split('\n')
+      const afterLines = after.replace(/\n$/, '').split('\n')
+      const { files, result, summary } = await reviewChanges(data)
+      expect(files.entries[0]).toMatchObject({
+        old: { mode: oldMode },
+        new: { mode: newMode },
+        text: { changes: 'available', before: 'available', after: 'available' },
+        lines: { additions: afterLines.length, deletions: beforeLines.length }
+      })
+      expect(result).toMatchObject({ availability: 'available', entry: files.entries[0] })
+      expect(result.hunks).toEqual([
+        {
+          header: `@@ -1,${beforeLines.length} +1,${afterLines.length} @@`,
+          lines: [
+            ...beforeLines.map((text) => ({ kind: 'del', text })),
+            ...afterLines.map((text) => ({ kind: 'add', text }))
+          ]
+        }
+      ])
+      for (const [view, text] of [
+        ['before', before],
+        ['after', after]
+      ] as const) {
+        const content = await rehearsalReviewFile(
+          '/tool',
+          data.identity,
+          summary.reviewRevision,
+          'tracked-worktree',
+          result.entryId,
+          view
+        )
+        expect(content).toMatchObject({ availability: 'available', text })
+      }
+      expect(data.origin.git('status', '--porcelain')).toBe('')
+    }
+  )
 
   it('keeps external diff and textconv disabled for unusual literal paths', async () => {
     const path = '-literal path [x]$.txt'

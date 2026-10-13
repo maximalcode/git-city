@@ -56,7 +56,28 @@ test('restores panel focus when a continued child workflow unmounts', async ({ p
       drift: [],
       drift_unexpected: false
     }
-    const continued = { ...stopped, id: 'continued-preview', outcome: 'clean' as const }
+    const continued = { ...stopped, outcome: 'clean' as const }
+    let retainedDraftVisible = false
+    let discardFailures = 1
+    const retainedDraft = {
+      schema: 1 as const,
+      key: {
+        repository: identity.repository,
+        origin_worktree: identity.origin_worktree,
+        repository_id: identity.repository_id,
+        rehearsal_id: stopped.id,
+        path: 'conflicted.txt'
+      },
+      base_revision: 'sandbox-revision',
+      base_content: '<<<<<<< ours\nold\n=======\nincoming\n>>>>>>> theirs\n',
+      mode: 'whole-file' as const,
+      whole_file_text: 'retained resolution text\n',
+      choices: {},
+      edits: {},
+      acknowledged_hunks: [],
+      draft_revision: 3,
+      saved_at_unix: 1
+    }
     const endpoint = {
       kind: 'commit' as const,
       commit: 'a'.repeat(40),
@@ -119,7 +140,22 @@ test('restores panel focus when a continued child workflow unmounts', async ({ p
       rehearsalAvailability: async () => ({ available: true, configured: true, message: '' }),
       rehearsalRecovery: async () => recovery,
       rehearsalList: async () => inventory,
-      rehearsalDraftList: async () => ({ status: 'saved' as const, records: [] }),
+      rehearsalDraftList: async () => ({
+        status: 'saved' as const,
+        records: retainedDraftVisible ? [retainedDraft] : []
+      }),
+      rehearsalDraftDiscard: async () => {
+        if (discardFailures > 0) {
+          discardFailures -= 1
+          return {
+            status: 'conflict' as const,
+            draft_revision: retainedDraft.draft_revision,
+            message: 'The saved draft changed and was kept.'
+          }
+        }
+        retainedDraftVisible = false
+        return { status: 'absent' as const, draft_revision: null }
+      },
       rehearsalReviewSummary: async () => summary,
       rehearsalReviewFiles: async () => ({
         identity,
@@ -152,10 +188,36 @@ test('restores panel focus when a continued child workflow unmounts', async ({ p
       .createRoot(host)
       .render(ReactModule.default.createElement(panelModule.default))
     ;(
-      window as unknown as { focusHarness: { store: typeof store; continued: unknown } }
+      window as unknown as {
+        focusHarness: {
+          store: typeof store
+          continued: unknown
+          showRetainedDraft: () => Promise<void>
+        }
+      }
     ).focusHarness = {
       store,
-      continued
+      continued,
+      showRetainedDraft: async () => {
+        retainedDraftVisible = true
+        store.setState({
+          rehearsalResults: {
+            [identity.repository]: {
+              kind: 'report',
+              report: { ...stopped }
+            }
+          }
+        })
+        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+        store.setState({
+          rehearsalResults: {
+            [identity.repository]: {
+              kind: 'report',
+              report: { ...continued }
+            }
+          }
+        })
+      }
     }
   })
 
@@ -218,4 +280,19 @@ test('restores panel focus when a continued child workflow unmounts', async ({ p
     })
   })
   await expect.poll(() => page.evaluate(() => document.activeElement === document.body)).toBe(true)
+
+  await page.evaluate(() => {
+    const harness = (window as unknown as { focusHarness: { showRetainedDraft: () => void } })
+      .focusHarness
+    // Model a clean report refreshed after Continue ran outside Git City.
+    harness.showRetainedDraft()
+  })
+  const retained = panel.getByRole('region', { name: 'Retained rehearsal drafts' })
+  await expect(retained.getByText(/A saved draft for conflicted\.txt remains/)).toBeVisible()
+  await retained.getByText('Inspect retained draft for conflicted.txt').click()
+  await expect(retained.getByText('retained resolution text')).toBeVisible()
+  await retained.getByRole('button', { name: 'Discard retained draft for conflicted.txt' }).click()
+  await expect(retained.getByRole('alert')).toContainText('The saved draft changed and was kept.')
+  await retained.getByRole('button', { name: 'Discard retained draft for conflicted.txt' }).click()
+  await expect(retained.getByText(/A saved draft for conflicted\.txt remains/)).toHaveCount(0)
 })

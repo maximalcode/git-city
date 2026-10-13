@@ -514,11 +514,12 @@ export default function RehearsalPanel(): React.JSX.Element | null {
                 )
               )}
             </div>
-            {result?.kind === 'report' && result.report.outcome === 'stopped' && (
+            {result?.kind === 'report' && (
               <RehearsalConflicts
                 key={`${repo}:${result.report.id}`}
                 report={result.report}
                 blocked={!!blocked}
+                draftRecoveryOnly={result.report.outcome !== 'stopped'}
                 onDirtyStateChange={setConflictDirty}
                 onAbandonAvailable={(abandon) => {
                   conflictAbandon.current = abandon

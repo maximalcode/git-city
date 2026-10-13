@@ -126,6 +126,7 @@ async function mountApplyPanel(page: Page, strictCapability: boolean): Promise<v
       message: ''
     }
     bridgeModule.setBridge({
+      rehearsalDraftList: async () => ({ status: 'saved' as const, records: [] }),
       rehearsalAvailability: async () => ({ available: true, configured: true, message: '' }),
       rehearsalRecovery: async () => recovery,
       rehearsalReviewSummary: async () => summary,

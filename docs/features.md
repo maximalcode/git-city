@@ -197,7 +197,8 @@ complete
 Ours/Theirs versions; deletion/rename conflicts have external sandbox instructions.
 Each text section starts unreviewed. Explicit hunk or remaining-section choices and whole-file
 confirmation enable Save and stage; later edits invalidate the affected decision. Decisions
-survive navigation and restart with the draft, and external revisions require deliberate
+survive navigation and restart with the draft. Retained drafts remain inspectable and explicitly
+discardable even after external Continue completes the rehearsal; external revisions require deliberate
 reconciliation. The complete assembled result can be inspected before saving.
 Preflight identifies tracked work, staging consequences and excluded untracked
 files; the retained report supersedes it after execution. The completed summary

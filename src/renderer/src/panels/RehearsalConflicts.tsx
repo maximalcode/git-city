@@ -6,7 +6,7 @@ import type {
   RehearsalDraftRecord,
   RehearsalReport
 } from '../../../shared/types'
-import { runRepoRead, useRepoQuery } from '../lib/repoQuery'
+import { useRepoQuery } from '../lib/repoQuery'
 import { bridge } from '../lib/bridge'
 import { useStore } from '../store'
 import { assemble, ConflictHunk, type Choice } from './MergeView'
@@ -34,12 +34,14 @@ function draftText(record: RehearsalDraftPayload): string {
 export default function RehearsalConflicts({
   report,
   blocked,
+  draftRecoveryOnly = false,
   onDirtyStateChange,
   onAbandonAvailable,
   onPrepareNavigationAvailable
 }: {
   report: RehearsalReport
   blocked: boolean
+  draftRecoveryOnly?: boolean
   onDirtyStateChange?: (dirty: boolean) => void
   onAbandonAvailable?: (abandon: (() => Promise<boolean>) | null) => void
   onPrepareNavigationAvailable?: (prepare: (() => Promise<boolean>) | null) => void
@@ -66,10 +68,11 @@ export default function RehearsalConflicts({
   )
   const outstanding =
     drafts.data?.records.filter(
-      (record) => !report.conflicts.some((conflict) => conflict.path === record.key.path)
+      (record) =>
+        draftRecoveryOnly || !report.conflicts.some((conflict) => conflict.path === record.key.path)
     ) ?? []
   const { data, error, loading, reload } = useRepoQuery(
-    active ? ([report, active] as const) : null,
+    !draftRecoveryOnly && active ? ([report, active] as const) : null,
     (api, [identity, path]) => api.rehearsalConflictRead(identity, path)
   )
   const shown = data?.file.path === active ? data : null
@@ -131,32 +134,47 @@ export default function RehearsalConflicts({
     if (!resume) reload()
     if (result && result.kind !== 'report') setNotice(`⚠ ${result.message}`)
   }
+  if (
+    draftRecoveryOnly &&
+    !drafts.loading &&
+    !drafts.error &&
+    drafts.data?.status !== 'unknown' &&
+    outstanding.length === 0
+  )
+    return <></>
   return (
-    <section aria-label="Sandbox conflict editor">
+    <section
+      aria-label={draftRecoveryOnly ? 'Retained rehearsal drafts' : 'Sandbox conflict editor'}
+    >
       <h3 ref={heading} tabIndex={-1}>
-        Resolve in sandbox
+        {draftRecoveryOnly ? 'Retained rehearsal drafts' : 'Resolve in sandbox'}
       </h3>
-      <p>
-        Rehearsal {report.id}. Original worktree: {report.origin_worktree}. Changes here are saved
-        and staged only in the sandbox.
-      </p>
-      <p>
-        Sandbox: <code>{report.sandbox}</code>
-      </p>
-      <p>
-        For deletion or rename conflicts, open the sandbox folder shown above in your editor or
-        terminal. Choose the final paths and contents, then stage each resolved path with git add
-        (or git rm for a deletion) in that sandbox. Refresh to check the remaining conflicts. Apply
-        stays unavailable until Continue produces a completed report.
-      </p>
-      {(error || notice) && <p role="alert">{error ? `⚠ ${error}` : notice}</p>}
+      {!draftRecoveryOnly && (
+        <>
+          <p>
+            Rehearsal {report.id}. Original worktree: {report.origin_worktree}. Changes here are
+            saved and staged only in the sandbox.
+          </p>
+          <p>
+            Sandbox: <code>{report.sandbox}</code>
+          </p>
+          <p>
+            For deletion or rename conflicts, open the sandbox folder shown above in your editor or
+            terminal. Choose the final paths and contents, then stage each resolved path with git
+            add (or git rm for a deletion) in that sandbox. Refresh to check the remaining
+            conflicts. Apply stays unavailable until Continue produces a completed report.
+          </p>
+          {(error || notice) && <p role="alert">{error ? `⚠ ${error}` : notice}</p>}
+        </>
+      )}
       {drafts.error && <p role="alert">Saved drafts could not be inspected: {drafts.error}</p>}
       {drafts.data?.status === 'unknown' && <p role="alert">{drafts.data.message}</p>}
+      {draftRecoveryOnly && notice && <p role="alert">{notice}</p>}
       {outstanding.map((record) => (
         <section key={record.key.path} aria-label={`Retained draft for ${record.key.path}`}>
           <p>
-            A saved draft for {record.key.path} remains, although the sandbox no longer lists it as
-            unresolved. Review it before Continue.
+            A saved draft for {record.key.path} remains. Inspect it or explicitly discard it before
+            Continue or Apply.
           </p>
           <details>
             <summary>Inspect retained draft for {record.key.path}</summary>
@@ -172,9 +190,13 @@ export default function RehearsalConflicts({
                     return
                   }
                   clearRehearsalDraftSession(rehearsalDraftSessionKey(report, record.key.path))
-                  if (active === record.key.path) {
-                    setEditorDirty(false)
-                    onDirtyStateChange?.(false)
+                  setNotice('')
+                  if (draftRecoveryOnly || active === record.key.path) {
+                    const remaining =
+                      draftRecoveryOnly &&
+                      outstanding.some((draft) => draft.key.path !== record.key.path)
+                    setEditorDirty(remaining)
+                    onDirtyStateChange?.(remaining)
                   }
                   drafts.reload()
                 })
@@ -185,89 +207,94 @@ export default function RehearsalConflicts({
           </button>
         </section>
       ))}
-      <div>
-        {report.conflicts.map((c) => (
-          <button key={c.path} disabled={disabled} onClick={() => void selectConflict(c.path)}>
-            Resolve {c.path}
-          </button>
-        ))}
-      </div>
-      {active && <p>Editing {active}</p>}
-      {shown?.external && (
-        <p role="status">
-          ⚠ Deletion or rename conflict. One or both versions have no file at this path. Follow the
-          external resolution and staging instructions above; no text buffer will be saved here.
-        </p>
-      )}
-      {shown?.file.binary && (
-        <fieldset disabled={disabled}>
-          <legend>Binary conflict: choose a complete version</legend>
-          <p>
-            Ours is Git stage 2; Theirs is Git stage 3. During rebase, Ours is the destination and
-            Theirs is the commit being replayed. Choosing a version replaces and stages this sandbox
-            file.
-          </p>
-          {(['ours', 'theirs'] as const).map((side) => (
-            <button
-              key={side}
-              onClick={() => {
-                void save(report, shown.file.path, shown.revision, { side }).then((result) => {
-                  setNotice(result.message ?? 'Saved in sandbox.')
-                  if (result.ok) {
-                    setActive(null)
-                    heading.current?.focus()
-                  }
-                })
+      {!draftRecoveryOnly && (
+        <>
+          <div>
+            {report.conflicts.map((c) => (
+              <button key={c.path} disabled={disabled} onClick={() => void selectConflict(c.path)}>
+                Resolve {c.path}
+              </button>
+            ))}
+          </div>
+          {active && <p>Editing {active}</p>}
+          {shown?.external && (
+            <p role="status">
+              ⚠ Deletion or rename conflict. One or both versions have no file at this path. Follow
+              the external resolution and staging instructions above; no text buffer will be saved
+              here.
+            </p>
+          )}
+          {shown?.file.binary && (
+            <fieldset disabled={disabled}>
+              <legend>Binary conflict: choose a complete version</legend>
+              <p>
+                Ours is Git stage 2; Theirs is Git stage 3. During rebase, Ours is the destination
+                and Theirs is the commit being replayed. Choosing a version replaces and stages this
+                sandbox file.
+              </p>
+              {(['ours', 'theirs'] as const).map((side) => (
+                <button
+                  key={side}
+                  onClick={() => {
+                    void save(report, shown.file.path, shown.revision, { side }).then((result) => {
+                      setNotice(result.message ?? 'Saved in sandbox.')
+                      if (result.ok) {
+                        setActive(null)
+                        heading.current?.focus()
+                      }
+                    })
+                  }}
+                >
+                  Use {side} in sandbox
+                </button>
+              ))}
+            </fieldset>
+          )}
+          {shown && !shown.external && !shown.file.binary && (
+            <ConflictEditor
+              key={rehearsalDraftSessionKey(report, shown.file.path)}
+              report={report}
+              buffer={shown}
+              disabled={disabled}
+              onSaved={(message) => {
+                setActive(null)
+                setNotice(message)
+                drafts.reload()
+                heading.current?.focus()
               }}
-            >
-              Use {side} in sandbox
-            </button>
-          ))}
-        </fieldset>
+              onError={setNotice}
+              onDirtyStateChange={(dirty) => {
+                setEditorDirty(dirty)
+                onDirtyStateChange?.(dirty)
+              }}
+              onAbandonAvailable={(abandon) => {
+                registerEditorAbandon(abandon)
+                onAbandonAvailable?.(abandon)
+              }}
+              onPrepareNavigationAvailable={(prepare) => {
+                editorPrepare.current = prepare
+                onPrepareNavigationAvailable?.(prepare)
+              }}
+            />
+          )}
+          <button disabled={disabled} onClick={() => void update()}>
+            Refresh sandbox
+          </button>
+          <button
+            disabled={
+              disabled ||
+              report.conflicts.length > 0 ||
+              editorDirty ||
+              outstanding.length > 0 ||
+              drafts.loading ||
+              !!drafts.error
+            }
+            onClick={() => void update(true)}
+          >
+            Continue rehearsal
+          </button>
+        </>
       )}
-      {shown && !shown.external && !shown.file.binary && (
-        <ConflictEditor
-          key={rehearsalDraftSessionKey(report, shown.file.path)}
-          report={report}
-          buffer={shown}
-          disabled={disabled}
-          onSaved={(message) => {
-            setActive(null)
-            setNotice(message)
-            drafts.reload()
-            heading.current?.focus()
-          }}
-          onError={setNotice}
-          onDirtyStateChange={(dirty) => {
-            setEditorDirty(dirty)
-            onDirtyStateChange?.(dirty)
-          }}
-          onAbandonAvailable={(abandon) => {
-            registerEditorAbandon(abandon)
-            onAbandonAvailable?.(abandon)
-          }}
-          onPrepareNavigationAvailable={(prepare) => {
-            editorPrepare.current = prepare
-            onPrepareNavigationAvailable?.(prepare)
-          }}
-        />
-      )}
-      <button disabled={disabled} onClick={() => void update()}>
-        Refresh sandbox
-      </button>
-      <button
-        disabled={
-          disabled ||
-          report.conflicts.length > 0 ||
-          editorDirty ||
-          outstanding.length > 0 ||
-          drafts.loading ||
-          !!drafts.error
-        }
-        onClick={() => void update(true)}
-      >
-        Continue rehearsal
-      </button>
     </section>
   )
 }
@@ -355,6 +382,13 @@ export function ConflictEditor({
     }),
     [report.id, report.repository, report.repository_id, report.origin_worktree]
   )
+  const draftQueryArgs = [identity, buffer.file.path, buffer.revision, buffer.base_content] as const
+  const draftQueryKey = JSON.stringify(draftQueryArgs)
+  const draftRead = useRepoQuery(draftQueryArgs, (api, [draftIdentity, path]) =>
+    api.rehearsalDraftRead(draftIdentity, path)
+  )
+  const handledDraftQueryKey = useRef<string | null>(null)
+  const preserveBufferForRead = useRef(false)
 
   const restoreRecord = useCallback(
     (record: RehearsalDraftRecord): void => {
@@ -390,6 +424,7 @@ export function ConflictEditor({
         latestDraftStatus.current === 'error' ||
         latestDraftStatus.current === 'unknown' ||
         latestDraftStatus.current === 'obsolete')
+    preserveBufferForRead.current = preserveBuffer
     openedRevision.current = buffer.revision
     setDraftStatus('loading')
     setDraftRevision(null)
@@ -404,54 +439,66 @@ export function ConflictEditor({
       setRaw(null)
       setAcknowledgements([])
     }
-    const api = bridge()
-    if (!api) {
-      setDraftStatus('saved')
-      dirtyCallback.current?.(false)
+  }, [buffer.file.path, buffer.revision, buffer.base_content, identity, restoreRecord])
+
+  useEffect(() => {
+    if (handledDraftQueryKey.current !== draftQueryKey) {
+      handledDraftQueryKey.current = draftQueryKey
       return
     }
-    return runRepoRead(
-      () => api.rehearsalDraftRead(identity, buffer.file.path),
-      (patch) => {
-        if (patch.error) {
-          setDraftStatus('error')
-          dirtyCallback.current?.(true)
-        }
-        const result = patch.data
-        if (!result) return
-        if (result.record) {
-          savedRevision.current = result.record.draft_revision
-          setDraftRevision(result.record.draft_revision)
-          if (result.record.base_revision !== buffer.revision) {
-            if (!preserveBuffer) restoreRecord(result.record)
-            setAcknowledgements([])
-            setObsolete(result.record)
-            setDraftStatus('obsolete')
-            dirtyCallback.current?.(true)
-            return
-          }
-          if (!preserveBuffer) restoreRecord(result.record)
-          setDraftStatus(
-            sessionRef.current.persistenceFailed
-              ? 'error'
-              : result.status === 'unknown'
-                ? 'unknown'
-                : 'saved'
-          )
-          dirtyCallback.current?.(true)
-        } else {
-          savedRevision.current = null
-          setDraftStatus(
-            sessionRef.current.persistenceFailed || ['unknown', 'error'].includes(result.status)
-              ? 'error'
-              : 'saved'
-          )
-          dirtyCallback.current?.(preserveBuffer || ['unknown', 'error'].includes(result.status))
-        }
+    if (draftRead.loading) return
+    if (draftRead.error) {
+      setDraftStatus('error')
+      dirtyCallback.current?.(true)
+      return
+    }
+    const result = draftRead.data
+    if (!result) {
+      if (!bridge()) {
+        setDraftStatus('saved')
+        dirtyCallback.current?.(false)
       }
-    )
-    // The shared read boundary drops responses from an obsolete sandbox revision.
-  }, [buffer.file.path, buffer.revision, buffer.base_content, identity, restoreRecord])
+      return
+    }
+    const preserveBuffer = preserveBufferForRead.current
+    if (result.record) {
+      savedRevision.current = result.record.draft_revision
+      setDraftRevision(result.record.draft_revision)
+      if (result.record.base_revision !== buffer.revision) {
+        if (!preserveBuffer) restoreRecord(result.record)
+        setAcknowledgements([])
+        setObsolete(result.record)
+        setDraftStatus('obsolete')
+        dirtyCallback.current?.(true)
+        return
+      }
+      if (!preserveBuffer) restoreRecord(result.record)
+      setDraftStatus(
+        sessionRef.current.persistenceFailed
+          ? 'error'
+          : result.status === 'unknown'
+            ? 'unknown'
+            : 'saved'
+      )
+      dirtyCallback.current?.(true)
+    } else {
+      savedRevision.current = null
+      setDraftStatus(
+        sessionRef.current.persistenceFailed || ['unknown', 'error'].includes(result.status)
+          ? 'error'
+          : 'saved'
+      )
+      dirtyCallback.current?.(preserveBuffer || ['unknown', 'error'].includes(result.status))
+    }
+  }, [
+    buffer.base_content,
+    buffer.revision,
+    draftQueryKey,
+    draftRead.data,
+    draftRead.error,
+    draftRead.loading,
+    restoreRecord
+  ])
 
   useEffect(() => {
     const onBeforeUnload = (event: BeforeUnloadEvent): void => {

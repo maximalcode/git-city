@@ -330,6 +330,7 @@ test('picks a rendered change beyond the first page while a conflicting filter i
       }
     }
     const api = {
+      rehearsalDraftList: async () => ({ status: 'saved' as const, records: [] }),
       rehearsalAvailability: async () => ({ available: true, configured: true, message: '' }),
       rehearsalRecovery: async () => ({
         state: 'none' as const,

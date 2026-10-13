@@ -1,8 +1,15 @@
 import { expect, test, type Page } from '@playwright/test'
 
-async function mountApplyPanel(page: Page, strictCapability: boolean): Promise<void> {
-  await page.goto('/')
+async function mountApplyPanel(
+  page: Page,
+  strictCapability: boolean,
+  deferReviewSummary = false
+): Promise<void> {
+  await page.goto(deferReviewSummary ? '/?defer-review-summary' : '/')
   await page.evaluate(async (strict) => {
+    const deferReviewSummary = new URL(window.location.href).searchParams.has(
+      'defer-review-summary'
+    )
     const resources = performance.getEntriesByType('resource').map((entry) => entry.name)
     const reactUrl = resources.find((url) => url.includes('/.vite/deps/react.js'))
     const reactDomUrl = resources.find((url) => url.includes('/.vite/deps/react-dom_client.js'))
@@ -118,6 +125,13 @@ async function mountApplyPanel(page: Page, strictCapability: boolean): Promise<v
       headHash: 'initial-head'
     }
     let applyCalls = 0
+    let applyRequest: unknown = null
+    let releaseSummaryGate: (() => void) | null = null
+    const summaryGate = deferReviewSummary
+      ? new Promise<void>((resolve) => {
+          releaseSummaryGate = resolve
+        })
+      : Promise.resolve()
     const recovery = {
       state: 'none' as const,
       repository: identity.repository,
@@ -129,7 +143,10 @@ async function mountApplyPanel(page: Page, strictCapability: boolean): Promise<v
       rehearsalDraftList: async () => ({ status: 'saved' as const, records: [] }),
       rehearsalAvailability: async () => ({ available: true, configured: true, message: '' }),
       rehearsalRecovery: async () => recovery,
-      rehearsalReviewSummary: async () => summary,
+      rehearsalReviewSummary: async () => {
+        await summaryGate
+        return summary
+      },
       rehearsalReviewFiles: async () => files,
       rehearsalReviewFile: async (
         _identity: unknown,
@@ -164,8 +181,9 @@ async function mountApplyPanel(page: Page, strictCapability: boolean): Promise<v
         lowSpace: false,
         protected: false
       }),
-      rehearsalApply: async () => {
+      rehearsalApply: async (request: unknown) => {
         applyCalls++
+        applyRequest = request
         return { kind: 'applied' as const, message: 'Applied.', recovery }
       },
       status: async () => workingStatus
@@ -206,7 +224,9 @@ async function mountApplyPanel(page: Page, strictCapability: boolean): Promise<v
         applyHarness: {
           store: typeof store
           setWorkingStatus: (status: typeof workingStatus) => void
+          releaseReviewSummary: () => void
           applyCalls: () => number
+          applyRequest: () => unknown
         }
       }
     ).applyHarness = {
@@ -214,10 +234,71 @@ async function mountApplyPanel(page: Page, strictCapability: boolean): Promise<v
       setWorkingStatus: (nextStatus) => {
         workingStatus = nextStatus
       },
-      applyCalls: () => applyCalls
+      releaseReviewSummary: () => releaseSummaryGate?.(),
+      applyCalls: () => applyCalls,
+      applyRequest: () => applyRequest
     }
   }, strictCapability)
 }
+
+test('keyboard Apply waits for the matching review before opening and submitting confirmation', async ({
+  page
+}) => {
+  await mountApplyPanel(page, true, true)
+  const panel = page.locator('#apply-confirmation-harness .rehearsal-panel')
+  const apply = panel.getByRole('button', { name: 'Apply', exact: true })
+  const cancel = panel.getByRole('button', { name: 'Cancel Apply', exact: true })
+
+  await expect(apply).toBeDisabled()
+  await apply.focus()
+  await expect(apply).not.toBeFocused()
+  await page.keyboard.press('Enter')
+  await expect(cancel).toHaveCount(0)
+  expect(
+    await page.evaluate(() =>
+      (
+        window as unknown as { applyHarness: { applyCalls: () => number } }
+      ).applyHarness.applyCalls()
+    )
+  ).toBe(0)
+
+  await page.evaluate(() =>
+    (
+      window as unknown as { applyHarness: { releaseReviewSummary: () => void } }
+    ).applyHarness.releaseReviewSummary()
+  )
+  await expect(apply).toBeEnabled()
+  await apply.focus()
+  await expect(apply).toBeFocused()
+  await page.keyboard.press('Enter')
+  await expect(cancel).toBeFocused()
+
+  const dialog = panel.getByRole('dialog', { name: 'Confirm Apply', exact: true })
+  const submit = dialog.getByRole('button', { name: 'Apply rehearsal', exact: true })
+  await submit.focus()
+  await expect(submit).toBeFocused()
+  await page.keyboard.press('Enter')
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        (
+          window as unknown as { applyHarness: { applyCalls: () => number } }
+        ).applyHarness.applyCalls()
+      )
+    )
+    .toBe(1)
+  expect(
+    await page.evaluate(() =>
+      (
+        window as unknown as { applyHarness: { applyRequest: () => unknown } }
+      ).applyHarness.applyRequest()
+    )
+  ).toMatchObject({
+    report: { id: 'apply-review', result_revision: 'tool-result-revision-1' },
+    reviewRevision: 'review-revision-1',
+    expectedResultRevision: 'tool-result-revision-1'
+  })
+})
 
 test('confirmation is tied to the displayed review and refreshes checkout status before Apply', async ({
   page

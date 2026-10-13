@@ -116,7 +116,10 @@ try {
       await page.keyboard.press('Enter')
       await expect(page.getByRole('heading', { name: 'Merge preview completed' })).toBeVisible()
       assert.equal(git('rev-parse', 'HEAD'), before)
-      await page.getByRole('button', { name: 'Apply', exact: true }).focus()
+      const applyButton = page.getByRole('button', { name: 'Apply', exact: true })
+      await expect(applyButton).toBeEnabled()
+      await applyButton.focus()
+      await expect(applyButton).toBeFocused()
       await page.keyboard.press('Enter')
       await expect(page.getByRole('button', { name: 'Cancel Apply', exact: true })).toBeFocused()
       const reviewedRevision = await page

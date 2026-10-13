@@ -196,7 +196,10 @@ for (const conflict of [false, true]) {
         { repo: root, id: shown }
       )
       expect(reviewedHead).toBeTruthy()
-      await page.getByRole('button', { name: 'Apply', exact: true }).focus()
+      const apply = page.getByRole('button', { name: 'Apply', exact: true })
+      await expect(apply).toBeEnabled()
+      await apply.focus()
+      await expect(apply).toBeFocused()
       await page.keyboard.press('Enter')
       await expect(page.getByRole('button', { name: 'Cancel Apply' })).toBeFocused()
       await page.keyboard.press('Tab')

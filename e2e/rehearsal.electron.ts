@@ -90,7 +90,10 @@ test('real Electron merge preview preserves the original and supports keyboard k
     expect(layout.footerBottom).toBeLessThanOrEqual(layout.height)
     expect(layout.overflow).toBe(false)
     // Tab leaves the nonmodal panel, and a city toolbar action remains operable.
-    await panel.getByRole('button', { name: 'Apply', exact: true }).focus()
+    const apply = panel.getByRole('button', { name: 'Apply', exact: true })
+    await expect(apply).toBeEnabled()
+    await apply.focus()
+    await expect(apply).toBeFocused()
     await page.keyboard.press('Tab')
     expect(await panel.evaluate((element) => element.contains(document.activeElement))).toBe(false)
     await page.getByRole('button', { name: 'Play history', exact: true }).click()
@@ -135,7 +138,9 @@ test('real Electron merge preview preserves the original and supports keyboard k
       { repo: root, id: shown }
     )
     expect(reviewedHead).toBeTruthy()
-    await page.getByRole('button', { name: 'Apply', exact: true }).focus()
+    await expect(apply).toBeEnabled()
+    await apply.focus()
+    await expect(apply).toBeFocused()
     await page.keyboard.press('Enter')
     await expect(page.getByRole('button', { name: 'Cancel Apply' })).toBeFocused()
     await expect(page.getByRole('dialog', { name: 'Confirm Apply', exact: true })).toHaveJSProperty(

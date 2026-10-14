@@ -57,6 +57,10 @@ Both/Edit, text fields, Save and stage, Refresh sandbox and Continue rehearsal.
 Enter activates buttons; Escape keeps and closes the rehearsal panel. See the
 [Rehearse panel guide](rehearse.md) and [rehearsal](rehearse.md#review-and-resolve).
 
+In the frozen review workspace, Tab reaches the scope selector, file filter,
+changed-file list, Changes/Before/After tabs, city preference and the pane
+divider. Focus the divider and use Left/Right to resize the file list.
+
 In the interactive-rebase rehearsal flow, Tab reaches Move up/down and Pick/Squash/Drop;
 Enter activates them. Rehearse opens the shared side panel with focus on submission,
 and Escape returns to the plan entry.
@@ -67,6 +71,9 @@ Saved rehearsals, Technical details and the exact Undo Apply disclosure. Escape
 closes the panel only while focus is inside it; closing returns focus to its entry.
 Stop and Keep remain in the footer during execution. Apply and Discard
 confirmations are modal; Escape cancels them without closing the panel.
+Apply and Undo confirmations are invalidated when their displayed subject is
+refreshed or changes. Return to the current result and confirm again; no extra
+per-file acknowledgement is required.
 
 In expanded rehearsal history, Tab reaches Open, checkboxes and Discard;
 Space toggles a checkbox and Enter activates a button. Discard confirmation starts

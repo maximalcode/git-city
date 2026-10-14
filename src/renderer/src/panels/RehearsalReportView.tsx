@@ -1,31 +1,12 @@
-import type { RehearsalReport } from '../../../shared/types'
+import type { RehearsalReport, RehearsalReviewSummary } from '../../../shared/types'
 
 export default function RehearsalReportView({
   report
 }: {
   report: RehearsalReport
 }): React.JSX.Element {
-  const action =
-    { merge: 'Merge', rebase: 'Rebase', 'cherry-pick': 'Cherry-pick' }[report.command[0]] ??
-    'Git action'
-  const noOp =
-    report.outcome === 'clean' &&
-    report.refs.length === 0 &&
-    !report.drift_unexpected &&
-    report.conflicts.length === 0
-  const status = report.conflicted
-    ? 'Conflicts need attention'
-    : noOp
-      ? 'No-op — no branch changes'
-      : {
-          clean: `${action} preview completed`,
-          stopped: `${action} stopped`,
-          failed: `Git could not complete the ${action.toLowerCase()}`,
-          incomplete: `${action} execution is incomplete`
-        }[report.outcome]
   return (
     <>
-      <h3 tabIndex={-1}>{status}</h3>
       {report.outcome === 'incomplete' && (
         <p role="alert">
           ⚠ Execution was interrupted. Retained work is available for reference; Apply and automatic
@@ -36,11 +17,6 @@ export default function RehearsalReportView({
       {report.drift_unexpected && (
         <p role="alert">⚠ Unexpected content changes — review the affected files carefully.</p>
       )}
-      <p className="rehearsal-summary">
-        {report.refs.length} branch/commit movements ·{' '}
-        {new Set(report.drift.flatMap((drift) => drift.files.map((file) => file.path))).size}{' '}
-        changed files reported
-      </p>
       {report.refs.length > 0 && (
         <ul className="rehearsal-movements">
           {report.refs.slice(0, 3).map((ref) => (
@@ -136,6 +112,55 @@ export default function RehearsalReportView({
   )
 }
 
+export function RehearsalOutcomeSummary({
+  report,
+  summary
+}: {
+  report: RehearsalReport
+  summary: RehearsalReviewSummary | null
+}): React.JSX.Element {
+  const action =
+    { merge: 'Merge', rebase: 'Rebase', 'cherry-pick': 'Cherry-pick' }[report.command[0]] ??
+    'Git action'
+  const noOp =
+    report.outcome === 'clean' &&
+    report.refs.length === 0 &&
+    !report.drift_unexpected &&
+    report.conflicts.length === 0
+  const outcome = report.conflicted
+    ? 'Conflicts need attention'
+    : noOp
+      ? 'No-op — no branch changes'
+      : {
+          clean: `${action} preview completed`,
+          stopped: `${action} stopped`,
+          failed: `Git could not complete the ${action.toLowerCase()}`,
+          incomplete: `${action} execution is incomplete`
+        }[report.outcome]
+  const defaultScope = summary?.defaultScopeId
+  const defaultEntries = defaultScope ? summary?.changeMap[defaultScope] : undefined
+  const changedFileCount =
+    summary?.complete && Array.isArray(defaultEntries) ? defaultEntries.length : null
+  const targetName =
+    report.checkout.kind === 'branch' ? report.checkout.target : 'detached checkout'
+  return (
+    <section aria-label="Rehearsal outcome" className="rehearsal-outcome-summary">
+      <h3 tabIndex={-1}>{outcome}</h3>
+      <p className="rehearsal-summary">
+        {report.outcome === 'clean' ? 'Git completed the preview' : outcome} on {targetName} in{' '}
+        {report.origin_worktree}.{' '}
+        {changedFileCount === null
+          ? 'Changed-file count unavailable'
+          : `${changedFileCount} changed ${changedFileCount === 1 ? 'file' : 'files'}`}{' '}
+        in the retained review.
+      </p>
+      {summary?.afterAvailable === false && summary.afterReason && (
+        <p role="status">Review content unavailable: {summary.afterReason}</p>
+      )}
+    </section>
+  )
+}
+
 export function RehearsalDetails({ report }: { report: RehearsalReport }): React.JSX.Element {
   return (
     <details>
@@ -152,6 +177,8 @@ export function RehearsalDetails({ report }: { report: RehearsalReport }): React
       </p>
       <section aria-label="Execution conditions">
         <h4>Execution conditions</h4>
+        <p>Git command completion is reported separately from retained content availability.</p>
+        <p>Tests were not run by this preview.</p>
         <p>
           {report.repository_hooks === 'disabled'
             ? '⚠ Repository hooks were not run. Apply also skips hooks; Off keeps direct Git hooks.'

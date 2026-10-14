@@ -8,6 +8,16 @@ import { cameraHeading } from '../lib/cameraHeading'
 const UP = new Vector3(0, 1, 0)
 const offsetScratch = new Vector3() // reused every frame during the intro orbit
 
+interface CameraView {
+  position: Vector3
+  target: Vector3
+}
+
+// The live canvas is intentionally unmounted while a frozen review owns the
+// single WebGL surface. Keep its view outside React/R3F so returning to live
+// restores the user's framing rather than starting another intro/fly-to.
+const cameraViews = new Map<string, CameraView>()
+
 /**
  * Thin wrapper around three's own MapControls (pan/zoom/orbit above the scene).
  * Used instead of @react-three/drei's version so the app has no dependency on
@@ -25,17 +35,22 @@ export default function CameraRig({
   worldSize,
   resolveFocus,
   maxPolarAngle = Math.PI * 0.47,
-  focusDistance
+  focusDistance,
+  selectedPath,
+  cacheKey
 }: {
   worldSize: number
   resolveFocus: (path: string) => Vector3 | null
   maxPolarAngle?: number
   focusDistance?: number
+  selectedPath?: string | null
+  cacheKey?: string
 }): null {
   const camera = useThree((s) => s.camera)
   const gl = useThree((s) => s.gl)
   const scene = useThree((s) => s.scene)
-  const selected = useStore((s) => s.selected)
+  const liveSelected = useStore((s) => s.selected)
+  const selected = selectedPath === undefined ? liveSelected : selectedPath
   const reduceMotion = useStore((s) => s.reduceMotion)
 
   const controls = useMemo(() => new MapControls(camera, gl.domElement), [camera, gl])
@@ -43,17 +58,17 @@ export default function CameraRig({
   // "Reduce motion" skips the cinematic intro orbit entirely
   const intro = useRef(!reduceMotion)
   const tween = useRef<{ target: Vector3; pos: Vector3 } | null>(null)
+  const restoredView = useRef(false)
 
   // Create once. dispose() detaches the DOM listeners, so it must run ONLY on
-  // unmount — never when worldSize changes (a view-mode switch changes it,
-  // since the modes size their worlds differently). If it ran on every switch the
-  // memoized controls would be disposed and never reconnected, leaving the
-  // camera dead. Size/angle limits live in the separate effect below.
+  // unmount — never when worldSize or cacheKey changes (a view-mode switch
+  // changes both). If it ran on every switch the memoized controls would be
+  // disposed and never reconnected, leaving the camera dead. Size/angle limits
+  // and camera cache state live in separate effects below.
   useEffect(() => {
     controls.enableDamping = true
     controls.dampingFactor = 0.08
     controls.minDistance = 8
-    controls.target.set(0, 0, 0)
     const stopAuto = (): void => {
       intro.current = false
       tween.current = null
@@ -69,7 +84,30 @@ export default function CameraRig({
         w.__gitCityRigDisposes = (w.__gitCityRigDisposes ?? 0) + 1
       }
     }
-  }, [controls])
+  }, [camera, controls])
+
+  // Save and restore the active scene's view independently of the controls'
+  // DOM-listener lifetime. The key changes when City/Farm changes, but the
+  // same MapControls instance must remain connected through that transition.
+  useEffect(() => {
+    const cached = cacheKey ? cameraViews.get(cacheKey) : undefined
+    if (cached) {
+      camera.position.copy(cached.position)
+      controls.target.copy(cached.target)
+      intro.current = false
+      restoredView.current = true
+    } else {
+      controls.target.set(0, 0, 0)
+    }
+    return () => {
+      if (cacheKey) {
+        cameraViews.set(cacheKey, {
+          position: camera.position.clone(),
+          target: controls.target.clone()
+        })
+      }
+    }
+  }, [cacheKey, camera, controls])
 
   // Someone reacting to the motion they can see, by ticking "Reduce motion",
   // was watching the camera keep orbiting: the flag was only read when the rig
@@ -94,6 +132,7 @@ export default function CameraRig({
       const w = window as unknown as {
         __gitCityCam?: unknown
         __gitCityScene?: unknown
+        __gitCitySceneCanvas?: HTMLCanvasElement
         __gitCitySceneReadyMs?: number
       }
       w.__gitCityCam = camera
@@ -101,26 +140,44 @@ export default function CameraRig({
       // instanced meshes actually moved this second?" — the only sound way to
       // verify animation from outside the canvas (#58).
       w.__gitCityScene = scene
+      w.__gitCitySceneCanvas = gl.domElement
       // Milliseconds from navigation start to the scene being interactive.
       // The scale work in #12 needed this and had to infer it from a polling
       // probe, which is not sound — the rig does not remount when the model
       // changes, so the sentinel never resets. One timestamp makes the cost
       // directly readable instead.
       w.__gitCitySceneReadyMs = performance.now()
+      return () => {
+        if (w.__gitCityScene === scene) {
+          delete w.__gitCityCam
+          delete w.__gitCityScene
+          delete w.__gitCitySceneCanvas
+        }
+      }
     }
-  }, [camera, scene])
+  }, [camera, gl, scene])
 
   // fly-to when the selection changes to something the scene can locate
   useEffect(() => {
+    if (restoredView.current) {
+      restoredView.current = false
+      return
+    }
     if (!selected) return
     const center = resolveFocus(selected)
     if (!center) return
     // keep the current view direction, just re-frame at a closer distance
     const dir = new Vector3().subVectors(camera.position, controls.target).normalize()
     const dist = focusDistance ?? Math.max(22, worldSize * 0.28)
+    if (reduceMotion) {
+      controls.target.copy(center)
+      camera.position.copy(center).addScaledVector(dir, dist)
+      tween.current = null
+      return
+    }
     intro.current = false
     tween.current = { target: center, pos: new Vector3().copy(center).addScaledVector(dir, dist) }
-  }, [selected, resolveFocus, worldSize, focusDistance, camera, controls])
+  }, [selected, resolveFocus, worldSize, focusDistance, camera, controls, reduceMotion])
 
   useFrame((_, dt) => {
     if (intro.current) {

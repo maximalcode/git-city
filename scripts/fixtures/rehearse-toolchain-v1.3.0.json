@@ -1,0 +1,42 @@
+{
+  "version": "1.3.0",
+  "jsonSchema": 1,
+  "metadataSchema": 3,
+  "repository": "maximalcode/git-rehearse",
+  "releaseTag": "v1.3.0",
+  "revision": "81a0621b4089749dfa899233a2a3ee06eacad44e",
+  "targets": {
+    "darwin-arm64": {
+      "target": "aarch64-apple-darwin",
+      "archive": "git-rehearse-v1.3.0-aarch64-apple-darwin.tar.gz",
+      "sha256": "cdcc8e77f34b5b46ad371baa13b8c6b4065eef76cdd59d1984e9a79bcf49a58e",
+      "executable": "git-rehearse",
+      "binarySha256": "d607d0322ad18dc925483033556834d65033663f7f89515301184abe3f9c6952",
+      "licenseSha256": "93a6ecdcbd3e29aa261196b94b489feda4f33d83e810522f99f3b7fe952e6b7e"
+    },
+    "darwin-x64": {
+      "target": "x86_64-apple-darwin",
+      "archive": "git-rehearse-v1.3.0-x86_64-apple-darwin.tar.gz",
+      "sha256": "54e016676b8d0ede822d1055cb7121e4299334aa9526838928449994715468c6",
+      "executable": "git-rehearse",
+      "binarySha256": "f2e1c60f3946bcb5a3decb4ae4551b3ced5d69baa195b9f0a186999bdaf73fab",
+      "licenseSha256": "93a6ecdcbd3e29aa261196b94b489feda4f33d83e810522f99f3b7fe952e6b7e"
+    },
+    "win32-x64": {
+      "target": "x86_64-pc-windows-msvc",
+      "archive": "git-rehearse-v1.3.0-x86_64-pc-windows-msvc.zip",
+      "sha256": "d824bf249b75f053b81ca5b9790efc3eac9f1f5c477215b05112ceecbcd14a26",
+      "executable": "git-rehearse.exe",
+      "binarySha256": "0f24293bee7f3642200e215b1fb2e8326bbd17cab98d41d4b7556965f1165453",
+      "licenseSha256": "08e8c3a229c173c54570edb9b8baf47614930c4170ba478a10116230412cd89b"
+    },
+    "linux-x64": {
+      "target": "x86_64-unknown-linux-gnu",
+      "archive": "git-rehearse-v1.3.0-x86_64-unknown-linux-gnu.tar.gz",
+      "sha256": "f7e40f6f0809f2ac6bd7068a685288492eebce74a288296d6bc00140048f7983",
+      "executable": "git-rehearse",
+      "binarySha256": "1b97ab662e816854edf15450115e811f556ee652a765cdd38a5f75a4c4d74109",
+      "licenseSha256": "93a6ecdcbd3e29aa261196b94b489feda4f33d83e810522f99f3b7fe952e6b7e"
+    }
+  }
+}

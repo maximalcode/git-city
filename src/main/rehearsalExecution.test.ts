@@ -5,6 +5,7 @@ import { join } from 'path'
 import { tmpdir } from 'os'
 import { rehearseMerge, rehearsalShow } from './rehearsal'
 import { applyRehearsal } from './rehearsalRecovery'
+import { rehearsalReviewSummary } from './rehearsalReview'
 import {
   continueRehearsal,
   readRehearsalConflict,
@@ -26,6 +27,15 @@ function report(result: RehearsalResult): RehearsalReport {
   if (result.kind !== 'report') throw new Error(JSON.stringify(result))
   reports.push(result.report)
   return result.report
+}
+async function applyRequest(report: RehearsalReport) {
+  const summary = await rehearsalReviewSummary(tool, report)
+  if (!report.result_revision) throw new Error('Expected a tool result revision.')
+  return {
+    report,
+    reviewRevision: summary.reviewRevision,
+    expectedResultRevision: report.result_revision
+  }
 }
 afterEach(async () => {
   for (const item of reports.splice(0))
@@ -87,7 +97,7 @@ describe.skipIf(!tool)('real execution conditions through the app adapter', () =
       trust: 'not_checked'
     })
     expect(report(await rehearsalShow(tool, signed)).signatures).toEqual(signed.signatures)
-    expect((await applyRehearsal(tool, signed)).kind).toBe('applied')
+    expect((await applyRehearsal(tool, await applyRequest(signed))).kind).toBe('applied')
     expect(git(root, 'rev-parse', 'HEAD')).toBe(tip)
     git(root, 'verify-commit', tip)
     git(root, 'checkout', '-b', 'next')
@@ -127,7 +137,7 @@ describe.skipIf(!tool)('real execution conditions through the app adapter', () =
     const before = git(root, 'rev-parse', 'HEAD')
     const preview = report(await rehearseMerge(tool, root, 'topic'))
     expect(preview.repository_hooks).toBe('disabled')
-    expect((await applyRehearsal(tool, preview)).kind).toBe('applied')
+    expect((await applyRehearsal(tool, await applyRequest(preview))).kind).toBe('applied')
     await expect(readFile(sentinel)).rejects.toMatchObject({ code: 'ENOENT' })
     git(root, 'reset', '--hard', before)
     await rm(sentinel, { force: true })
@@ -154,7 +164,7 @@ describe.skipIf(!tool)('real execution conditions through the app adapter', () =
     expect(git(second.sandbox!, 'ls-files', '-u')).toBe('')
     const final = report(await continueRehearsal(tool, second))
     expect(final.outcome).toBe('clean')
-    expect((await applyRehearsal(tool, final)).kind).toBe('applied')
+    expect((await applyRehearsal(tool, await applyRequest(final))).kind).toBe('applied')
     expect(await snapshot(cache)).toEqual(before)
     expect(await readFile(join(root, 'file.txt'), 'utf8')).toBe('resolved\n')
   })

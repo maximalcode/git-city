@@ -4,6 +4,7 @@ import { execFileSync } from 'child_process'
 import { mkdir, mkdtemp, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join, resolve } from 'path'
+import { discardFixtureRehearsals } from './rehearsal-fixture-cleanup'
 
 test('nonmodal rehearsal panel keeps the city usable and explains retained states', async () => {
   test.setTimeout(360_000)
@@ -144,17 +145,7 @@ test('nonmodal rehearsal panel keeps the city usable and explains retained state
     await expect(panel.getByRole('alert').filter({ hasText: missingTarget })).toBeVisible()
   } finally {
     await app?.close()
-    if (tool) {
-      try {
-        const listing = JSON.parse(
-          execFileSync(tool, ['--json', 'list'], { cwd: repo, encoding: 'utf8' })
-        )
-        for (const entry of listing.rehearsals)
-          execFileSync(tool, ['--json', 'discard', entry.id], { cwd: repo })
-      } catch {
-        /* The test may fail before the repository is ready for CLI inspection. */
-      }
-    }
+    if (tool) await discardFixtureRehearsals(tool, repo)
     await rm(container, { recursive: true, force: true })
     await rm(userData, { recursive: true, force: true })
   }

@@ -1,8 +1,14 @@
 import { lstat, realpath } from 'fs/promises'
 import { join } from 'path'
-import type { RehearsalApplyResult, RehearsalReport, RehearsalRecovery } from '../shared/types'
+import type {
+  RehearsalApplyRequest,
+  RehearsalApplyResult,
+  RehearsalReport,
+  RehearsalRecovery
+} from '../shared/types'
 import { commonRepository, withRepositoryWrite } from './repositoryQueue'
 import { rehearsalAvailability, rehearsalShow, runRehearsalTool } from './rehearsal'
+import { rehearsalReviewRevisionLocked } from './rehearsalReview'
 
 const unknown = (repository: string, message: string): RehearsalRecovery => ({
   repository,
@@ -103,13 +109,22 @@ export async function inspectRecovery(
 
 export async function applyRehearsal(
   tool: string | undefined,
-  identity: RehearsalReport
+  request: RehearsalApplyRequest
 ): Promise<RehearsalApplyResult> {
+  const identity = request?.report
   const repo = identity?.origin_worktree
   try {
     return await withRepositoryWrite(repo, async () => {
       const recovery = await inspectRecovery(tool, repo)
       if (recovery.state !== 'none') return { kind: 'refused', message: recovery.message, recovery }
+      if (!tool || !request?.expectedResultRevision) {
+        return {
+          kind: 'refused',
+          message:
+            'This git-rehearse version cannot apply a confirmed result revision. Update the compatible tool, then refresh and review the retained result.',
+          recovery
+        }
+      }
       // Bind the exact ID to its origin immediately before asking the CLI to revalidate Apply.
       const shown = await rehearsalShow(tool, identity)
       if (
@@ -141,11 +156,52 @@ export async function applyRehearsal(
             'The retained result changed since review. Keep it and review it again before Apply.',
           recovery
         }
+      if (
+        shown.report.result_revision !== request.expectedResultRevision ||
+        !shown.report.result_endpoints
+      )
+        return {
+          kind: 'refused',
+          message:
+            shown.report.result_unavailable ||
+            'The retained tool cannot prove the exact reviewed result. Keep it and refresh with a compatible git-rehearse release.',
+          recovery
+        }
+      let currentReviewRevision: string
+      try {
+        currentReviewRevision = await rehearsalReviewRevisionLocked(tool, identity)
+      } catch (error) {
+        return {
+          kind: 'refused',
+          message:
+            error instanceof Error
+              ? `The reviewed result changed or became unavailable. Refresh the review before Apply. ${error.message}`
+              : 'The reviewed result changed or became unavailable. Refresh the review before Apply.',
+          recovery
+        }
+      }
+      if (currentReviewRevision !== request.reviewRevision)
+        return {
+          kind: 'refused',
+          message:
+            'The displayed review changed. Refresh and confirm the current result before Apply.',
+          recovery
+        }
       let kind: RehearsalApplyResult['kind'] = 'uncertain'
       let message =
         'The Apply response was lost or incomplete. Status was queried; Apply was not repeated. Review the repository before starting another rehearsal.'
       try {
-        const result = await runRehearsalTool(tool!, ['--json', 'apply', identity.id], repo)
+        const result = await runRehearsalTool(
+          tool,
+          [
+            '--json',
+            'apply',
+            identity.id,
+            '--expected-result-revision',
+            request.expectedResultRevision
+          ],
+          repo
+        )
         const value: unknown = JSON.parse(result.stdout)
         if (
           object(value) &&
@@ -154,6 +210,9 @@ export async function applyRehearsal(
           value.exit_code === 0 &&
           value.id === identity.id &&
           value.repository === shown.report.repository &&
+          value.result_revision === request.expectedResultRevision &&
+          JSON.stringify(value.result_endpoints) ===
+            JSON.stringify(shown.report.result_endpoints) &&
           object(value.applied) &&
           Array.isArray(value.applied.refs)
         ) {

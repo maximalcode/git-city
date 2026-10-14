@@ -15,6 +15,7 @@ import type {
   RehearsalResult,
   RehearsalRecovery,
   RehearsalApplyResult,
+  RehearsalApplyRequest,
   RehearsalReport,
   BranchInfo,
   GitCityApi,
@@ -38,6 +39,7 @@ import type {
 import { DEFAULT_THEME_ID } from './city/themes'
 import { DEFAULT_MODE, isViewMode, type ViewMode } from './city/modes'
 import { bridge, cleanError } from './lib/bridge'
+import { requestRehearsalNavigation } from './panels/rehearsalNavigation'
 import { repoWarning, type RepoWarning } from './lib/repoScale'
 import { opMessage } from '../../shared/opMessages'
 import { snapshotAtCommit } from '../../shared/snapshots'
@@ -335,7 +337,7 @@ export interface GitCityState extends RehearsalManagementState, RehearsalCompari
     resume?: boolean
   ): Promise<RehearsalResult | undefined>
   undoRehearsal(identity: RehearsalUndoStatus): Promise<RehearsalUndoResult | undefined>
-  applyRehearsal(identity: RehearsalReport): Promise<void>
+  applyRehearsal(request: RehearsalApplyRequest): Promise<void>
   recoverRehearsal(id: string, action: 'complete' | 'rollback'): Promise<void>
   rehearsalOpen: boolean
   rehearsalBusy: boolean
@@ -471,7 +473,7 @@ export interface GitCityState extends RehearsalManagementState, RehearsalCompari
   setHelpOpen(open: boolean): void
   openCommit(hash: string): void
   closeCommit(): void
-  backToWelcome(): void
+  backToWelcome(): Promise<void>
 
   // live actions
   setPanel(panel: Panel): void
@@ -651,16 +653,36 @@ export const useStore = create<GitCityState>((set, get, api) => ({
     }
     return result
   },
-  applyRehearsal: async (identity) => {
+  applyRehearsal: async (request) => {
+    const { report, expectedResultRevision, reviewRevision } = request
     const api = bridge()
     const repo = get().repoPath
-    if (!api || !repo || get().rehearsalBusy || get().rehearsalApplications[repo]?.[identity.id])
+    if (
+      !api ||
+      !repo ||
+      get().rehearsalBusy ||
+      get().rehearsalApplications[repo]?.[report.id] ||
+      !reviewRevision ||
+      !expectedResultRevision ||
+      report.result_revision !== expectedResultRevision
+    )
       return
+    const selected = get().rehearsalResults[repo]
+    if (selected?.kind !== 'report' || selected.report !== report) {
+      set((state) => ({
+        rehearsalManagementMessages: {
+          ...state.rehearsalManagementMessages,
+          [repo]:
+            'The selected rehearsal changed before Apply. Review its current result and confirm it again.'
+        }
+      }))
+      return
+    }
     get().clearRehearsalComparison()
     set({ rehearsalBusy: true })
     let result: RehearsalApplyResult
     try {
-      result = await api.rehearsalApply(identity)
+      result = await api.rehearsalApply(request)
     } catch (error) {
       const recovery = await readRehearsalRecovery(api, repo)
       result = {
@@ -673,7 +695,7 @@ export const useStore = create<GitCityState>((set, get, api) => ({
       rehearsalBusy: false,
       rehearsalApplications: {
         ...state.rehearsalApplications,
-        [repo]: { ...state.rehearsalApplications[repo], [identity.id]: result }
+        [repo]: { ...state.rehearsalApplications[repo], [report.id]: result }
       },
       rehearsalRecovery: { ...state.rehearsalRecovery, [repo]: result.recovery }
     }))
@@ -910,6 +932,12 @@ export const useStore = create<GitCityState>((set, get, api) => ({
   openPath: async (path: string) => {
     const api = bridge()
     if (!api) return
+    if (get().repoPath && get().repoPath !== path) {
+      const action = get().worktrees.some((worktree) => worktree.path === path)
+        ? 'switch worktrees'
+        : 'open another repository'
+      if (!(await requestRehearsalNavigation(action))) return
+    }
     // Probe the size first: a monorepo can take minutes to replay, and a
     // progress bar with no sense of scale reads as a hang (#12). Cheap enough
     // (two counting calls) that the common case is unaffected.
@@ -937,6 +965,7 @@ export const useStore = create<GitCityState>((set, get, api) => ({
     const api = bridge()
     const pending = get().pendingRepo
     if (!api || !pending) return
+    if (!(await requestRehearsalNavigation('switch repositories'))) return
     set({ pendingRepo: null })
     await loadRepo(set, get, () => api.analyzeRepo(pending.path), pending.path)
   },
@@ -953,6 +982,7 @@ export const useStore = create<GitCityState>((set, get, api) => ({
   openUrl: async (url: string) => {
     const api = bridge()
     if (!api) return
+    if (!(await requestRehearsalNavigation('open the cloned repository'))) return
     set({ screen: 'loading', error: null, progress: null })
     try {
       const path = await api.cloneRepo(url)
@@ -1062,7 +1092,8 @@ export const useStore = create<GitCityState>((set, get, api) => ({
   setHelpOpen: (helpOpen) => set({ helpOpen }),
   openCommit: (hash) => set({ commitDetailHash: hash, paletteOpen: false }),
   closeCommit: () => set({ commitDetailHash: null }),
-  backToWelcome: () => {
+  backToWelcome: async () => {
+    if (!(await requestRehearsalNavigation('return to the welcome screen'))) return
     void bridge()?.watchStop()
     lastFingerprint = ''
     set({

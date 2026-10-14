@@ -1,42 +1,42 @@
 {
-  "version": "1.3.0",
+  "version": "1.4.0",
   "jsonSchema": 1,
   "metadataSchema": 3,
   "repository": "maximalcode/git-rehearse",
-  "releaseTag": "v1.3.0",
-  "revision": "81a0621b4089749dfa899233a2a3ee06eacad44e",
+  "releaseTag": "v1.4.0",
+  "revision": "20e0cba27146fc6af0040bf0121ea26102d90810",
   "targets": {
     "darwin-arm64": {
       "target": "aarch64-apple-darwin",
-      "archive": "git-rehearse-v1.3.0-aarch64-apple-darwin.tar.gz",
-      "sha256": "cdcc8e77f34b5b46ad371baa13b8c6b4065eef76cdd59d1984e9a79bcf49a58e",
+      "archive": "git-rehearse-v1.4.0-aarch64-apple-darwin.tar.gz",
+      "sha256": "7e2626982a2865298e3a96168ab759f2196a6c74a9fa1285c392eb816c4160a9",
       "executable": "git-rehearse",
-      "binarySha256": "d607d0322ad18dc925483033556834d65033663f7f89515301184abe3f9c6952",
+      "binarySha256": "7329deeb425870f4ce4da5214fdc04614457fd5f2b098cc6ff4ce2d27011e44f",
       "licenseSha256": "93a6ecdcbd3e29aa261196b94b489feda4f33d83e810522f99f3b7fe952e6b7e"
     },
     "darwin-x64": {
       "target": "x86_64-apple-darwin",
-      "archive": "git-rehearse-v1.3.0-x86_64-apple-darwin.tar.gz",
-      "sha256": "54e016676b8d0ede822d1055cb7121e4299334aa9526838928449994715468c6",
+      "archive": "git-rehearse-v1.4.0-x86_64-apple-darwin.tar.gz",
+      "sha256": "b0767906281307756310bcf8dcc95c6f280ec065a9aa711cf18a41f008746916",
       "executable": "git-rehearse",
-      "binarySha256": "f2e1c60f3946bcb5a3decb4ae4551b3ced5d69baa195b9f0a186999bdaf73fab",
+      "binarySha256": "d48942e88367b6cb6c0368a551f1a100d03aad3a32e1cb34871caa2482fef682",
+      "licenseSha256": "93a6ecdcbd3e29aa261196b94b489feda4f33d83e810522f99f3b7fe952e6b7e"
+    },
+    "linux-x64": {
+      "target": "x86_64-unknown-linux-gnu",
+      "archive": "git-rehearse-v1.4.0-x86_64-unknown-linux-gnu.tar.gz",
+      "sha256": "f2922e3dd29df56aa592fb043ab701a4c4a115a45496bf408e03e81af2390729",
+      "executable": "git-rehearse",
+      "binarySha256": "d7a7e550aadf199deb33aa733b74b79ad088e7be945ea0357985a2d72c091fc6",
       "licenseSha256": "93a6ecdcbd3e29aa261196b94b489feda4f33d83e810522f99f3b7fe952e6b7e"
     },
     "win32-x64": {
       "target": "x86_64-pc-windows-msvc",
-      "archive": "git-rehearse-v1.3.0-x86_64-pc-windows-msvc.zip",
-      "sha256": "d824bf249b75f053b81ca5b9790efc3eac9f1f5c477215b05112ceecbcd14a26",
+      "archive": "git-rehearse-v1.4.0-x86_64-pc-windows-msvc.zip",
+      "sha256": "23d62a1db5500b57fe46c86bbb8c3c5977ca49571d3a585e2585704f5cced338",
       "executable": "git-rehearse.exe",
-      "binarySha256": "0f24293bee7f3642200e215b1fb2e8326bbd17cab98d41d4b7556965f1165453",
+      "binarySha256": "adec01f063839365fdba762c484c06d0bb522dbc7a06f0005abc6df584990424",
       "licenseSha256": "08e8c3a229c173c54570edb9b8baf47614930c4170ba478a10116230412cd89b"
-    },
-    "linux-x64": {
-      "target": "x86_64-unknown-linux-gnu",
-      "archive": "git-rehearse-v1.3.0-x86_64-unknown-linux-gnu.tar.gz",
-      "sha256": "f7e40f6f0809f2ac6bd7068a685288492eebce74a288296d6bc00140048f7983",
-      "executable": "git-rehearse",
-      "binarySha256": "1b97ab662e816854edf15450115e811f556ee652a765cdd38a5f75a4c4d74109",
-      "licenseSha256": "93a6ecdcbd3e29aa261196b94b489feda4f33d83e810522f99f3b7fe952e6b7e"
     }
   }
 }

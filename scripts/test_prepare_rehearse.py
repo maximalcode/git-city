@@ -57,7 +57,7 @@ def make_zip(members: dict[str, bytes], symlink: str | None = None) -> bytes:
 class PrepareRehearseTests(unittest.TestCase):
     def pin(self, archive: str, archive_bytes: bytes) -> dict:
         return {
-            'releaseTag': 'v1.3.0',
+            'releaseTag': 'v1.4.0',
             'repository': 'maximalcode/git-rehearse',
             'revision': 'revision',
             'targets': {
@@ -85,8 +85,8 @@ class PrepareRehearseTests(unittest.TestCase):
         calls: list[list[str]] = []
         with tempfile.TemporaryDirectory() as directory:
             destination = Path(directory)
-            spec = {'archive': 'git-rehearse-v1.3.0-linux.tar.gz'}
-            pin = {'releaseTag': 'v1.3.0', 'repository': 'owner/repo'}
+            spec = {'archive': 'git-rehearse-v1.4.0-linux.tar.gz'}
+            pin = {'releaseTag': 'v1.4.0', 'repository': 'owner/repo'}
             result = download_asset(
                 pin,
                 spec,
@@ -96,14 +96,14 @@ class PrepareRehearseTests(unittest.TestCase):
 
         self.assertEqual(result.name, spec['archive'])
         self.assertEqual(calls, [[
-            'gh', 'release', 'download', 'v1.3.0', '--repo', 'owner/repo',
+            'gh', 'release', 'download', 'v1.4.0', '--repo', 'owner/repo',
             '--pattern', spec['archive'], '--dir', str(destination),
         ]])
         self.assertNotIn('latest', calls[0])
         self.assertNotIn('run', calls[0])
 
     def test_archive_checksum_failure_does_not_stage_output(self):
-        archive_name = 'git-rehearse-v1.3.0-linux.tar.gz'
+        archive_name = 'git-rehearse-v1.4.0-linux.tar.gz'
         archive_bytes = make_tar({f'release/{name}': content for name, content in FILES.items()})
         pin = self.pin(archive_name, archive_bytes)
         pin['targets']['linux-x64']['sha256'] = '0' * 64
@@ -120,7 +120,7 @@ class PrepareRehearseTests(unittest.TestCase):
             self.assertFalse((Path(directory) / 'build').exists())
 
     def test_file_checksum_failure_preserves_existing_destination(self):
-        archive_name = 'git-rehearse-v1.3.0-linux.tar.gz'
+        archive_name = 'git-rehearse-v1.4.0-linux.tar.gz'
         archive_bytes = make_tar({f'release/{name}': content for name, content in FILES.items()})
         for field, member in (('binarySha256', 'git-rehearse'), ('licenseSha256', 'LICENSE')):
             with self.subTest(field=field), tempfile.TemporaryDirectory() as directory:

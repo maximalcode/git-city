@@ -3,6 +3,19 @@ import type { RehearsalUndoStatus } from '../../../shared/types'
 import { useRepoQuery } from '../lib/repoQuery'
 import { useStore } from '../store'
 
+function undoStatusKey(status: RehearsalUndoStatus | null): string {
+  return status
+    ? JSON.stringify([
+        status.repository,
+        status.rehearsal,
+        status.worktree,
+        status.applied_at_unix,
+        status.available,
+        status.reason
+      ])
+    : ''
+}
+
 export default function RehearsalUndo({
   repo,
   blocked
@@ -45,6 +58,15 @@ export default function RehearsalUndo({
     else if (wasConfirming.current) trigger.current?.focus()
     wasConfirming.current = !!confirmation
   }, [confirmation])
+  useEffect(() => {
+    if (!confirmation) return
+    if (loading || undoStatusKey(status) !== undoStatusKey(confirmation)) {
+      setConfirmation(null)
+      setMessage(
+        'Undo availability changed while it was being confirmed. Refresh and review the current status before trying again.'
+      )
+    }
+  }, [confirmation, loading, status])
   useEffect(() => {
     if (message && section.current?.contains(document.activeElement)) outcome.current?.focus()
   }, [message])
@@ -95,9 +117,17 @@ export default function RehearsalUndo({
             {message}
           </p>
         )}
+        {message && lastAttempt && (
+          <p>
+            Keep local work in place. Inspect the affected worktree and refs, then refresh Undo
+            availability before trying again.
+          </p>
+        )}
         <button
           disabled={busy || loading}
           onClick={() => {
+            setConfirmation(null)
+            setMessage('')
             section.current?.focus()
             reload()
           }}
@@ -114,8 +144,15 @@ export default function RehearsalUndo({
               Cancel Undo
             </button>{' '}
             <button
-              disabled={busy || blocked}
+              disabled={busy || blocked || loading}
               onClick={async () => {
+                if (loading || !status || undoStatusKey(status) !== undoStatusKey(confirmation)) {
+                  setConfirmation(null)
+                  setMessage(
+                    'Undo availability changed while it was being confirmed. Refresh and review the current status before trying again.'
+                  )
+                  return
+                }
                 section.current?.focus()
                 setLastAttempt(confirmation)
                 setConfirmation(null)

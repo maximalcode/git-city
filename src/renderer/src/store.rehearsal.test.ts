@@ -79,28 +79,47 @@ it('queries recovery after an IPC response loss and never repeats Apply', async 
     conflicts: [],
     drift: [],
     drift_unexpected: false,
+    result_revision: 'result-revision',
     id: 'exact-id',
     repository: '/original',
     origin_worktree: '/original',
     repository_id: '/common'
   }
-  useStore.setState({ repoPath: '/original', rehearsalApplications: {}, resync, refreshAnalysis })
+  const applyRequest = {
+    report: identity,
+    reviewRevision: 'review-revision',
+    expectedResultRevision: 'result-revision'
+  }
+  useStore.setState({
+    repoPath: '/original',
+    rehearsalApplications: {},
+    rehearsalResults: { '/original': { kind: 'report', report: identity } },
+    resync,
+    refreshAnalysis
+  })
   try {
-    await useStore.getState().applyRehearsal(identity)
-    await useStore.getState().applyRehearsal(identity)
-    expect(rehearsalApply).toHaveBeenCalledExactlyOnceWith(identity)
+    await useStore.getState().applyRehearsal(applyRequest)
+    await useStore.getState().applyRehearsal(applyRequest)
+    expect(rehearsalApply).toHaveBeenCalledExactlyOnceWith(applyRequest)
     expect(rehearsalRecovery).toHaveBeenCalledExactlyOnceWith('/original')
     expect(useStore.getState().rehearsalApplications['/original']['exact-id'].kind).toBe(
       'uncertain'
     )
     expect(resync).toHaveBeenCalledOnce()
     // CLI IDs are scoped to their origin, not globally unique across repositories.
-    useStore.setState({ repoPath: '/second' })
-    await useStore.getState().applyRehearsal({
+    const secondReport = {
       ...identity,
       repository: '/second',
       origin_worktree: '/second',
       repository_id: '/second/.git'
+    }
+    useStore.setState({
+      repoPath: '/second',
+      rehearsalResults: { '/second': { kind: 'report', report: secondReport } }
+    })
+    await useStore.getState().applyRehearsal({
+      ...applyRequest,
+      report: secondReport
     })
     expect(rehearsalApply).toHaveBeenCalledTimes(2)
     expect(useStore.getState().rehearsalApplications['/second']['exact-id'].kind).toBe('uncertain')
@@ -113,6 +132,81 @@ it('queries recovery after an IPC response loss and never repeats Apply', async 
       refreshAnalysis: originalRefresh,
       rehearsalApplications: {},
       rehearsalRecovery: {}
+    })
+  }
+})
+
+it('binds Apply to the selected report under an aliased worktree path', async () => {
+  const recovery = {
+    state: 'none',
+    repository: '/private/var/folders/tmp/repo',
+    can_complete: false,
+    can_rollback: false,
+    message: ''
+  }
+  const rehearsalApply = vi
+    .fn()
+    .mockResolvedValue({ kind: 'applied', message: 'Applied', recovery })
+  const resync = vi.fn().mockResolvedValue(undefined)
+  const refreshAnalysis = vi.fn().mockResolvedValue(undefined)
+  setBridge({ rehearsalApply } as unknown as GitCityApi)
+  const originalResync = useStore.getState().resync
+  const originalRefresh = useStore.getState().refreshAnalysis
+  const selectedReport: RehearsalReport = {
+    schema: 1,
+    command: ['merge', 'topic'],
+    checkout: { kind: 'branch', target: 'main' },
+    pre_state: {},
+    lifecycle: 'kept',
+    outcome: 'clean',
+    conflicted: false,
+    refs: [{ name: 'refs/heads/main', before: 'before', after: 'after' }],
+    conflicts: [],
+    drift: [],
+    drift_unexpected: false,
+    result_revision: 'result-revision',
+    id: 'aliased-id',
+    repository: '/private/var/folders/tmp/repo',
+    origin_worktree: '/private/var/folders/tmp/repo',
+    repository_id: '/private/var/folders/tmp/repo/.git'
+  }
+  const request = {
+    report: selectedReport,
+    reviewRevision: 'review-revision',
+    expectedResultRevision: 'result-revision'
+  }
+  useStore.setState({
+    repoPath: '/var/folders/tmp/repo',
+    rehearsalResults: { '/var/folders/tmp/repo': { kind: 'report', report: selectedReport } },
+    rehearsalApplications: {},
+    rehearsalManagementMessages: {},
+    resync,
+    refreshAnalysis
+  })
+  try {
+    await useStore.getState().applyRehearsal(request)
+    expect(rehearsalApply).toHaveBeenCalledExactlyOnceWith(request)
+
+    const currentReport = { ...selectedReport, id: 'new-selected-id' }
+    useStore.setState({
+      rehearsalBusy: false,
+      rehearsalApplications: {},
+      rehearsalResults: {
+        '/var/folders/tmp/repo': { kind: 'report', report: currentReport }
+      }
+    })
+    await useStore.getState().applyRehearsal(request)
+    expect(rehearsalApply).toHaveBeenCalledTimes(1)
+    expect(useStore.getState().rehearsalManagementMessages['/var/folders/tmp/repo']).toContain(
+      'selected rehearsal changed'
+    )
+  } finally {
+    useStore.setState({
+      resync: originalResync,
+      refreshAnalysis: originalRefresh,
+      rehearsalApplications: {},
+      rehearsalRecovery: {},
+      rehearsalManagementMessages: {}
     })
   }
 })

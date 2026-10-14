@@ -4,6 +4,7 @@ import { execFileSync } from 'child_process'
 import { mkdtemp, readFile, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join, resolve } from 'path'
+import { discardFixtureRehearsals } from './rehearsal-fixture-cleanup'
 
 test('real Electron merge preview preserves the original and supports keyboard keep/reopen', async () => {
   const tool = process.env.GIT_CITY_REHEARSE_BIN
@@ -89,14 +90,17 @@ test('real Electron merge preview preserves the original and supports keyboard k
     expect(layout.footerBottom).toBeLessThanOrEqual(layout.height)
     expect(layout.overflow).toBe(false)
     // Tab leaves the nonmodal panel, and a city toolbar action remains operable.
-    await panel.getByRole('button', { name: 'Apply', exact: true }).focus()
+    const apply = panel.getByRole('button', { name: 'Apply', exact: true })
+    await expect(apply).toBeEnabled()
+    await apply.focus()
+    await expect(apply).toBeFocused()
     await page.keyboard.press('Tab')
     expect(await panel.evaluate((element) => element.contains(document.activeElement))).toBe(false)
     await page.getByRole('button', { name: 'Play history', exact: true }).click()
     await expect(panel).toBeVisible()
     await page.screenshot({ path: 'test-results/rehearsal-narrow.png' })
     await app.evaluate(({ BrowserWindow }) =>
-      BrowserWindow.getAllWindows()[0].setContentSize(1360, 900)
+      BrowserWindow.getAllWindows()[0].setContentSize(1280, 800)
     )
 
     await expandRehearsal(page, /^Technical details$/)
@@ -117,7 +121,26 @@ test('real Electron merge preview preserves the original and supports keyboard k
     expect(await readFile(join(root, '.git/index'))).toEqual(before.index)
     expect(await readFile(join(root, 'file.txt'))).toEqual(before.file)
     await page.screenshot({ path: 'test-results/rehearsal-electron.png' })
-    await page.getByRole('button', { name: 'Apply', exact: true }).focus()
+    const shown = await page
+      .getByText('Kept rehearsal:', { exact: false })
+      .locator('code')
+      .textContent()
+    const reviewedHead = await page.evaluate(
+      async ({ repo, id }) => {
+        const listing = await window.gitCity.rehearsalList(repo)
+        const identity = listing.entries.find((entry) => entry.id === id)
+        if (!identity) throw new Error('Displayed result missing')
+        const result = await window.gitCity.rehearsalShow(identity)
+        if (result.kind !== 'report' || !result.report.result_revision)
+          throw new Error('Missing result revision')
+        return result.report.result_endpoints?.results.HEAD
+      },
+      { repo: root, id: shown }
+    )
+    expect(reviewedHead).toBeTruthy()
+    await expect(apply).toBeEnabled()
+    await apply.focus()
+    await expect(apply).toBeFocused()
     await page.keyboard.press('Enter')
     await expect(page.getByRole('button', { name: 'Cancel Apply' })).toBeFocused()
     await expect(page.getByRole('dialog', { name: 'Confirm Apply', exact: true })).toHaveJSProperty(
@@ -125,15 +148,41 @@ test('real Electron merge preview preserves the original and supports keyboard k
       true
     )
     await expect(page.locator(':modal')).toHaveCount(1)
+    await expect(page.getByRole('dialog', { name: 'Confirm Apply', exact: true })).toContainText(
+      'Displayed review revision:'
+    )
+    await page.screenshot({ path: 'test-results/confirmation-1280x800.png' })
+    await app.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows()[0].setContentSize(960, 700)
+    )
+    await page.screenshot({ path: 'test-results/confirmation-960x700.png' })
+    // A real external filesystem change refreshes current status while the
+    // modal is open. It must invalidate the old agreement, not replace it.
+    await writeFile(join(root, 'excluded.txt'), 'external untracked change\n')
+    await expect(page.getByTestId('apply-confirmation-invalidated')).toBeVisible()
+    await expect(page.getByRole('dialog', { name: 'Confirm Apply', exact: true })).not.toBeVisible()
+    expect(git('rev-parse', 'HEAD')).toBe(before.head)
+    expect(await readFile(join(root, '.git/index'))).toEqual(before.index)
+    expect(await readFile(join(root, 'file.txt'))).toEqual(before.file)
+    expect(await readFile(join(root, 'excluded.txt'), 'utf8')).toBe('external untracked change\n')
+    await app.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows()[0].setContentSize(1280, 800)
+    )
+    await page.getByRole('button', { name: 'Apply', exact: true }).click()
+    await expect(page.getByRole('dialog', { name: 'Confirm Apply', exact: true })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Cancel Apply' })).toBeFocused()
     await page.keyboard.press('Escape')
     await expect(page.getByRole('heading', { name: 'Apply rehearsal' })).not.toBeVisible()
     await page.getByRole('button', { name: 'Apply', exact: true }).click()
+    await expect(page.getByRole('dialog', { name: 'Confirm Apply', exact: true })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Cancel Apply' })).toBeFocused()
     await page.keyboard.press('Tab')
     await expect(page.getByRole('button', { name: 'Apply rehearsal', exact: true })).toBeFocused()
     await page.keyboard.press('Enter')
     await expect(page.getByText('The checked rehearsal was applied.')).toBeVisible()
-    await expect(page.locator('.rehearsal-panel [aria-live="polite"]')).toBeFocused()
+    await expect(page.locator('.rehearsal-panel [aria-live="polite"][aria-busy]')).toBeFocused()
     expect(git('rev-parse', 'HEAD^2')).toBe(git('rev-parse', 'topic'))
+    expect(git('rev-parse', 'HEAD')).toBe(reviewedHead)
     expect(await readFile(join(root, 'file.txt'), 'utf8')).toBe('preview\n')
     const appliedHead = git('rev-parse', 'HEAD')
     // Start again immediately while post-Apply history and Undo refreshes run.
@@ -168,11 +217,7 @@ test('real Electron merge preview preserves the original and supports keyboard k
     } catch {
       /* no pending recovery */
     }
-    const listing = JSON.parse(
-      execFileSync(tool!, ['--json', 'list'], { cwd: root, encoding: 'utf8' })
-    )
-    for (const rehearsal of listing.rehearsals)
-      execFileSync(tool!, ['--json', 'discard', rehearsal.id], { cwd: root })
+    await discardFixtureRehearsals(tool!, root)
     await rm(root, { recursive: true, force: true })
     await rm(userData, { recursive: true, force: true })
   }

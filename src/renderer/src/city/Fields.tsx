@@ -95,11 +95,13 @@ function plantRows(model: FarmModel, spacing: number): Tufts {
 export default function Fields({
   model,
   targets,
-  theme
+  theme,
+  onSelectPath
 }: {
   model: FarmModel
   targets: FarmTargets
   theme: Theme
+  onSelectPath?: (path: string) => void
 }): React.JSX.Element {
   const plotRef = useRef<InstancedMesh>(null!)
   // one mesh per crop class, so a field's size changes what grows on it rather
@@ -224,7 +226,10 @@ export default function Fields({
   const onClick = (e: ThreeEvent<MouseEvent>): void => {
     e.stopPropagation()
     const path = fieldAt(e)
-    if (path) setSelected(path)
+    if (path) {
+      if (onSelectPath) onSelectPath(path)
+      else setSelected(path)
+    }
   }
 
   // double-click opens the diff, exactly as double-clicking a building does
@@ -232,8 +237,11 @@ export default function Fields({
     e.stopPropagation()
     const path = fieldAt(e)
     if (!path) return
-    setSelected(path)
-    setDiffOpen(true)
+    if (onSelectPath) onSelectPath(path)
+    else {
+      setSelected(path)
+      setDiffOpen(true)
+    }
   }
 
   return (

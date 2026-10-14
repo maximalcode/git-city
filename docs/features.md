@@ -50,6 +50,11 @@ lights the city lights the farm too, and a test holds that together.
 has an always-visible legend, and the encoding is identical in both view modes.
 See [what the colours mean](colour-modes.md).
 
+**Linked rehearsal city review.** Frozen Before and After scenes share the
+review layout and camera context. Changed-file markers select the corresponding
+retained file, including both sides of a rename, while absent or unrepresentable
+files explain why their text review remains the source of truth.
+
 **Time of day**, decoupled from the theme. Drag the sun from night through noon
 to dusk and the key light and shadows follow. Or leave _sky follows commit time_
 on, the default, and the sun tracks each commit's local hour. Scrubbing history
@@ -162,7 +167,7 @@ fly-to.
 
 ### Rehearse
 
-Git City v0.9.2 bundles published, integrity-checked git-rehearse v1.3.0 for Windows x64,
+Git City bundles published, integrity-checked git-rehearse v1.4.0 for Windows x64,
 Linux x64, Intel macOS and Apple Silicon. Merge, normal Rebase, the existing
 interactive Pick/Squash/Drop/reorder plan, and single Cherry-pick from Graph or
 commit details run in retained sandboxes. There is no separate installation.
@@ -173,13 +178,46 @@ details expose refs/commits, files, conflicts, unexpected content, tracked carri
 work, history/storage and execution conditions. Text warnings stay prominent.
 **Compare city** switches one scene between frozen Before/After snapshots with a
 shared layout and text inventory; unfinished results explain the missing After.
+**Frozen file review** opens as a content-first workspace with a complete
+tracked-file inventory independent of city rendering caps, review-local scope,
+path filtering, and revision-bound Changes/Before/After content from retained Git
+objects. Its file-list divider supports pointer and keyboard resizing. Live edits,
+untracked files, and staging selection are excluded; binary, mode-only, oversized,
+absent, and unavailable content remains explicitly labelled. A completed rehearsal
+with affected refs also provides separate committed-reference scopes, groups true
+`HEAD` and current-branch aliases, preserves replay warnings, and shows explicit
+empty sides for created/deleted refs. Rename detection is bounded with truthful
+add/delete fallback; symlinks and gitlinks expose stored object metadata without
+following paths or executing repository code. Endpoint blobs are capped at 2 MiB
+and generated patches at 4 MiB, with over-limit state preserved in the inventory.
 
-Text conflicts support hunk choices, free editing, checked save-and-stage,
-external-edit refresh and repeated Continue. Binary conflicts support complete
+Text conflicts support hunk choices, free editing, durable per-rehearsal drafts,
+checked save-and-stage, external-edit refresh and repeated Continue. Binary conflicts support
+complete
 Ours/Theirs versions; deletion/rename conflicts have external sandbox instructions.
-Apply confirms origin and consequences, rechecks state, then adopts exact reviewed
-objects. Stale results and local-work/foreign-checkout collisions are refused and
-retained. Carried tracked edits become unstaged; untracked files are not carried.
+Each text section starts unreviewed. Explicit hunk or remaining-section choices and whole-file
+confirmation enable Save and stage; later edits invalidate the affected decision. Decisions
+survive navigation and restart with the draft. Retained drafts remain inspectable and explicitly
+discardable even after external Continue completes the rehearsal; external revisions require deliberate
+reconciliation. The complete assembled result can be inspected before saving.
+Preflight identifies tracked work, staging consequences and excluded untracked
+files; the retained report supersedes it after execution. The completed summary
+leads with outcome, checkout/worktree and complete changed-file count. Git
+completion, content availability, tests not run, skipped hooks and unchecked
+signatures remain distinct facts.
+
+Apply confirms origin, consequences and the displayed review revision. Refresh or
+change invalidates the pending confirmation. The backend verifies the complete
+app review revision and passes the tool's expected result revision for a check
+under ownership before adopting the same retained candidate. Missing tool support
+refuses clearly; there is no unconditional Apply fallback. Both content and city
+use the tool's authoritative endpoints. Supported v1.3.0 retained results remain
+reviewable through the new tool; unavailable older results are preserved.
+Stale results and local-work/foreign-checkout collisions are refused and retained.
+Initial carry replay leaves tracked edits unstaged; Apply adopts the reviewed
+index/files, and untracked files are excluded. The confirmation explains that
+carried uncommitted work may prevent Undo. See [Apply and local work](rehearse.md#apply-and-local-work)
+for the coordination boundary and supported next steps after refusal.
 
 **Automatic / Ask / Off** persists across linked worktrees. New repositories use
 Automatic; existing recent repositories get a one-time choice. Automatic routes

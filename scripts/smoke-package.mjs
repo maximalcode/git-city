@@ -1,9 +1,9 @@
 import { expect as baseExpect, _electron as electron } from '@playwright/test'
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { mkdtemp, rm, readFile, writeFile } from 'node:fs/promises'
+import { mkdtemp, rm, readFile, realpath, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import assert from 'node:assert/strict'
 import { waitForPackagedApply } from './smoke-package-apply.mjs'
 import {
@@ -20,7 +20,18 @@ const executablePath = resolve(process.argv[2])
 const restarts = Number(process.env.GIT_CITY_SMOKE_RESTARTS ?? 2)
 assert.ok(Number.isInteger(restarts) && restarts >= 2 && restarts <= 10)
 const profile = await mkdtemp(join(tmpdir(), 'git-city-package-profile-'))
+// Keep retained Git rehearsals outside Chromium's recursively cleaned cache tree.
+const cache = await mkdtemp(join(tmpdir(), 'git-city-package-rehearsal-cache-'))
 const repo = join(profile, 'repo')
+const isWithin = (parent, candidate) => {
+  const pathFromParent = relative(parent, candidate)
+  return (
+    pathFromParent === '' ||
+    (!isAbsolute(pathFromParent) &&
+      !pathFromParent.startsWith(`..${sep}`) &&
+      pathFromParent !== '..')
+  )
+}
 const diagnosticsGraceMs = Math.min(
   180_000,
   Math.max(0, Number(process.env.GIT_CITY_SMOKE_DIAGNOSTICS_GRACE_MS ?? 180_000) || 0)
@@ -76,7 +87,7 @@ try {
         env: {
           ...process.env,
           GIT_CITY_REHEARSE_BIN: '/must-not-use-development-override',
-          GIT_REHEARSE_CACHE_DIR: join(profile, 'cache')
+          GIT_REHEARSE_CACHE_DIR: cache
         },
         timeout: 90_000
       })
@@ -85,9 +96,19 @@ try {
         packaged: app.isPackaged,
         resources: process.resourcesPath,
         platform: process.platform,
-        arch: process.arch
+        arch: process.arch,
+        sessionData: app.getPath('sessionData')
       }))
       assert.equal(context.packaged, true)
+      const [sessionDataPath, toolCachePath] = await Promise.all([
+        realpath(context.sessionData),
+        realpath(cache)
+      ])
+      assert.equal(
+        isWithin(sessionDataPath, toolCachePath),
+        false,
+        `Rehearsal cache ${toolCachePath} must be outside Electron sessionData ${sessionDataPath}`
+      )
       page = await app.firstWindow()
       await writeDiagnostics(join(diagnosticsDir, 'diagnostics-install.json'), {
         main: mainDiagnosticsInstall,
@@ -116,9 +137,18 @@ try {
       await page.keyboard.press('Enter')
       await expect(page.getByRole('heading', { name: 'Merge preview completed' })).toBeVisible()
       assert.equal(git('rev-parse', 'HEAD'), before)
-      await page.getByRole('button', { name: 'Apply', exact: true }).focus()
+      const applyButton = page.getByRole('button', { name: 'Apply', exact: true })
+      await expect(applyButton).toBeEnabled()
+      await applyButton.focus()
+      await expect(applyButton).toBeFocused()
       await page.keyboard.press('Enter')
       await expect(page.getByRole('button', { name: 'Cancel Apply', exact: true })).toBeFocused()
+      const reviewedRevision = await page
+        .getByRole('dialog', { name: 'Confirm Apply', exact: true })
+        .getByText('Displayed review revision:', { exact: false })
+        .locator('code')
+        .innerText()
+      assert.ok(reviewedRevision.length > 0, 'Confirmation must identify its displayed review')
       await page.keyboard.press('Tab')
       await expect(page.getByRole('button', { name: 'Apply rehearsal', exact: true })).toBeFocused()
       applyRequested = true
@@ -127,6 +157,20 @@ try {
       applyRequested = false
       assert.equal(git('rev-parse', 'HEAD'), target)
       assert.equal(await readFile(join(repo, 'file.txt'), 'utf8'), expectedFile)
+      const admission = await readMainSpawnDiagnostics(app)
+      const confirmed = admission.ipcRecords.filter((record) => record.phase === 'start')
+      assert.equal(confirmed.length, 1, 'Apply must not be retried')
+      assert.equal(confirmed[0].reviewRevision, reviewedRevision)
+      assert.match(confirmed[0].expectedResultRevision, /^rr1:[0-9a-f]{40,64}$/)
+      const applyProcesses = admission.records.filter((record) => record.args.includes('apply'))
+      assert.equal(applyProcesses.length, 1, 'Exactly one conditional tool Apply must run')
+      const expectedArgument = applyProcesses[0].args.indexOf('--expected-result-revision')
+      assert.ok(expectedArgument >= 0, 'Packaged Apply must pass the expected result revision')
+      assert.equal(
+        applyProcesses[0].args[expectedArgument + 1],
+        confirmed[0].expectedResultRevision
+      )
+      await writeDiagnostics(join(diagnosticsDir, 'conditional-apply.json'), admission)
       await writeDiagnostics(
         join(diagnosticsDir, 'post-apply-repo.json'),
         await snapshotRepo(repo, 'post-apply')
@@ -213,4 +257,5 @@ try {
   }
 } finally {
   await rm(profile, { recursive: true, force: true })
+  await rm(cache, { recursive: true, force: true })
 }

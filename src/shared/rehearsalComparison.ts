@@ -14,6 +14,9 @@ export function rehearsalComparisonKey(report: RehearsalReport): string {
     report.outcome,
     report.conflicted,
     report.conflicts,
-    report.carried
+    report.carried,
+    report.result_revision,
+    report.result_endpoints,
+    report.result_unavailable
   ])
 }

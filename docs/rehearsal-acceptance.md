@@ -6,6 +6,67 @@ Test coverage below identifies where to verify each requirement; it is not itsel
 evidence that a run passed. Public activation requires completed local checks,
 real-tool integration, Electron keyboard flows, and all four packaged targets.
 
+## Connected review work (#195)
+
+The R1–R7 integration adds durable conflict drafts, explicit
+resolution decisions, frozen content review, reference scopes, keyboard pane
+controls, and linked city selection. Its integration baseline is
+`3cb7c8666de201d844a1c548aa928537854831ae`. The activation results below belong
+to earlier revisions; they are not acceptance of this new workspace. Current
+commands, tested revision, screenshots and outcomes belong to the implementation
+PR's validation record.
+
+R7 consumes published [git-rehearse v1.4.0](https://github.com/maximalcode/git-rehearse/releases/tag/v1.4.0)
+from source `20e0cba27146fc6af0040bf0121ea26102d90810`. The [#119 delivery record](https://github.com/maximalcode/git-rehearse/issues/119#issuecomment-6129897261)
+contains all four archive/executable checksums, source/tag provenance and native
+contract/upgrade outcomes. The actual release assets were downloaded again before
+integration and matched that record. PR test artifacts are not used as the pin.
+R7 binds app admission and explicit confirmation to the displayed review revision
+and passes the tool's expected result revision for conditional adoption. Final
+Git City checks belong to the PR's current validation record, separately from
+upstream tool delivery. No Git City merge or release is included.
+
+Native Electron captures at `16215aa41f2955f775d54895cd3c70d42692b7bf` on
+macOS arm64 show the [active city comparison at 960×700](media/rehearse-review-city-960x700.png)
+and [frozen file review at 1280×800](media/rehearse-review-1280x800.png).
+These use real Git fixtures and document R1–R6. R7 adds native Apply confirmation
+captures at [1280×800](media/rehearse-apply-1280x800.png) and
+[960×700](media/rehearse-apply-960x700.png), using the published v1.4.0 executable
+on macOS arm64. The displayed revision, original worktree, affected refs and
+carried-work/Undo consequences remain readable at both sizes; Cancel receives
+initial keyboard focus. The refreshed [README capture](media/app-rehearsal.png)
+uses the built app and a clean clone of this repository. Screenshots establish
+presentation only; the conditional adoption/refusal results are recorded separately
+in the current PR validation.
+
+The conditional-Apply and packaged fixtures keep the tool cache outside Electron's
+session data and check that boundary against the running app. A directory named
+`cache` beneath the user profile aliases Chromium's `Cache` on case-insensitive
+filesystems; Chromium can delete its children asynchronously during startup.
+A real retained-rehearsal probe reproduced that deletion and verified preservation
+with a separate cache. Failed conditional tests preserve synthetic repository and
+tool-cache archives, public report/revision data, refs and object visibility for
+diagnosis. They do not archive the browser profile or relax Apply assertions.
+
+The additional verification seams are:
+
+| Requirement                                                                                                | Verification source                                                                                                                                                                               |
+| ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Durable drafts, obsolete bases, atomic records and save recovery                                           | `src/main/rehearsalDrafts.test.ts`, `src/main/rehearsalConflicts.test.ts`, `e2e/rehearsal-conflicts.electron.ts`, `e2e/rehearsal-draft-safety.e2e.ts`, `e2e/rehearsal-draft-recovery.electron.ts` |
+| Deliberate hunk and whole-file decisions, including restart                                                | `e2e/rehearsal-decisions.electron.ts`, `e2e/rehearsal-interactive.electron.ts`                                                                                                                    |
+| Frozen objects, exact Git hunks, complete paged scopes and honest unavailable content                      | `src/main/rehearsalReview.git.test.ts`, `src/main/rehearsalReview.contract.test.ts`, `e2e/rehearsal-review.electron.ts`, `e2e/rehearsal-review-scopes.e2e.ts`                                     |
+| Identity/refresh races, retained selection and visible errors                                              | `e2e/rehearsal-review-identity.e2e.ts`, `e2e/rehearsal-review-refresh.e2e.ts`                                                                                                                     |
+| Real building picks beyond a page/filter, endpoint-aware rename paths, one scene and restored live context | `e2e/rehearsal-review-identity.e2e.ts`, `e2e/rehearsal-review.electron.ts`, `src/renderer/src/city/rehearsalMarkers.test.ts`                                                                      |
+| Keyboard selection/resizing at 960×700 and 1280×800, reduced motion and existing mode switching            | `e2e/rehearsal-review-scopes.e2e.ts`, `e2e/rehearsal-review.electron.ts`, `e2e/mode-switch.e2e.ts`, `e2e/rehearsal-panel-focus.e2e.ts`, `e2e/rehearsal-review-focus.e2e.ts`                       |
+| Expected-result adoption, external result/carry mutation refusal and unchanged original state              | `src/main/rehearsalRecovery.test.ts`, `e2e/rehearsal-conditional.electron.ts`, `e2e/rehearsal-actions.electron.ts`, `e2e/rehearsal-interactive.electron.ts`                                       |
+| Frozen confirmation, refresh/status invalidation and explicit missing-capability refusal                   | `e2e/rehearsal-apply-confirmation.e2e.ts`, `e2e/rehearsal.electron.ts`                                                                                                                            |
+| Published tool integrity and packaged app-to-tool revision handoff                                         | `scripts/test_prepare_rehearse.py`, `scripts/smoke-rehearse.py`, `scripts/smoke-package.mjs`, `.github/workflows/release.yml`                                                                     |
+
+The complete acceptance scenarios and cross-repository gate criteria are in the
+[approved execution runbook](plans/rehearse-review/runbook.md#acceptance-evidence-matrix).
+A test file identifies coverage intent; only a recorded completed run establishes
+its outcome.
+
 ## Baseline
 
 The acceptance branch starts at `30d6415984b62ebc52639b585b73a79eff8ee3c4`

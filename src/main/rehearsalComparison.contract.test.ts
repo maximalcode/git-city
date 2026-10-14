@@ -1,9 +1,10 @@
 import { beforeEach, expect, it, vi } from 'vitest'
-import { compareRehearsal } from './rehearsalComparison'
+import { compareRehearsal, resolveRehearsalEndpoints } from './rehearsalComparison'
 import { rehearsalShow } from './rehearsal'
 import { runGit } from './git/exec'
 import { analyzeComparison } from './git/analyze'
 import type { RehearsalReport } from '../shared/types'
+import { rehearsalComparisonKey } from '../shared/rehearsalComparison'
 
 vi.mock('fs/promises', () => ({ realpath: vi.fn(async (path) => path) }))
 vi.mock('./rehearsal', () => ({ rehearsalShow: vi.fn() }))
@@ -22,6 +23,21 @@ const report: RehearsalReport = {
   checkout: { kind: 'branch', target: 'main' },
   pre_state: { HEAD: before },
   refs: [{ name: 'HEAD', before, after }],
+  result_revision: `rr1:${'c'.repeat(40)}`,
+  result_endpoints: {
+    version: 1,
+    origin: {
+      rehearsal: 'selected',
+      repository: '/origin',
+      repository_id: 'repo',
+      common_dir: '/origin/.git',
+      git_dir: '/origin/.git'
+    },
+    action: ['merge', 'topic'],
+    checkout: { kind: 'branch', target: 'main' },
+    pre_state: { HEAD: before },
+    results: { HEAD: after }
+  },
   lifecycle: 'kept',
   outcome: 'clean',
   conflicted: false,
@@ -32,7 +48,7 @@ const report: RehearsalReport = {
 beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(rehearsalShow).mockResolvedValue({ kind: 'report', report })
-  vi.mocked(runGit).mockResolvedValue('/sandbox/.git')
+  vi.mocked(runGit).mockImplementation(async (repo) => `${repo}/.git`)
 })
 it.each(['stopped', 'failed', 'incomplete'] as const)(
   'never labels %s as finished After',
@@ -44,6 +60,26 @@ it.each(['stopped', 'failed', 'incomplete'] as const)(
     expect(analyzeComparison).toHaveBeenCalledExactlyOnceWith('/sandbox', [before])
   }
 )
+it('clearly limits stopped carried city comparisons to the committed Before tree', async () => {
+  vi.mocked(rehearsalShow).mockResolvedValue({
+    kind: 'report',
+    report: {
+      ...report,
+      outcome: 'stopped',
+      carried: { paths: ['file.txt'], status: 'conflicted', conflicts: ['file.txt'] },
+      result_revision: undefined,
+      result_endpoints: undefined,
+      result_unavailable: 'The rehearsal stopped before producing authoritative endpoints.'
+    }
+  })
+
+  const result = await compareRehearsal('/tool', report)
+
+  expect(result.afterAvailable).toBe(false)
+  expect(result.notice).toContain('Before shows only the frozen committed tree')
+  expect(result.notice).toContain('tracked carried work is unavailable')
+  expect(analyzeComparison).toHaveBeenCalledExactlyOnceWith('/sandbox', [before])
+})
 it('refuses an active or missing rehearsal without analyzing anything', async () => {
   vi.mocked(rehearsalShow).mockResolvedValue({ kind: 'refused', message: 'Rehearsal is active' })
   await expect(compareRehearsal('/tool', report)).rejects.toThrow('active')
@@ -68,7 +104,7 @@ it.each(['/origin', '/origin/nested'])('refuses non-isolated sandbox %s', async 
   await expect(compareRehearsal('/tool', report)).rejects.toThrow('separate retained sandbox')
   expect(analyzeComparison).not.toHaveBeenCalled()
 })
-it('rejects incompatible retained carry objects instead of omitting local work', async () => {
+it('refuses carried review without authoritative endpoints instead of inferring old refs', async () => {
   vi.mocked(rehearsalShow).mockResolvedValue({
     kind: 'report',
     report: { ...report, carried: { paths: ['file'], status: 'restored', conflicts: [] } }
@@ -77,6 +113,81 @@ it('rejects incompatible retained carry objects instead of omitting local work',
     if (args.includes('--path-format=absolute')) return '/sandbox/.git'
     return after
   })
-  await expect(compareRehearsal('/tool', report)).rejects.toThrow('snapshot does not match')
+  await expect(compareRehearsal('/tool', report)).rejects.toThrow('authoritative')
   expect(analyzeComparison).not.toHaveBeenCalled()
+})
+
+it('retains the carried snapshot ancestry guard for public endpoint descriptors', async () => {
+  const snapshot = 'c'.repeat(40)
+  const replay = 'd'.repeat(40)
+  const withCarry: RehearsalReport = {
+    ...report,
+    carried: { paths: ['file'], status: 'restored', conflicts: [] },
+    result_endpoints: {
+      ...report.result_endpoints!,
+      carried: {
+        snapshot,
+        snapshot_ref: snapshot,
+        snapshot_ref_status: 'present',
+        replay,
+        replay_ref: replay,
+        replay_ref_status: 'present',
+        paths: ['file']
+      }
+    }
+  }
+  vi.mocked(runGit).mockImplementation(async (repo, args) => {
+    if (args.includes('--path-format=absolute')) return `${repo}/.git`
+    if (args.some((arg) => arg.includes(`${snapshot}^1`))) return 'f'.repeat(40)
+    return after
+  })
+  await expect(resolveRehearsalEndpoints(withCarry)).rejects.toThrow(
+    'carried-work snapshot does not match'
+  )
+})
+
+it('invalidates the city key when the authoritative result endpoint changes under same carry status', () => {
+  const carried = { paths: ['file'], status: 'restored', conflicts: [] }
+  const first: RehearsalReport = {
+    ...report,
+    carried,
+    result_revision: `rr1:${'c'.repeat(40)}`,
+    result_endpoints: {
+      version: 1,
+      origin: {
+        rehearsal: report.id,
+        repository: report.repository,
+        repository_id: report.repository_id,
+        common_dir: '/origin/.git',
+        git_dir: '/origin/.git'
+      },
+      action: report.command,
+      checkout: report.checkout,
+      pre_state: { HEAD: before },
+      results: { HEAD: after },
+      carried: {
+        snapshot: 'c'.repeat(40),
+        snapshot_ref: 'c'.repeat(40),
+        snapshot_ref_status: 'present',
+        replay: 'd'.repeat(40),
+        replay_ref: 'd'.repeat(40),
+        replay_ref_status: 'present',
+        paths: ['file']
+      }
+    }
+  }
+  const second: RehearsalReport = {
+    ...first,
+    result_revision: `rr1:${'e'.repeat(40)}`,
+    result_endpoints: {
+      ...first.result_endpoints!,
+      carried: {
+        ...first.result_endpoints!.carried!,
+        snapshot: 'e'.repeat(40),
+        snapshot_ref: 'e'.repeat(40)
+      }
+    }
+  }
+  expect(second.carried?.status).toBe(first.carried?.status)
+  expect(rehearsalComparisonKey(second)).not.toBe(rehearsalComparisonKey(first))
 })

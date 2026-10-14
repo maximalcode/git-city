@@ -152,6 +152,8 @@ export const createRehearsalManagement: StateCreator<
       set({ rehearsalBusy: true })
       try {
         const result = await api.rehearsalDiscard(repo, entries)
+        for (const entry of entries)
+          if (result.discarded.includes(entry.id)) clearRehearsalDraftSessionsFor(entry)
         const message = [
           `Discarded ${result.discarded.length} rehearsal(s).`,
           ...result.failures.map((failure) => `${failure.id}: ${failure.message}`)
@@ -209,3 +211,4 @@ export const createRehearsalManagement: StateCreator<
     }
   }
 }
+import { clearRehearsalDraftSessionsFor } from './panels/rehearsalDraftSessions'

@@ -11,6 +11,9 @@ import {
   saveRehearsalConflict
 } from './rehearsalConflicts'
 import { applyRehearsal } from './rehearsalRecovery'
+import { rehearsalReviewSummary } from './rehearsalReview'
+import { readRehearsalDraft, writeRehearsalDraft } from './rehearsalDrafts'
+import type { RehearsalDraftPayload } from '../shared/types'
 
 // Wrap only the open boundary; all filesystem operations still execute for real.
 vi.mock('fs/promises', async (importOriginal) => {
@@ -20,6 +23,15 @@ vi.mock('fs/promises', async (importOriginal) => {
 
 const tool = process.env.GIT_CITY_REHEARSE_BIN
 const cleanup: (() => Promise<void>)[] = []
+async function applyRequest(report: import('../shared/types').RehearsalReport) {
+  const summary = await rehearsalReviewSummary(tool, report)
+  if (!report.result_revision) throw new Error('Expected a tool result revision.')
+  return {
+    report,
+    reviewRevision: summary.reviewRevision,
+    expectedResultRevision: report.result_revision
+  }
+}
 afterEach(async () => {
   for (const fn of cleanup.splice(0).reverse()) await fn()
 })
@@ -61,7 +73,15 @@ it.skipIf(!tool).each(['merge', 'rebase', 'cherry-pick'] as const)(
       execFileSync(tool!, ['--json', 'discard', report.id], { cwd: repo })
     })
     expect(report.outcome).toBe('stopped')
-    expect((await applyRehearsal(tool, report)).kind).toBe('refused')
+    expect(
+      (
+        await applyRehearsal(tool, {
+          report,
+          reviewRevision: 'stopped-result',
+          expectedResultRevision: 'stopped-result'
+        })
+      ).kind
+    ).toBe('refused')
     const sandbox = report.sandbox!
     for (const path of [
       '../file.txt',
@@ -143,11 +163,114 @@ it.skipIf(!tool).each(['merge', 'rebase', 'cherry-pick'] as const)(
       encoding: 'utf8'
     }).trim()
     const expectedFile = await readFile(join(sandbox, 'file.txt'))
-    const applied = await applyRehearsal(tool, report)
+    const applied = await applyRehearsal(tool, await applyRequest(report))
     expect(applied.kind, JSON.stringify(applied)).toBe('applied')
     expect(git('rev-parse', 'HEAD')).toBe(expectedHead)
     expect(await readFile(join(repo, 'file.txt'))).toEqual(expectedFile)
     cleanup.pop() // successful Apply removed its own sandbox
+  },
+  180000
+)
+
+it.skipIf(!tool)(
+  'reports a staged-save failure without losing the sandbox bytes or draft',
+  async () => {
+    const repo = await mkdtemp(join(tmpdir(), 'city-partial-save-'))
+    cleanup.push(() => rm(repo, { recursive: true, force: true }))
+    const git = (...args: string[]): string =>
+      execFileSync('git', args, { cwd: repo, encoding: 'utf8' }).trim()
+    git('init', '-b', 'main')
+    git('config', 'user.name', 'Test')
+    git('config', 'user.email', 'test@example.invalid')
+    git('config', 'commit.gpgSign', 'false')
+    await writeFile(join(repo, 'file.txt'), 'base\n')
+    git('add', '.')
+    git('commit', '-m', 'base')
+    git('checkout', '-b', 'topic')
+    await writeFile(join(repo, 'file.txt'), 'topic\n')
+    git('commit', '-am', 'topic')
+    git('checkout', 'main')
+    await writeFile(join(repo, 'file.txt'), 'main\n')
+    git('commit', '-am', 'main')
+
+    const before = {
+      head: git('rev-parse', 'HEAD'),
+      index: await readFile(join(repo, '.git/index')),
+      file: await readFile(join(repo, 'file.txt'))
+    }
+    const result = await rehearse(tool, repo, 'merge', 'topic')
+    if (result.kind !== 'report') throw new Error(JSON.stringify(result))
+    const report = result.report
+    cleanup.push(async () => {
+      execFileSync(tool!, ['--json', 'discard', report.id], { cwd: repo })
+    })
+    expect(report.outcome).toBe('stopped')
+
+    const conflict = await readRehearsalConflict(tool, report, 'file.txt')
+    const draftRoot = await mkdtemp(join(tmpdir(), 'city-partial-draft-'))
+    cleanup.push(() => rm(draftRoot, { recursive: true, force: true }))
+    const draftFile = join(draftRoot, 'drafts.json')
+    const draft: RehearsalDraftPayload = {
+      base_revision: conflict.revision,
+      base_content: conflict.base_content ?? '',
+      mode: 'whole-file',
+      whole_file_text: 'editor draft resolution\n',
+      choices: {},
+      edits: {},
+      acknowledged_hunks: []
+    }
+    expect(await writeRehearsalDraft(draftFile, report, 'file.txt', draft, null)).toMatchObject({
+      status: 'saved'
+    })
+
+    const lock = join(report.sandbox!, '.git', 'index.lock')
+    await writeFile(lock, 'held by another Git process\n')
+    const resolution = 'saved in sandbox before staging failed\n'
+    await expect(
+      saveRehearsalConflict(tool, report, 'file.txt', conflict.revision, resolution)
+    ).rejects.toThrow(
+      /sandbox file saved.*could not stage.*editor draft retained.*Refresh sandbox\/review.*resolve.*lock/i
+    )
+
+    expect(await readFile(join(report.sandbox!, 'file.txt'), 'utf8')).toBe(resolution)
+    expect(
+      execFileSync('git', ['ls-files', '-u', '--', 'file.txt'], {
+        cwd: report.sandbox!,
+        encoding: 'utf8'
+      })
+    ).toContain('file.txt')
+    const savedDraft = await readRehearsalDraft(draftFile, report, 'file.txt')
+    expect(savedDraft.record?.whole_file_text).toBe('editor draft resolution\n')
+
+    const refreshed = await readRehearsalConflict(tool, report, 'file.txt')
+    expect(refreshed.revision).not.toBe(conflict.revision)
+    await rm(lock)
+    await expect(
+      saveRehearsalConflict(tool, report, 'file.txt', conflict.revision, 'late retry\n')
+    ).rejects.toThrow('changed on disk')
+    expect((await readRehearsalDraft(draftFile, report, 'file.txt')).record?.whole_file_text).toBe(
+      'editor draft resolution\n'
+    )
+
+    const actualOpen = (await vi.importActual<typeof import('fs/promises')>('fs/promises')).open
+    const truncateFailure = vi.mocked(filesystem.open).mockImplementationOnce(async (...args) => {
+      const handle = await actualOpen(...args)
+      vi.spyOn(handle, 'truncate').mockRejectedValueOnce(new Error('simulated disk full'))
+      return handle
+    })
+    try {
+      await expect(
+        saveRehearsalConflict(tool, report, 'file.txt', refreshed.revision, 'possibly partial\n')
+      ).rejects.toThrow(
+        /write\/truncate failed.*bytes may be partially saved.*editor draft retained/i
+      )
+    } finally {
+      truncateFailure.mockImplementation(actualOpen)
+    }
+
+    expect(git('rev-parse', 'HEAD')).toBe(before.head)
+    expect(await readFile(join(repo, '.git/index'))).toEqual(before.index)
+    expect(await readFile(join(repo, 'file.txt'))).toEqual(before.file)
   },
   180000
 )

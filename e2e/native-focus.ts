@@ -30,6 +30,8 @@ process.on('message', async direction => {
       other = new BrowserWindow({ width: 200, height: 100 })
       await other.loadURL('about:blank')
       other.show()
+      main.blur()
+      other.moveTop()
       other.focus()
       other.webContents.focus()
     } else {
@@ -40,6 +42,13 @@ process.on('message', async direction => {
       main.show()
       main.focus()
       main.webContents.focus()
+    }
+    const expected = direction === 'away' ? other : main
+    const unfocused = direction === 'away' ? main : undefined
+    const deadline = Date.now() + 10_000
+    while (!expected.isFocused() || (unfocused && unfocused.isFocused())) {
+      if (Date.now() >= deadline) throw new Error('Native focus handoff did not settle: ' + direction)
+      await new Promise(resolve => setTimeout(resolve, 25))
     }
     process.send({ ok: true })
   } catch (error) { process.send({ ok: false, message: String(error) }) }

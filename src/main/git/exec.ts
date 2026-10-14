@@ -144,11 +144,15 @@ export async function runGit(cwd: string, args: string[]): Promise<string> {
  * doesn't exist at that ref) instead of throwing. Caps output to avoid loading
  * a huge binary into memory.
  */
-export function runGitBuffer(
+export type GitBufferResult =
+  { kind: 'ok'; bytes: Buffer } | { kind: 'too-large' } | { kind: 'unavailable' }
+
+/** Run git with a hard stdout cap while preserving limit failures. */
+export function runGitBufferBounded(
   cwd: string,
   args: string[],
   maxBytes = 12 * 1024 * 1024
-): Promise<Buffer | null> {
+): Promise<GitBufferResult> {
   return new Promise((resolve) => {
     const child = spawn('git', args, { cwd, stdio: ['ignore', 'pipe', 'pipe'], env: GIT_ENV })
     const chunks: Buffer[] = []
@@ -164,12 +168,23 @@ export function runGitBuffer(
       chunks.push(d)
     })
     child.stderr.on('data', () => {}) // discard; a failure just means "no blob"
-    child.on('error', () => resolve(null))
+    child.on('error', () => resolve({ kind: 'unavailable' }))
     child.on('close', (code) => {
-      if (over || code !== 0) resolve(null)
-      else resolve(Buffer.concat(chunks))
+      if (over) resolve({ kind: 'too-large' })
+      else if (code !== 0) resolve({ kind: 'unavailable' })
+      else resolve({ kind: 'ok', bytes: Buffer.concat(chunks) })
     })
   })
+}
+
+export function runGitBuffer(
+  cwd: string,
+  args: string[],
+  maxBytes = 12 * 1024 * 1024
+): Promise<Buffer | null> {
+  return runGitBufferBounded(cwd, args, maxBytes).then((result) =>
+    result.kind === 'ok' ? result.bytes : null
+  )
 }
 
 /** Stream git stdout line by line (for large outputs like `git log`). */

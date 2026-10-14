@@ -4,6 +4,7 @@ import { execFileSync } from 'child_process'
 import { mkdtemp, readFile, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join, resolve } from 'path'
+import { discardFixtureRehearsals } from './rehearsal-fixture-cleanup'
 
 test('keyboard city comparison stays with its frozen rehearsal when switching results', async () => {
   const tool = process.env.GIT_CITY_REHEARSE_BIN!
@@ -41,6 +42,13 @@ test('keyboard city comparison stays with its frozen rehearsal when switching re
     const page = await app.firstWindow()
     await page.getByRole('button', { name: 'Open a local repository…' }).click()
     await page.getByRole('button', { name: 'Got it', exact: true }).click()
+    await page.getByRole('button', { name: 'Settings' }).click()
+    await page
+      .locator('label.settings-row.toggle')
+      .filter({ hasText: 'Reduce motion' })
+      .getByRole('checkbox')
+      .check({ force: true })
+    await page.getByRole('button', { name: 'Close' }).click()
     await page.getByRole('button', { name: 'Rehearse panel' }).click()
     const create = async (target: string): Promise<void> => {
       await expandRehearsal(page, /Rehearse again|Choose rehearsal target/)
@@ -55,8 +63,27 @@ test('keyboard city comparison stays with its frozen rehearsal when switching re
       await expect(page.getByRole('button', { name: 'Rehearse', exact: true })).toBeEnabled()
     }
     await create('topic')
+    await page.waitForFunction(
+      () => !!(window as unknown as { __gitCityCam?: unknown }).__gitCityCam
+    )
+    const liveCameraBefore = await page.evaluate(() => {
+      const camera = (
+        window as unknown as {
+          __gitCityCam?: { position: { x: number; y: number; z: number } }
+        }
+      ).__gitCityCam!
+      return [camera.position.x, camera.position.y, camera.position.z]
+    })
+    await page.getByRole('button', { name: 'Show city context', exact: true }).click()
     const comparison = page.getByRole('region', { name: 'Rehearsal city comparison' })
+    await expect(comparison).toBeVisible()
+    await expect(
+      comparison.getByRole('button', { name: 'Compare city', exact: true })
+    ).toBeVisible()
     const compare = async (): Promise<void> => {
+      await expect(
+        comparison.getByRole('button', { name: 'Compare city', exact: true })
+      ).toBeVisible()
       await comparison.getByRole('button', { name: 'Compare city', exact: true }).focus()
       await page.keyboard.press('Enter')
       await expect(comparison.getByRole('button', { name: 'Before', exact: true })).toBeFocused()
@@ -102,6 +129,28 @@ test('keyboard city comparison stays with its frozen rehearsal when switching re
       comparison.getByRole('button', { name: 'Compare city', exact: true })
     ).toBeFocused()
     await expect(page.locator('canvas:not(.minimap canvas)')).toHaveCount(1)
+    await page.waitForFunction(() => {
+      const scene = window as unknown as {
+        __gitCitySceneCanvas?: HTMLCanvasElement
+        __gitCityCam?: unknown
+      }
+      return (
+        scene.__gitCitySceneCanvas?.isConnected &&
+        !scene.__gitCitySceneCanvas.closest('.rehearsal-city') &&
+        !!scene.__gitCityCam
+      )
+    })
+    const liveCameraAfter = await page.evaluate(() => {
+      const camera = (
+        window as unknown as {
+          __gitCityCam?: { position: { x: number; y: number; z: number } }
+        }
+      ).__gitCityCam!
+      return [camera.position.x, camera.position.y, camera.position.z]
+    })
+    expect(
+      Math.max(...liveCameraBefore.map((value, index) => Math.abs(value - liveCameraAfter[index])))
+    ).toBeLessThan(0.01)
     expect(git('rev-parse', 'HEAD')).toBe(before.head)
     expect(await readFile(join(repo, '.git/index'))).toEqual(before.index)
     await page.keyboard.press('Escape')
@@ -110,11 +159,7 @@ test('keyboard city comparison stays with its frozen rehearsal when switching re
   } finally {
     await app.close()
     try {
-      const inventory = JSON.parse(
-        execFileSync(tool, ['--json', 'list'], { cwd: repo, encoding: 'utf8' })
-      )
-      for (const entry of inventory.rehearsals)
-        execFileSync(tool, ['--json', 'discard', entry.id], { cwd: repo })
+      await discardFixtureRehearsals(tool, repo)
     } finally {
       await rm(repo, { recursive: true, force: true })
       await rm(userData, { recursive: true, force: true })
